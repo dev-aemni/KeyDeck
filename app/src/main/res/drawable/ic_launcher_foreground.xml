@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <!-- Outer keyboard chassis inside 66dp safe zone (24..84) -->
+    <path
+        android:fillColor="#FF25385E"
+        android:pathData="M27,34 L81,34 C83.2,34 85,35.8 85,38 L85,70 C85,72.2 83.2,74 81,74 L27,74 C24.8,74 23,72.2 23,70 L23,38 C23,35.8 24.8,34 27,34 Z" />
+    <!-- Top keycap row -->
+    <path
+        android:fillColor="#FFF8FAFC"
+        android:pathData="M28,39 h8 v7 h-8 z M39,39 h8 v7 h-8 z M50,39 h8 v7 h-8 z M61,39 h8 v7 h-8 z" />
+    <!-- Coral hotkey corner keycap -->
+    <path
+        android:fillColor="#FFFF5462"
+        android:pathData="M72,39 h8 v17 h-8 z" />
+    <!-- Middle keycap row -->
+    <path
+        android:fillColor="#FFF8FAFC"
+        android:pathData="M28,49 h11 v7 h-11 z M42,49 h8 v7 h-8 z M53,49 h8 v7 h-8 z M64,49 h5 v7 h-5 z" />
+    <!-- Bottom row with spacebar and numpad cluster -->
+    <path
+        android:fillColor="#FFF8FAFC"
+        android:pathData="M28,59 h8 v8 h-8 z M39,59 h26 v8 h-26 z" />
+    <path
+        android:fillColor="#FF5CE1E6"
+        android:pathData="M68,59 h12 v8 h-12 z" />
+</vector>

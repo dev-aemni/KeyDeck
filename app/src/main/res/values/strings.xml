@@ -1,0 +1,9 @@
+<resources>
+    <string name="app_name">KeyDeck</string>
+    <string name="ime_label">KeyDeck PC Keyboard</string>
+    <string name="accessibility_service_label">KeyDeck Shortcut &amp; Floating Trigger</string>
+    <string name="accessibility_service_description">Provides an on-screen Accessibility keyboard trigger button and dispatches navigation, scroll, and shortcut actions across apps even when no text input field is focused.</string>
+    <string name="fgs_notification_title">KeyDeck Keyboard Active</string>
+    <string name="fgs_notification_text">Tap the floating icon to open the PC keyboard. Closes automatically if KeyDeck is closed.</string>
+    <string name="fgs_action_stop">Turn Off</string>
+</resources>
