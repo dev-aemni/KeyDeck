@@ -453,8 +453,6 @@ fun PcKeyboardDeck(
                         isModifierLit = spec.id == "num_toggle_top" && settings.layoutMode != KeyboardLayoutMode.PC_STANDARD,
                         compact = true,
                         showKeyBorder = settings.showKeyBorder,
-                        rgbActive = rgbActive,
-                        rgbPhaseDeg = rgbPhaseDeg,
                         modifier = Modifier.weight(spec.weight),
                         onClick = { handleKeyTap(spec) },
                     )
@@ -486,8 +484,6 @@ fun PcKeyboardDeck(
                         fnActive = fnActive,
                         compact = true,
                         showKeyBorder = settings.showKeyBorder,
-                        rgbActive = rgbActive,
-                        rgbPhaseDeg = rgbPhaseDeg,
                         modifier = Modifier.weight(0.68f),
                         onKeyTap = { handleKeyTap(it, isFromNumpad = false) },
                     )
@@ -501,8 +497,6 @@ fun PcKeyboardDeck(
                         numLockOn = settings.numLockOn,
                         compact = true,
                         showKeyBorder = settings.showKeyBorder,
-                        rgbActive = rgbActive,
-                        rgbPhaseDeg = rgbPhaseDeg,
                         modifier = Modifier.weight(0.32f),
                         onKeyTap = { handleKeyTap(it, isFromNumpad = true) },
                     )
@@ -527,8 +521,6 @@ fun PcKeyboardDeck(
                     fnActive = fnActive,
                     compact = isTightDeck,
                     showKeyBorder = settings.showKeyBorder,
-                    rgbActive = rgbActive,
-                    rgbPhaseDeg = rgbPhaseDeg,
                     onKeyTap = { handleKeyTap(it, isFromNumpad = false) },
                 )
             }
@@ -544,8 +536,6 @@ fun PcKeyboardDeck(
                     numLockOn = settings.numLockOn,
                     compact = false,
                     showKeyBorder = settings.showKeyBorder,
-                    rgbActive = rgbActive,
-                    rgbPhaseDeg = rgbPhaseDeg,
                     modifier = Modifier.fillMaxWidth(),
                     onKeyTap = { handleKeyTap(it, isFromNumpad = true) },
                 )
@@ -617,8 +607,6 @@ private fun KeyGridBlock(
     fnActive: Boolean,
     compact: Boolean,
     showKeyBorder: Boolean,
-    rgbActive: Boolean,
-    rgbPhaseDeg: Float,
     modifier: Modifier = Modifier,
     onKeyTap: (KeySpec) -> Unit,
 ) {
@@ -653,8 +641,6 @@ private fun KeyGridBlock(
                         isModifierLit = isLit,
                         compact = compact,
                         showKeyBorder = showKeyBorder,
-                        rgbActive = rgbActive,
-                        rgbPhaseDeg = rgbPhaseDeg,
                         modifier = Modifier.weight(spec.weight),
                         onClick = { onKeyTap(spec) },
                     )
@@ -727,7 +713,7 @@ private fun GamingHoldKeyCap(
         label = "gaming_key_offset",
     )
 
-    val borderCol = if (showKeyBorder) palette.keyBorder.copy(alpha = 0.85f) else null
+    val borderCol = if (showKeyBorder && !rgbActive) palette.keyBorder.copy(alpha = 0.90f) else null
     val keyBg = when {
         held -> palette.activeFill
         spec.isAccent -> palette.activeFill.copy(alpha = 0.75f)
@@ -820,12 +806,10 @@ private fun NumpadBlock(
     numLockOn: Boolean,
     compact: Boolean,
     showKeyBorder: Boolean,
-    rgbActive: Boolean,
-    rgbPhaseDeg: Float,
     modifier: Modifier = Modifier,
     onKeyTap: (KeySpec) -> Unit,
 ) {
-    val borderCol = if (showKeyBorder) palette.keyBorder.copy(alpha = 0.72f) else null
+    val borderCol = if (showKeyBorder) palette.keyBorder.copy(alpha = 0.78f) else null
     Column(
         modifier = modifier
             .neumorphicInset(
@@ -864,8 +848,6 @@ private fun NumpadBlock(
                         isModifierLit = isNumLockKey && numLockOn,
                         compact = compact,
                         showKeyBorder = showKeyBorder,
-                        rgbActive = rgbActive,
-                        rgbPhaseDeg = rgbPhaseDeg,
                         modifier = Modifier.weight(spec.weight),
                         onClick = { onKeyTap(spec) },
                     )
@@ -888,8 +870,6 @@ private fun PcKeyCap(
     isModifierLit: Boolean,
     compact: Boolean,
     showKeyBorder: Boolean,
-    rgbActive: Boolean,
-    rgbPhaseDeg: Float,
     modifier: Modifier = Modifier,
     onClick: () -> Unit,
 ) {
@@ -931,7 +911,7 @@ private fun PcKeyCap(
         else -> palette.primaryText
     }
 
-    val borderCol = if (showKeyBorder) palette.keyBorder.copy(alpha = 0.85f) else null
+    val borderCol = if (showKeyBorder) palette.keyBorder.copy(alpha = 0.90f) else null
     val shadowDepth = if (compact) 2.dp else 3.dp
     val blurRadius = if (compact) 4.dp else 6.dp
     val iconSize = (keyHeight * 0.38f).coerceIn(11.dp, 17.dp)
@@ -944,6 +924,7 @@ private fun PcKeyCap(
             cornerRadius = keyCorner,
             depth = 2.5.dp,
             borderColor = borderCol,
+            borderWidth = 1.15.dp,
         )
     } else {
         Modifier.neumorphicRaised(
@@ -954,6 +935,7 @@ private fun PcKeyCap(
             shadowOffset = shadowDepth,
             blurRadius = blurRadius,
             borderColor = borderCol,
+            borderWidth = 1.15.dp,
         )
     }
 
@@ -962,18 +944,6 @@ private fun PcKeyCap(
             .height(keyHeight)
             .offset(y = pressOffsetY)
             .then(neumorphicModifier)
-            .then(
-                if (rgbActive) {
-                    Modifier.rgbAnimatedBorder(
-                        phaseDegrees = rgbPhaseDeg,
-                        cornerRadius = keyCorner,
-                        strokeWidth = if (isEngaged) 1.6.dp else 1.15.dp,
-                        alpha = if (isEngaged) 0.95f else 0.70f,
-                    )
-                } else {
-                    Modifier
-                },
-            )
             .clickable(
                 interactionSource = interactionSource,
                 indication = null,

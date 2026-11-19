@@ -18,7 +18,6 @@ enum class KeyboardDockAlignment(val label: String) {
 
 enum class RgbBorderMode(val label: String) {
     GAMING_ONLY("Gaming Only"),
-    ALL_MODES("All Modes"),
     OFF("Off"),
 }
 
@@ -63,7 +62,7 @@ enum class KeyboardThemeId(
         accentBg = Color(0xFF4F46E5),
         shadowLight = Color(0xFFF1F4F9),
         shadowDark = Color(0xFFA5AEBC),
-        keyBorder = Color(0xFF12151B),
+        keyBorder = Color.Black,
         primaryText = Color(0xFF1F2937),
         secondaryText = Color(0xFF4B5563),
         activeIndicator = Color(0xFF4F46E5),
@@ -78,7 +77,7 @@ enum class KeyboardThemeId(
         accentBg = Color(0xFF6D28D9),
         shadowLight = Color(0xFFF3F1FA),
         shadowDark = Color(0xFFAEB0C9),
-        keyBorder = Color(0xFF12151B),
+        keyBorder = Color.Black,
         primaryText = Color(0xFF2E244D),
         secondaryText = Color(0xFF5A5178),
         activeIndicator = Color(0xFF6D28D9),
@@ -93,7 +92,7 @@ enum class KeyboardThemeId(
         accentBg = Color(0xFFD97706),
         shadowLight = Color(0xFFF6F2EC),
         shadowDark = Color(0xFFB8AEA2),
-        keyBorder = Color(0xFF141311),
+        keyBorder = Color.Black,
         primaryText = Color(0xFF332A22),
         secondaryText = Color(0xFF63574B),
         activeIndicator = Color(0xFFD97706),
@@ -108,7 +107,7 @@ enum class KeyboardThemeId(
         accentBg = Color(0xFF0D9488),
         shadowLight = Color(0xFFECF4F1),
         shadowDark = Color(0xFFA2B7AF),
-        keyBorder = Color(0xFF12151B),
+        keyBorder = Color.Black,
         primaryText = Color(0xFF1E352E),
         secondaryText = Color(0xFF46655C),
         activeIndicator = Color(0xFF0D9488),
@@ -123,7 +122,7 @@ enum class KeyboardThemeId(
         accentBg = Color(0xFF6366F1),
         shadowLight = Color(0xFF353B49),
         shadowDark = Color(0xFF14171E),
-        keyBorder = Color(0xFF05070B),
+        keyBorder = Color.Black,
         primaryText = Color(0xFFE2E8F0),
         secondaryText = Color(0xFF94A3B8),
         activeIndicator = Color(0xFF818CF8),
@@ -138,7 +137,7 @@ enum class KeyboardThemeId(
         accentBg = Color(0xFF38BDF8),
         shadowLight = Color(0xFF2A344D),
         shadowDark = Color(0xFF0D111A),
-        keyBorder = Color(0xFF05070B),
+        keyBorder = Color.Black,
         primaryText = Color(0xFFF1F5F9),
         secondaryText = Color(0xFF93C5FD),
         activeIndicator = Color(0xFF38BDF8),
@@ -153,7 +152,7 @@ enum class KeyboardThemeId(
         accentBg = Color(0xFFE11D48),
         shadowLight = Color(0xFFF7EEF1),
         shadowDark = Color(0xFFBDA8AE),
-        keyBorder = Color(0xFF161214),
+        keyBorder = Color.Black,
         primaryText = Color(0xFF3E242C),
         secondaryText = Color(0xFF6D4C56),
         activeIndicator = Color(0xFFE11D48),
@@ -168,7 +167,7 @@ enum class KeyboardThemeId(
         accentBg = Color(0xFF10B981),
         shadowLight = Color(0xFF272C34),
         shadowDark = Color(0xFF0B0D10),
-        keyBorder = Color(0xFF05070B),
+        keyBorder = Color.Black,
         primaryText = Color(0xFFE2FDF8),
         secondaryText = Color(0xFF6EE7B7),
         activeIndicator = Color(0xFF10B981),
@@ -183,7 +182,7 @@ enum class KeyboardThemeId(
         accentBg = Color(0xFF4F46E5),
         shadowLight = Color(0xFFF1F4F9),
         shadowDark = Color(0xFFA5AEBC),
-        keyBorder = Color(0xFF12151B),
+        keyBorder = Color.Black,
         primaryText = Color(0xFF1F2937),
         secondaryText = Color(0xFF4B5563),
         activeIndicator = Color(0xFF4F46E5),
@@ -317,11 +316,8 @@ data class KeyDeckSettings(
     val customTextHex: Long = 0xFF1F2937,
     val customAccentHex: Long = 0xFF4F46E5,
 ) {
-    fun isRgbActiveForCurrentMode(): Boolean = when (rgbBorderMode) {
-        RgbBorderMode.GAMING_ONLY -> layoutMode == KeyboardLayoutMode.GAMING
-        RgbBorderMode.ALL_MODES -> true
-        RgbBorderMode.OFF -> false
-    }
+    fun isRgbActiveForCurrentMode(): Boolean =
+        rgbBorderMode == RgbBorderMode.GAMING_ONLY && layoutMode == KeyboardLayoutMode.GAMING
 
     fun resolvePalette(): ResolvedKeyboardPalette {
         return if (themeId == KeyboardThemeId.CUSTOM_STUDIO) {
@@ -334,7 +330,7 @@ data class KeyDeckSettings(
             val sLight = if (isLightDeck) Color(0xFFF3F6FA) else androidx.compose.ui.graphics.lerp(deck, Color.White, 0.12f)
             val sDark = if (isLightDeck) androidx.compose.ui.graphics.lerp(deck, Color(0xFF7B8596), 0.45f) else androidx.compose.ui.graphics.lerp(deck, Color.Black, 0.48f)
             val active = if (isLightDeck) Color(0xFFCDE0F8) else androidx.compose.ui.graphics.lerp(deck, accent, 0.26f)
-            val border = Color(0xFF12151B)
+            val border = Color.Black
             ResolvedKeyboardPalette(
                 deckBg = deck,
                 keyBg = key,

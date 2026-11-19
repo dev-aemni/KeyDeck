@@ -55,6 +55,7 @@ class KeyDeckImeService : InputMethodService() {
         repository = KeyDeckRepository(applicationContext)
         lifecycleOwner.onCreate()
         serviceScope.launch {
+            repository.migrateSchemaIfNeeded()
             repository.settingsFlow.collect { s ->
                 latestSettings = s
                 if (s.suppressAutoImeOnInput) {

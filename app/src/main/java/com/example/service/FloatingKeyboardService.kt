@@ -121,6 +121,7 @@ class FloatingKeyboardService : Service() {
         }
 
         KeyDeckRuntimeState.setOverlayServiceRunning(true)
+        serviceScope.launch { repository.migrateSchemaIfNeeded() }
         attachBubbleOverlay()
         observeExpansionState()
     }

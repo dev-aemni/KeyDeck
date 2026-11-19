@@ -62,6 +62,9 @@ class KeyDeckViewModel(application: Application) : AndroidViewModel(application)
     val readiness: StateFlow<SystemReadinessState> = _readiness.asStateFlow()
 
     init {
+        viewModelScope.launch {
+            repository.migrateSchemaIfNeeded()
+        }
         refreshSystemReadiness()
     }
 

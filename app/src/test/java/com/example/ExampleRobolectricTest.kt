@@ -78,11 +78,12 @@ class ExampleRobolectricTest {
         assertEquals(Color(0xFF4F46E5L), softDefault.accentBg)
         assertEquals(Color(0xFFF1F4F9L), softDefault.shadowLight)
         assertEquals(Color(0xFFA5AEBCL), softDefault.shadowDark)
-        assertEquals(Color(0xFF12151BL), softDefault.keyBorder)
+        assertEquals(Color.Black, softDefault.keyBorder)
 
         val gamingActive = defaultSettings.copy(layoutMode = KeyboardLayoutMode.GAMING)
         assertTrue(gamingActive.isRgbActiveForCurrentMode())
-        assertTrue(defaultSettings.copy(rgbBorderMode = RgbBorderMode.ALL_MODES).isRgbActiveForCurrentMode())
+        assertFalse(defaultSettings.copy(layoutMode = KeyboardLayoutMode.PC_WITH_NUMPAD).isRgbActiveForCurrentMode())
+        assertFalse(defaultSettings.copy(layoutMode = KeyboardLayoutMode.NUMPAD_ONLY).isRgbActiveForCurrentMode())
         assertFalse(gamingActive.copy(rgbBorderMode = RgbBorderMode.OFF).isRgbActiveForCurrentMode())
 
         val overridden = KeyDeckSettings(

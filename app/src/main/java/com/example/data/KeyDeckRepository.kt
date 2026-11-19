@@ -87,6 +87,7 @@ object KeyDeckRuntimeState {
 class KeyDeckRepository(private val context: Context) {
 
     private object Keys {
+        val SETTINGS_SCHEMA_VERSION = intPreferencesKey("settings_schema_version")
         val LAYOUT_MODE = stringPreferencesKey("layout_mode")
         val THEME_ID = stringPreferencesKey("theme_id")
         val SHOW_HOTKEY_BAR = booleanPreferencesKey("show_hotkey_bar")
@@ -133,10 +134,24 @@ class KeyDeckRepository(private val context: Context) {
         }
     }
 
+    suspend fun migrateSchemaIfNeeded() {
+        context.keyDeckDataStore.edit { prefs ->
+            val currentVersion = prefs[Keys.SETTINGS_SCHEMA_VERSION] ?: 0
+            if (currentVersion < CURRENT_SCHEMA_VERSION) {
+                prefs[Keys.SETTINGS_SCHEMA_VERSION] = CURRENT_SCHEMA_VERSION
+                prefs[Keys.LAYOUT_MODE] = KeyboardLayoutMode.PC_STANDARD.name
+                prefs[Keys.RGB_BORDER_MODE] = RgbBorderMode.GAMING_ONLY.name
+                prefs[Keys.SHOW_KEY_BORDER] = true
+                prefs[Keys.SUPPRESS_AUTO_IME_ON_INPUT] = true
+            }
+        }
+    }
+
     suspend fun updateSettings(transform: (KeyDeckSettings) -> KeyDeckSettings) {
         context.keyDeckDataStore.edit { prefs ->
             val current = decodeSettings(prefs)
             val updated = transform(current)
+            prefs[Keys.SETTINGS_SCHEMA_VERSION] = CURRENT_SCHEMA_VERSION
             prefs[Keys.LAYOUT_MODE] = updated.layoutMode.name
             prefs[Keys.THEME_ID] = updated.themeId.name
             prefs[Keys.SHOW_HOTKEY_BAR] = updated.showHotkeyBar
@@ -171,10 +186,20 @@ class KeyDeckRepository(private val context: Context) {
     }
 
     private fun decodeSettings(prefs: Preferences): KeyDeckSettings {
-        val layoutName = prefs[Keys.LAYOUT_MODE] ?: KeyboardLayoutMode.PC_STANDARD.name
+        val schemaVersion = prefs[Keys.SETTINGS_SCHEMA_VERSION] ?: 0
+        val isLegacyV1 = schemaVersion < CURRENT_SCHEMA_VERSION
+        val layoutName = if (isLegacyV1) {
+            KeyboardLayoutMode.PC_STANDARD.name
+        } else {
+            prefs[Keys.LAYOUT_MODE] ?: KeyboardLayoutMode.PC_STANDARD.name
+        }
         val themeName = prefs[Keys.THEME_ID] ?: KeyboardThemeId.SOFT_NEUMORPH.name
         val dockName = prefs[Keys.DOCK_ALIGNMENT] ?: KeyboardDockAlignment.CENTER.name
-        val rgbName = prefs[Keys.RGB_BORDER_MODE] ?: RgbBorderMode.GAMING_ONLY.name
+        val rgbName = if (isLegacyV1) {
+            RgbBorderMode.GAMING_ONLY.name
+        } else {
+            prefs[Keys.RGB_BORDER_MODE] ?: RgbBorderMode.GAMING_ONLY.name
+        }
         return KeyDeckSettings(
             layoutMode = runCatching { KeyboardLayoutMode.valueOf(layoutName) }
                 .getOrDefault(KeyboardLayoutMode.PC_STANDARD),
@@ -200,7 +225,7 @@ class KeyDeckRepository(private val context: Context) {
             bubbleSizeDp = (prefs[Keys.BUBBLE_SIZE_DP] ?: 48).coerceIn(36, 68),
             rgbBorderMode = runCatching { RgbBorderMode.valueOf(rgbName) }
                 .getOrDefault(RgbBorderMode.GAMING_ONLY),
-            showKeyBorder = prefs[Keys.SHOW_KEY_BORDER] ?: true,
+            showKeyBorder = if (isLegacyV1) true else (prefs[Keys.SHOW_KEY_BORDER] ?: true),
             touchpadSensitivity = (prefs[Keys.TOUCHPAD_SENSITIVITY] ?: 1.6f).coerceIn(0.6f, 3.5f),
             touchpadWidthFraction = (prefs[Keys.TOUCHPAD_WIDTH_FRACTION] ?: 0.42f).coerceIn(0.30f, 0.55f),
             gamingMcpeLookMode = prefs[Keys.GAMING_MCPE_LOOK_MODE] ?: true,
@@ -269,5 +294,9 @@ class KeyDeckRepository(private val context: Context) {
                 }
             }
         }.getOrElse { PcKeyboardLayoutData.defaultHotkeys }
+    }
+
+    companion object {
+        private const val CURRENT_SCHEMA_VERSION = 2
     }
 }
