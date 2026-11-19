@@ -1,8 +1,12 @@
 package com.example.ui.screens
 
 import android.annotation.SuppressLint
+import android.content.Context
 import android.os.SystemClock
 import android.view.KeyEvent
+import android.view.inputmethod.EditorInfo
+import android.view.inputmethod.InputConnection
+import android.view.inputmethod.InputMethodManager
 import android.webkit.WebView
 import android.webkit.WebViewClient
 import androidx.compose.foundation.background
@@ -54,15 +58,28 @@ import com.example.ui.theme.NeuTextSecondary
 import com.example.ui.theme.neumorphicInset
 import com.example.ui.theme.neumorphicRaised
 
+private class SandboxWebView(context: Context) : WebView(context) {
+    var suppressSystemKeyboard: Boolean = true
+
+    override fun onCheckIsTextEditor(): Boolean {
+        return if (suppressSystemKeyboard) false else super.onCheckIsTextEditor()
+    }
+
+    override fun onCreateInputConnection(outAttrs: EditorInfo): InputConnection? {
+        return if (suppressSystemKeyboard) null else super.onCreateInputConnection(outAttrs)
+    }
+}
+
 @SuppressLint("SetJavaScriptEnabled")
 @Composable
 fun WebSandboxScreen(
     isOverlayRunning: Boolean,
+    suppressSystemKeyboard: Boolean,
     onLaunchFloatingOverWeb: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     var urlInput by remember { mutableStateOf("playground://shortcuts") }
-    var webViewRef by remember { mutableStateOf<WebView?>(null) }
+    var webViewRef by remember { mutableStateOf<SandboxWebView?>(null) }
 
     DisposableEffect(webViewRef) {
         val wv = webViewRef
@@ -77,11 +94,34 @@ fun WebSandboxScreen(
                     wv.dispatchKeyEvent(up)
                     return true
                 }
+
+                override fun onDirectKeyHold(keyCode: Int, metaState: Int, isDown: Boolean): Boolean {
+                    wv.requestFocus()
+                    val now = SystemClock.uptimeMillis()
+                    val action = if (isDown) KeyEvent.ACTION_DOWN else KeyEvent.ACTION_UP
+                    wv.dispatchKeyEvent(KeyEvent(now, now, action, keyCode, 0, metaState))
+                    return true
+                }
+            }
+            val mouseTarget = object : KeyDispatcher.DirectMouseTarget {
+                override fun onMouseDelta(dx: Float, dy: Float) {
+                    wv.post {
+                        wv.evaluateJavascript("window.onKeyDeckMouseDelta && window.onKeyDeckMouseDelta($dx, $dy);", null)
+                    }
+                }
+
+                override fun onMouseClick(isRightClick: Boolean) {
+                    wv.post {
+                        wv.evaluateJavascript("window.onKeyDeckMouseClick && window.onKeyDeckMouseClick($isRightClick);", null)
+                    }
+                }
             }
             KeyDispatcher.setDirectTarget(target)
+            KeyDispatcher.setDirectMouseTarget(mouseTarget)
         }
         onDispose {
             KeyDispatcher.setDirectTarget(null)
+            KeyDispatcher.setDirectMouseTarget(null)
         }
     }
 
@@ -99,12 +139,12 @@ fun WebSandboxScreen(
         ) {
             Column(modifier = Modifier.weight(1f).padding(end = 8.dp)) {
                 Text(
-                    text = "Web Shortcut Sandbox",
+                    text = "Web & Gaming Lab",
                     style = MaterialTheme.typography.headlineMedium,
                     color = NeuTextPrimary,
                 )
                 Text(
-                    text = "Test PC shortcuts & numpad with zero text inputs",
+                    text = "Test shortcuts, numpad, WASD hold & mouse touchpad",
                     style = MaterialTheme.typography.bodyMedium,
                     color = NeuTextSecondary,
                 )
@@ -116,7 +156,7 @@ fun WebSandboxScreen(
                         if (isOverlayRunning) {
                             Modifier.neumorphicInset(NeuActiveFill, NeuShadowLight, NeuShadowDark, 14.dp, 3.dp)
                         } else {
-                            Modifier.neumorphicRaised(NeuBg, NeuShadowLight, NeuShadowDark, 14.dp, 4.dp, 8.dp)
+                            Modifier.neumorphicRaised(NeuBg, NeuShadowLight, NeuShadowDark, 14.dp, 4.dp, 7.dp)
                         },
                     )
                     .clickable(onClick = onLaunchFloatingOverWeb)
@@ -186,7 +226,7 @@ fun WebSandboxScreen(
             Box(
                 modifier = Modifier
                     .height(48.dp)
-                    .neumorphicRaised(NeuBg, NeuShadowLight, NeuShadowDark, 14.dp, 4.dp, 8.dp)
+                    .neumorphicRaised(NeuBg, NeuShadowLight, NeuShadowDark, 14.dp, 4.dp, 7.dp)
                     .clickable {
                         val wv = webViewRef ?: return@clickable
                         val target = urlInput.trim()
@@ -211,7 +251,7 @@ fun WebSandboxScreen(
             Box(
                 modifier = Modifier
                     .size(48.dp)
-                    .neumorphicRaised(NeuBg, NeuShadowLight, NeuShadowDark, 14.dp, 4.dp, 8.dp)
+                    .neumorphicRaised(NeuBg, NeuShadowLight, NeuShadowDark, 14.dp, 4.dp, 7.dp)
                     .clickable {
                         urlInput = "playground://shortcuts"
                         webViewRef?.loadDataWithBaseURL(
@@ -230,16 +270,18 @@ fun WebSandboxScreen(
         }
 
         // Embedded WebView inside a Soft UI Neumorphic frame
+        val suppressIme = suppressSystemKeyboard
         Box(
             modifier = Modifier
                 .fillMaxWidth()
                 .weight(1f)
-                .neumorphicRaised(NeuBg, NeuShadowLight, NeuShadowDark, 20.dp, 5.dp, 10.dp)
+                .neumorphicRaised(NeuBg, NeuShadowLight, NeuShadowDark, 20.dp, 5.dp, 9.dp)
                 .padding(6.dp),
         ) {
             AndroidView(
                 factory = { ctx ->
-                    WebView(ctx).apply {
+                    SandboxWebView(ctx).apply {
+                        this.suppressSystemKeyboard = suppressIme
                         isFocusable = true
                         isFocusableInTouchMode = true
                         settings.javaScriptEnabled = true
@@ -255,6 +297,13 @@ fun WebSandboxScreen(
                         webViewRef = this
                     }
                 },
+                update = { wv ->
+                    wv.suppressSystemKeyboard = suppressIme
+                    if (suppressIme) {
+                        val imm = wv.context.getSystemService(Context.INPUT_METHOD_SERVICE) as? InputMethodManager
+                        imm?.hideSoftInputFromWindow(wv.windowToken, 0)
+                    }
+                },
                 modifier = Modifier.fillMaxSize(),
             )
         }
@@ -268,120 +317,126 @@ private val PLAYGROUND_HTML = """
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
 <style>
   :root {
-    --bg: #e0e5ec;
-    --shadow-light: #ffffff;
-    --shadow-dark: #b9bcc6;
-    --text: #4b5563;
+    --bg: #d6dce5;
+    --shadow-light: #f1f4f9;
+    --shadow-dark: #a5aebc;
+    --text: #1f2937;
     --accent: #4f46e5;
   }
   body {
-    margin: 0; padding: 14px; font-family: system-ui, -apple-system, sans-serif;
+    margin: 0; padding: 12px; font-family: system-ui, -apple-system, sans-serif;
     background: var(--bg); color: var(--text);
   }
   .badge {
-    display: inline-block; padding: 6px 12px; border-radius: 999px; font-size: 11px; font-weight: 700;
-    background: #d7e3f4; color: var(--accent);
-    box-shadow: inset 3px 3px 6px var(--shadow-dark), inset -3px -3px 6px var(--shadow-light);
+    display: inline-block; padding: 5px 11px; border-radius: 999px; font-size: 11px; font-weight: 700;
+    background: #cde0f8; color: var(--accent); border: 1px solid rgba(139,149,165,0.6);
   }
   .card {
-    background: var(--bg); border-radius: 18px; padding: 14px; margin-top: 12px;
-    box-shadow: 6px 6px 12px var(--shadow-dark), -6px -6px 12px var(--shadow-light);
+    background: var(--bg); border-radius: 16px; padding: 12px; margin-top: 10px;
+    border: 1px solid rgba(139,149,165,0.65);
+    box-shadow: 5px 5px 10px var(--shadow-dark), -5px -5px 10px var(--shadow-light);
   }
-  .row { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 10px; }
+  .arena {
+    position: relative; height: 110px; border-radius: 12px; margin-top: 8px; overflow: hidden;
+    background: #cfd6e2; border: 1px solid rgba(139,149,165,0.7);
+    box-shadow: inset 3px 3px 6px var(--shadow-dark), inset -3px -3px 6px var(--shadow-light);
+  }
+  .cursor {
+    position: absolute; width: 16px; height: 16px; border-radius: 50%;
+    border: 2.5px solid #4f46e5; background: rgba(79,70,229,0.22);
+    transform: translate(-50%, -50%); left: 50%; top: 50%; pointer-events: none;
+  }
+  .row { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 8px; }
   .pill {
-    padding: 8px 12px; border-radius: 10px; background: var(--bg); font-size: 12px; font-weight: 600;
-    box-shadow: 4px 4px 8px var(--shadow-dark), -4px -4px 8px var(--shadow-light);
+    padding: 6px 10px; border-radius: 9px; background: #dce1ea; font-size: 11px; font-weight: 600;
+    border: 1px solid rgba(139,149,165,0.65);
   }
-  .pill.active {
-    background: #d7e3f4; color: var(--accent);
-    box-shadow: inset 3px 3px 6px var(--shadow-dark), inset -3px -3px 6px var(--shadow-light);
-  }
-  .stage { display: flex; align-items: center; justify-content: space-between; margin-top: 4px; }
+  .pill.active { background: #cde0f8; color: var(--accent); border-color: #4f46e5; }
+  .stage { display: flex; align-items: center; justify-content: space-between; margin-top: 4px; font-size: 13px; }
   .meter {
-    height: 10px; background: var(--bg); border-radius: 99px; overflow: hidden; margin-top: 10px;
-    box-shadow: inset 3px 3px 6px var(--shadow-dark), inset -3px -3px 6px var(--shadow-light);
+    height: 8px; background: #cfd6e2; border-radius: 99px; overflow: hidden; margin-top: 8px;
   }
-  .meter-fill { height: 100%; width: 35%; background: #4f46e5; border-radius: 99px; transition: width 0.15s; }
-  #log { font-size: 11px; color: #6b7280; max-height: 150px; overflow-y: auto; margin-top: 8px; }
-  .evt { padding: 5px 0; border-bottom: 1px solid rgba(185,188,198,0.4); }
+  .meter-fill { height: 100%; width: 35%; background: #4f46e5; border-radius: 99px; transition: width 0.12s; }
+  #log { font-size: 11px; color: #4b5563; max-height: 110px; overflow-y: auto; margin-top: 6px; }
+  .evt { padding: 4px 0; border-bottom: 1px solid rgba(139,149,165,0.35); }
   .k { color: var(--accent); font-weight: 700; }
 </style>
 </head>
 <body>
-  <div class="badge">NO TEXT INPUTS • SOFT UI KEYDOWN MODE</div>
+  <div class="badge">WEB + GAMING MODE TEST ARENA</div>
   <div class="card">
     <div class="stage">
-      <strong id="playerState">PAUSED (Press Space / K)</strong>
-      <span id="posLabel" style="color:#4f46e5;font-weight:700">35%</span>
+      <strong id="playerState">WASD &amp; Mouse Aim Arena</strong>
+      <span id="clickCounts" style="color:#4f46e5;font-weight:700">LMB: 0 • RMB: 0</span>
+    </div>
+    <div class="arena" id="arena">
+      <div class="cursor" id="cursor"></div>
+    </div>
+    <div class="row">
+      <div class="pill" id="k-w">W</div>
+      <div class="pill" id="k-a">A</div>
+      <div class="pill" id="k-s">S</div>
+      <div class="pill" id="k-d">D</div>
+      <div class="pill" id="k-space">Space</div>
+      <div class="pill" id="k-shift">Shift</div>
+      <div class="pill" id="tool-num">Num: <span id="numVal">-</span></div>
     </div>
     <div class="meter"><div id="fill" class="meter-fill"></div></div>
-    <div class="row">
-      <div class="pill" id="tool-brush">Ctrl+B Brush</div>
-      <div class="pill" id="tool-undo">Ctrl+Z Undo</div>
-      <div class="pill" id="tool-copy">Ctrl+C Copy</div>
-      <div class="pill" id="tool-num">Numpad: <span id="numVal">-</span></div>
-    </div>
   </div>
 
   <div class="card">
-    <strong>JS keydown Listener (Live)</strong>
-    <div id="log"><div class="evt">Tap the floating bubble, open KeyDeck, and press any key or hotkey...</div></div>
+    <strong>Live Key &amp; Mouse Events</strong>
+    <div id="log"><div class="evt">Open Floating Deck → Game mode to test WASD hold &amp; Touchpad...</div></div>
   </div>
 
 <script>
-  let playing = false;
-  let pos = 35;
+  let cx = 50, cy = 50, lmb = 0, rmb = 0, pos = 35;
+  const cursor = document.getElementById('cursor');
+  const clicksEl = document.getElementById('clickCounts');
   const log = document.getElementById('log');
-  const stateEl = document.getElementById('playerState');
   const fillEl = document.getElementById('fill');
-  const posEl = document.getElementById('posLabel');
   const numVal = document.getElementById('numVal');
 
-  function flash(id) {
-    const el = document.getElementById(id);
-    if (!el) return;
-    el.classList.add('active');
-    setTimeout(() => el.classList.remove('active'), 450);
+  window.onKeyDeckMouseDelta = (dx, dy) => {
+    cx = Math.max(5, Math.min(95, cx + dx * 0.25));
+    cy = Math.max(8, Math.min(92, cy + dy * 0.35));
+    cursor.style.left = cx + '%';
+    cursor.style.top = cy + '%';
+  };
+
+  window.onKeyDeckMouseClick = (isRight) => {
+    if (isRight) rmb++; else lmb++;
+    clicksEl.textContent = 'LMB: ' + lmb + ' • RMB: ' + rmb;
+    const row = document.createElement('div');
+    row.className = 'evt';
+    row.innerHTML = '<span class="k">' + (isRight ? 'RMB (Use/Place)' : 'LMB (Attack/Click)') + '</span> at (' + Math.round(cx) + '%, ' + Math.round(cy) + '%)';
+    log.prepend(row);
+    if (log.children.length > 14) log.removeChild(log.lastChild);
+  };
+
+  function toggleKeyPill(key, active) {
+    const k = (key || '').toLowerCase();
+    const map = { w: 'k-w', a: 'k-a', s: 'k-s', d: 'k-d', ' ': 'k-space', shift: 'k-shift' };
+    const id = map[k];
+    if (id) document.getElementById(id).classList.toggle('active', active);
   }
 
   window.addEventListener('keydown', (e) => {
-    const mods = [];
-    if (e.ctrlKey) mods.push('Ctrl');
-    if (e.altKey) mods.push('Alt');
-    if (e.shiftKey) mods.push('Shift');
-    if (e.metaKey) mods.push('Meta');
-    const combo = [...mods, e.key || e.code].join('+');
-
-    if (e.code === 'Space' || e.key === ' ' || e.key.toLowerCase() === 'k') {
-      playing = !playing;
-      stateEl.textContent = playing ? 'PLAYING (Space / K)' : 'PAUSED (Space / K)';
-      e.preventDefault();
-    } else if (e.key === 'ArrowRight' || e.key.toLowerCase() === 'l') {
-      pos = Math.min(100, pos + 10);
-    } else if (e.key === 'ArrowLeft' || e.key.toLowerCase() === 'j') {
-      pos = Math.max(0, pos - 10);
-    } else if (e.ctrlKey && e.key.toLowerCase() === 'b') {
-      flash('tool-brush');
-    } else if (e.ctrlKey && e.key.toLowerCase() === 'z') {
-      flash('tool-undo');
-    } else if (e.ctrlKey && e.key.toLowerCase() === 'c') {
-      flash('tool-copy');
-    }
-
+    toggleKeyPill(e.key, true);
     if (/^[0-9]$/.test(e.key)) {
       numVal.textContent = e.key;
-      flash('tool-num');
       pos = parseInt(e.key, 10) * 10;
+      fillEl.style.width = pos + '%';
     }
-
-    fillEl.style.width = pos + '%';
-    posEl.textContent = pos + '%';
-
     const row = document.createElement('div');
     row.className = 'evt';
-    row.innerHTML = '<span class="k">' + combo + '</span> • code=' + e.code + ' • keyCode=' + e.keyCode;
+    row.innerHTML = '<span class="k">DOWN ' + (e.key || e.code) + '</span> • keyCode=' + e.keyCode;
     log.prepend(row);
-    if (log.children.length > 18) log.removeChild(log.lastChild);
+    if (log.children.length > 14) log.removeChild(log.lastChild);
+  });
+
+  window.addEventListener('keyup', (e) => {
+    toggleKeyPill(e.key, false);
   });
 </script>
 </body>

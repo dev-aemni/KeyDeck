@@ -35,6 +35,9 @@ class KeyDeckImeService : InputMethodService() {
     private lateinit var repository: KeyDeckRepository
     private val lifecycleOwner = OverlayLifecycleOwner()
 
+    @Volatile
+    private var latestSettings = com.example.keyboard.KeyDeckSettings()
+
     companion object {
         @Volatile
         var activeInstance: KeyDeckImeService? = null
@@ -50,6 +53,34 @@ class KeyDeckImeService : InputMethodService() {
         activeInstance = this
         repository = KeyDeckRepository(applicationContext)
         lifecycleOwner.onCreate()
+        serviceScope.launch {
+            repository.settingsFlow.collect { s ->
+                latestSettings = s
+                if (s.suppressAutoImeOnInput) {
+                    requestHideSelf(0)
+                }
+            }
+        }
+    }
+
+    override fun onEvaluateInputViewShown(): Boolean {
+        if (latestSettings.suppressAutoImeOnInput ||
+            KeyDeckRuntimeState.isOverlayServiceRunning.value ||
+            KeyDeckRuntimeState.isKeyboardOverlayExpanded.value
+        ) {
+            return false
+        }
+        return super.onEvaluateInputViewShown()
+    }
+
+    override fun onShowInputRequested(flags: Int, configChange: Boolean): Boolean {
+        if (latestSettings.suppressAutoImeOnInput ||
+            KeyDeckRuntimeState.isOverlayServiceRunning.value ||
+            KeyDeckRuntimeState.isKeyboardOverlayExpanded.value
+        ) {
+            return false
+        }
+        return super.onShowInputRequested(flags, configChange)
     }
 
     override fun onCreateInputView(): View {
@@ -83,7 +114,7 @@ class KeyDeckImeService : InputMethodService() {
                         PcKeyboardDeck(
                             settings = settings,
                             hotkeys = hotkeys,
-                            routeLabel = "IME Input",
+                            routeLabel = "IME",
                             isOverlay = false,
                             onKeyDispatch = { keyCode, metaState, charToCommit, comboLabel ->
                                 KeyDispatcher.dispatchKey(
@@ -92,6 +123,32 @@ class KeyDeckImeService : InputMethodService() {
                                     metaState = metaState,
                                     charToCommit = charToCommit,
                                     comboLabel = comboLabel,
+                                    hapticEnabled = settings.hapticFeedback,
+                                )
+                            },
+                            onKeyHoldDispatch = { keyCode, metaState, isDown, comboLabel ->
+                                KeyDispatcher.dispatchKeyHold(
+                                    context = this@KeyDeckImeService,
+                                    keyCode = keyCode,
+                                    metaState = metaState,
+                                    isDown = isDown,
+                                    comboLabel = comboLabel,
+                                    hapticEnabled = settings.hapticFeedback,
+                                )
+                            },
+                            onMouseMove = { dx, dy ->
+                                KeyDispatcher.dispatchMouseMove(
+                                    dx = dx,
+                                    dy = dy,
+                                    sensitivity = settings.touchpadSensitivity,
+                                    mcpeLookMode = settings.gamingMcpeLookMode,
+                                )
+                            },
+                            onMouseClick = { isRight ->
+                                KeyDispatcher.dispatchMouseClick(
+                                    context = this@KeyDeckImeService,
+                                    isRightClick = isRight,
+                                    mcpeLookMode = settings.gamingMcpeLookMode,
                                     hapticEnabled = settings.hapticFeedback,
                                 )
                             },
@@ -117,6 +174,11 @@ class KeyDeckImeService : InputMethodService() {
                                     repository.updateSettings { it.copy(showFunctionRow = !it.showFunctionRow) }
                                 }
                             },
+                            onUpdateSettings = { transform ->
+                                serviceScope.launch {
+                                    repository.updateSettings(transform)
+                                }
+                            },
                             onMinimize = {
                                 requestHideSelf(0)
                             },
@@ -136,6 +198,10 @@ class KeyDeckImeService : InputMethodService() {
 
     override fun onStartInputView(info: EditorInfo?, restarting: Boolean) {
         super.onStartInputView(info, restarting)
+        if (latestSettings.suppressAutoImeOnInput || KeyDeckRuntimeState.isKeyboardOverlayExpanded.value) {
+            requestHideSelf(0)
+            return
+        }
         KeyDeckRuntimeState.setImeSessionActive(true)
         lifecycleOwner.onResume()
     }
@@ -175,6 +241,18 @@ class KeyDeckImeService : InputMethodService() {
         val upEvent = KeyEvent(uptimeMs, uptimeMs + 10, KeyEvent.ACTION_UP, keyCode, 0, metaState)
         ic.sendKeyEvent(downEvent)
         ic.sendKeyEvent(upEvent)
+        return true
+    }
+
+    fun dispatchKeyHoldEvent(
+        keyCode: Int,
+        metaState: Int,
+        isDown: Boolean,
+        uptimeMs: Long,
+    ): Boolean {
+        val ic = currentInputConnection ?: return false
+        val action = if (isDown) KeyEvent.ACTION_DOWN else KeyEvent.ACTION_UP
+        ic.sendKeyEvent(KeyEvent(uptimeMs, uptimeMs, action, keyCode, 0, metaState))
         return true
     }
 }

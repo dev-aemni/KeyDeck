@@ -17,39 +17,28 @@ import android.view.View
 import android.view.WindowManager
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
-import androidx.compose.foundation.gestures.detectDragGestures
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.DragHandle
 import androidx.compose.material.icons.filled.Keyboard
 import androidx.compose.material.icons.filled.KeyboardHide
 import androidx.compose.material3.Icon
-import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.input.pointer.positionChange
 import androidx.compose.ui.platform.ComposeView
 import androidx.compose.ui.platform.LocalViewConfiguration
 import androidx.compose.ui.platform.ViewCompositionStrategy
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import androidx.core.app.NotificationCompat
 import androidx.core.app.ServiceCompat
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -100,6 +89,8 @@ class FloatingKeyboardService : Service() {
     private var bubbleParams: WindowManager.LayoutParams? = null
     private var keyboardView: View? = null
     private var keyboardParams: WindowManager.LayoutParams? = null
+    private var dragResizeAccumX = 0f
+    private var dragResizeAccumY = 0f
 
     override fun onBind(intent: Intent?): IBinder? = null
 
@@ -159,6 +150,7 @@ class FloatingKeyboardService : Service() {
         removeKeyboardOverlay()
         removeBubbleOverlay()
         KeyDeckRuntimeState.setOverlayServiceRunning(false)
+        KeyDeckAccessibilityService.activeInstance?.syncSoftKeyboardPolicy(false)
         lifecycleOwner.onPause()
         lifecycleOwner.onDestroy()
         serviceScope.cancel()
@@ -168,6 +160,7 @@ class FloatingKeyboardService : Service() {
     private fun stopAllAndQuit() {
         KeyDeckRuntimeState.setKeyboardOverlayExpanded(false)
         KeyDeckRuntimeState.setOverlayServiceRunning(false)
+        KeyDeckAccessibilityService.activeInstance?.syncSoftKeyboardPolicy(false)
         removeKeyboardOverlay()
         removeBubbleOverlay()
         runCatching { stopForeground(STOP_FOREGROUND_REMOVE) }
@@ -228,6 +221,7 @@ class FloatingKeyboardService : Service() {
                     FloatingTriggerBubble(
                         sizeDp = settings.bubbleSizeDp,
                         palette = palette,
+                        showBorder = settings.showKeyBorder,
                         expanded = expanded,
                         onDragDelta = { dx, dy ->
                             val p = bubbleParams ?: return@FloatingTriggerBubble
@@ -257,6 +251,7 @@ class FloatingKeyboardService : Service() {
         if (keyboardView != null || !Settings.canDrawOverlays(this)) return
 
         val metrics = resources.displayMetrics
+        val maxW = metrics.widthPixels
         val maxH = metrics.heightPixels
 
         val params = WindowManager.LayoutParams(
@@ -270,7 +265,7 @@ class FloatingKeyboardService : Service() {
         ).apply {
             gravity = Gravity.BOTTOM or Gravity.CENTER_HORIZONTAL
             x = 0
-            y = 28
+            y = 24
         }
         keyboardParams = params
 
@@ -282,23 +277,120 @@ class FloatingKeyboardService : Service() {
             setContent {
                 val settings by repository.settingsFlow.collectAsStateWithLifecycle(initialValue = KeyDeckSettings())
                 val hotkeys by repository.hotkeysFlow.collectAsStateWithLifecycle(initialValue = PcKeyboardLayoutData.defaultHotkeys)
-                val lastKey by KeyDeckRuntimeState.lastDispatchedKey.collectAsStateWithLifecycle()
                 val palette = settings.resolvePalette()
                 val dockAlign = when (settings.dockAlignment) {
                     KeyboardDockAlignment.LEFT -> Alignment.CenterStart
                     KeyboardDockAlignment.CENTER -> Alignment.Center
                     KeyboardDockAlignment.RIGHT -> Alignment.CenterEnd
                 }
-                val outerCorner = (settings.keyCornerRadiusDp + 10).coerceIn(14, 28).dp
+                val outerCorner = (settings.keyCornerRadiusDp + 8).coerceIn(12, 24).dp
+                val borderCol = if (settings.showKeyBorder) palette.keyBorder.copy(alpha = 0.65f) else null
 
                 KeyDeckTheme(darkTheme = false) {
                     Box(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(horizontal = 6.dp, vertical = 6.dp),
+                            .padding(horizontal = 4.dp, vertical = 4.dp),
                         contentAlignment = dockAlign,
                     ) {
-                        Column(
+                        PcKeyboardDeck(
+                            settings = settings,
+                            hotkeys = hotkeys,
+                            routeLabel = KeyDispatcher.activeRouteLabel(),
+                            isOverlay = true,
+                            onKeyDispatch = { keyCode, metaState, charToCommit, comboLabel ->
+                                KeyDispatcher.dispatchKey(
+                                    context = this@FloatingKeyboardService,
+                                    keyCode = keyCode,
+                                    metaState = metaState,
+                                    charToCommit = charToCommit,
+                                    comboLabel = comboLabel,
+                                    hapticEnabled = settings.hapticFeedback,
+                                )
+                            },
+                            onKeyHoldDispatch = { keyCode, metaState, isDown, comboLabel ->
+                                KeyDispatcher.dispatchKeyHold(
+                                    context = this@FloatingKeyboardService,
+                                    keyCode = keyCode,
+                                    metaState = metaState,
+                                    isDown = isDown,
+                                    comboLabel = comboLabel,
+                                    hapticEnabled = settings.hapticFeedback,
+                                )
+                            },
+                            onMouseMove = { dx, dy ->
+                                KeyDispatcher.dispatchMouseMove(
+                                    dx = dx,
+                                    dy = dy,
+                                    sensitivity = settings.touchpadSensitivity,
+                                    mcpeLookMode = settings.gamingMcpeLookMode,
+                                )
+                            },
+                            onMouseClick = { isRight ->
+                                KeyDispatcher.dispatchMouseClick(
+                                    context = this@FloatingKeyboardService,
+                                    isRightClick = isRight,
+                                    mcpeLookMode = settings.gamingMcpeLookMode,
+                                    hapticEnabled = settings.hapticFeedback,
+                                )
+                            },
+                            onHotkeyDispatch = { hotkey ->
+                                KeyDispatcher.dispatchHotkey(
+                                    context = this@FloatingKeyboardService,
+                                    hotkey = hotkey,
+                                    hapticEnabled = settings.hapticFeedback,
+                                )
+                            },
+                            onChangeLayoutMode = { newMode ->
+                                serviceScope.launch {
+                                    repository.updateSettings { it.copy(layoutMode = newMode) }
+                                }
+                            },
+                            onToggleNumLock = {
+                                serviceScope.launch {
+                                    repository.updateSettings { it.copy(numLockOn = !it.numLockOn) }
+                                }
+                            },
+                            onToggleFunctionRow = {
+                                serviceScope.launch {
+                                    repository.updateSettings { it.copy(showFunctionRow = !it.showFunctionRow) }
+                                }
+                            },
+                            onUpdateSettings = { transform ->
+                                serviceScope.launch {
+                                    repository.updateSettings(transform)
+                                }
+                            },
+                            onOverlayDrag = { dx, dy ->
+                                val p = keyboardParams ?: return@PcKeyboardDeck
+                                p.x = (p.x + dx.roundToInt()).coerceIn((-maxW * 0.25f).roundToInt(), (maxW * 0.25f).roundToInt())
+                                p.y = (p.y - dy.roundToInt()).coerceIn(0, (maxH * 0.70f).roundToInt())
+                                runCatching { windowManager.updateViewLayout(this@apply, p) }
+                            },
+                            onResizeDragDelta = { dx, dy ->
+                                dragResizeAccumX += dx
+                                dragResizeAccumY += dy
+                                if (kotlin.math.abs(dragResizeAccumX) > 22f || kotlin.math.abs(dragResizeAccumY) > 16f) {
+                                    val widthStep = (dragResizeAccumX / 800f)
+                                    val heightStep = (-dragResizeAccumY / 18f).roundToInt()
+                                    dragResizeAccumX = 0f
+                                    dragResizeAccumY = 0f
+                                    serviceScope.launch {
+                                        repository.updateSettings { cur ->
+                                            cur.copy(
+                                                keyboardWidthFraction = (cur.keyboardWidthFraction + widthStep).coerceIn(0.60f, 1.0f),
+                                                keyHeightDp = (cur.keyHeightDp + heightStep).coerceIn(26, 54),
+                                            )
+                                        }
+                                    }
+                                }
+                            },
+                            onMinimize = {
+                                KeyDeckRuntimeState.setKeyboardOverlayExpanded(false)
+                            },
+                            onCloseOverlay = {
+                                stopAllAndQuit()
+                            },
                             modifier = Modifier
                                 .fillMaxWidth(settings.keyboardWidthFraction.coerceIn(0.60f, 1.0f))
                                 .neumorphicRaised(
@@ -306,134 +398,11 @@ class FloatingKeyboardService : Service() {
                                     shadowLight = palette.shadowLight,
                                     shadowDark = palette.shadowDark,
                                     cornerRadius = outerCorner,
-                                    shadowOffset = 6.dp,
-                                    blurRadius = 12.dp,
+                                    shadowOffset = 5.dp,
+                                    blurRadius = 10.dp,
+                                    borderColor = borderCol,
                                 ),
-                        ) {
-                            // Soft UI drag handle + live key badge + quick hide/stop pills
-                            Row(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .pointerInput(Unit) {
-                                        detectDragGestures { change, dragAmount ->
-                                            change.consume()
-                                            val p = keyboardParams ?: return@detectDragGestures
-                                            p.y = (p.y - dragAmount.y.roundToInt()).coerceIn(0, (maxH * 0.65f).roundToInt())
-                                            runCatching { windowManager.updateViewLayout(this@apply, p) }
-                                        }
-                                    }
-                                    .padding(horizontal = 10.dp, vertical = 5.dp),
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.SpaceBetween,
-                            ) {
-                                Row(
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.spacedBy(6.dp),
-                                ) {
-                                    Icon(
-                                        imageVector = Icons.Default.DragHandle,
-                                        contentDescription = "Drag keyboard vertically",
-                                        tint = palette.secondaryText,
-                                        modifier = Modifier.size(16.dp),
-                                    )
-                                    Text(
-                                        text = lastKey?.let { "${it.comboLabel} • ${it.route}" } ?: "Soft UI KeyDeck",
-                                        color = palette.secondaryText,
-                                        fontSize = 10.sp,
-                                        fontWeight = FontWeight.SemiBold,
-                                        maxLines = 1,
-                                    )
-                                }
-                                Row(
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                                ) {
-                                    Box(
-                                        modifier = Modifier
-                                            .size(24.dp)
-                                            .neumorphicRaised(
-                                                surfaceColor = palette.keyBg,
-                                                shadowLight = palette.shadowLight,
-                                                shadowDark = palette.shadowDark,
-                                                cornerRadius = 12.dp,
-                                                shadowOffset = 2.dp,
-                                                blurRadius = 4.dp,
-                                            )
-                                            .clickable { KeyDeckRuntimeState.setKeyboardOverlayExpanded(false) },
-                                        contentAlignment = Alignment.Center,
-                                    ) {
-                                        Icon(
-                                            imageVector = Icons.Default.KeyboardHide,
-                                            contentDescription = "Minimize to floating icon",
-                                            tint = palette.primaryText,
-                                            modifier = Modifier.size(13.dp),
-                                        )
-                                    }
-                                    Box(
-                                        modifier = Modifier
-                                            .size(24.dp)
-                                            .neumorphicInset(
-                                                surfaceColor = palette.activeFill,
-                                                shadowLight = palette.shadowLight,
-                                                shadowDark = palette.shadowDark,
-                                                cornerRadius = 12.dp,
-                                                depth = 2.dp,
-                                            )
-                                            .clickable { stopAllAndQuit() },
-                                        contentAlignment = Alignment.Center,
-                                    ) {
-                                        Icon(
-                                            imageVector = Icons.Default.Close,
-                                            contentDescription = "Turn off floating keyboard",
-                                            tint = palette.accentBg,
-                                            modifier = Modifier.size(13.dp),
-                                        )
-                                    }
-                                }
-                            }
-
-                            PcKeyboardDeck(
-                                settings = settings,
-                                hotkeys = hotkeys,
-                                routeLabel = KeyDispatcher.activeRouteLabel(),
-                                isOverlay = true,
-                                onKeyDispatch = { keyCode, metaState, charToCommit, comboLabel ->
-                                    KeyDispatcher.dispatchKey(
-                                        context = this@FloatingKeyboardService,
-                                        keyCode = keyCode,
-                                        metaState = metaState,
-                                        charToCommit = charToCommit,
-                                        comboLabel = comboLabel,
-                                        hapticEnabled = settings.hapticFeedback,
-                                    )
-                                },
-                                onHotkeyDispatch = { hotkey ->
-                                    KeyDispatcher.dispatchHotkey(
-                                        context = this@FloatingKeyboardService,
-                                        hotkey = hotkey,
-                                        hapticEnabled = settings.hapticFeedback,
-                                    )
-                                },
-                                onChangeLayoutMode = { newMode ->
-                                    serviceScope.launch {
-                                        repository.updateSettings { it.copy(layoutMode = newMode) }
-                                    }
-                                },
-                                onToggleNumLock = {
-                                    serviceScope.launch {
-                                        repository.updateSettings { it.copy(numLockOn = !it.numLockOn) }
-                                    }
-                                },
-                                onToggleFunctionRow = {
-                                    serviceScope.launch {
-                                        repository.updateSettings { it.copy(showFunctionRow = !it.showFunctionRow) }
-                                    }
-                                },
-                                onMinimize = {
-                                    KeyDeckRuntimeState.setKeyboardOverlayExpanded(false)
-                                },
-                            )
-                        }
+                        )
                     }
                 }
             }
@@ -493,12 +462,14 @@ class FloatingKeyboardService : Service() {
 private fun FloatingTriggerBubble(
     sizeDp: Int,
     palette: ResolvedKeyboardPalette,
+    showBorder: Boolean,
     expanded: Boolean,
     onDragDelta: (Float, Float) -> Unit,
     onClick: () -> Unit,
 ) {
     val clampedSize = sizeDp.coerceIn(36, 68).dp
     val touchSlop = LocalViewConfiguration.current.touchSlop
+    val borderCol = if (showBorder) palette.keyBorder.copy(alpha = 0.72f) else null
 
     Box(
         modifier = Modifier
@@ -512,6 +483,7 @@ private fun FloatingTriggerBubble(
                         shadowDark = palette.shadowDark,
                         cornerRadius = clampedSize / 2,
                         depth = 4.dp,
+                        borderColor = borderCol,
                     )
                 } else {
                     Modifier.neumorphicRaised(
@@ -520,7 +492,8 @@ private fun FloatingTriggerBubble(
                         shadowDark = palette.shadowDark,
                         cornerRadius = clampedSize / 2,
                         shadowOffset = 4.dp,
-                        blurRadius = 8.dp,
+                        blurRadius = 7.dp,
+                        borderColor = borderCol,
                     )
                 },
             )

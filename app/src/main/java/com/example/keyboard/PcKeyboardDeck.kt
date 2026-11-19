@@ -1,11 +1,21 @@
 package com.example.keyboard
 
 import android.view.KeyEvent
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
@@ -21,7 +31,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Backspace
 import androidx.compose.material.icons.automirrored.filled.KeyboardReturn
@@ -30,8 +39,12 @@ import androidx.compose.material.icons.filled.ArrowDropDown
 import androidx.compose.material.icons.filled.ArrowDropUp
 import androidx.compose.material.icons.filled.ArrowLeft
 import androidx.compose.material.icons.filled.ArrowRight
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Dialpad
+import androidx.compose.material.icons.filled.DragHandle
 import androidx.compose.material.icons.filled.KeyboardHide
+import androidx.compose.material.icons.filled.OpenInFull
+import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Upload
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
@@ -47,6 +60,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -54,9 +68,9 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.ui.theme.BodyFontFamily
-import com.example.ui.theme.MonoFontFamily
 import com.example.ui.theme.neumorphicInset
 import com.example.ui.theme.neumorphicRaised
+import com.example.ui.theme.rgbAnimatedBorder
 
 @Composable
 fun PcKeyboardDeck(
@@ -69,7 +83,14 @@ fun PcKeyboardDeck(
     onChangeLayoutMode: (KeyboardLayoutMode) -> Unit,
     onToggleNumLock: () -> Unit,
     onToggleFunctionRow: () -> Unit,
+    onUpdateSettings: ((KeyDeckSettings) -> KeyDeckSettings) -> Unit = {},
+    onKeyHoldDispatch: ((keyCode: Int, metaState: Int, isDown: Boolean, comboLabel: String) -> Unit)? = null,
+    onMouseMove: ((dx: Float, dy: Float) -> Unit)? = null,
+    onMouseClick: ((isRightClick: Boolean) -> Unit)? = null,
+    onOverlayDrag: ((dx: Float, dy: Float) -> Unit)? = null,
+    onResizeDragDelta: ((dx: Float, dy: Float) -> Unit)? = null,
     onMinimize: (() -> Unit)? = null,
+    onCloseOverlay: (() -> Unit)? = null,
     modifier: Modifier = Modifier,
 ) {
     val palette = remember(settings) { settings.resolvePalette() }
@@ -80,12 +101,31 @@ fun PcKeyboardDeck(
     var metaActive by remember { mutableStateOf(false) }
     var fnActive by remember { mutableStateOf(false) }
 
-    val keyHeight = settings.keyHeightDp.coerceIn(24, 54).dp
+    var showResizeStrip by remember { mutableStateOf(false) }
+    var showQuickSettingsPopup by remember { mutableStateOf(false) }
+
+    val rgbActive = settings.isRgbActiveForCurrentMode()
+    val rgbPhaseDeg by if (rgbActive) {
+        val transition = rememberInfiniteTransition(label = "rgb_border_transition")
+        transition.animateFloat(
+            initialValue = 0f,
+            targetValue = 360f,
+            animationSpec = infiniteRepeatable(
+                animation = tween(durationMillis = 4200, easing = LinearEasing),
+                repeatMode = RepeatMode.Restart,
+            ),
+            label = "rgb_phase_deg",
+        )
+    } else {
+        remember { mutableStateOf(0f) }
+    }
+
+    val keyHeight = settings.keyHeightDp.coerceIn(26, 54).dp
     val hGap = settings.keyHorizontalGapDp.coerceIn(1, 6).dp
     val vGap = settings.keyVerticalGapDp.coerceIn(1, 7).dp
     val deckPadding = settings.deckPaddingDp.coerceIn(1, 10).dp
     val keyCorner = settings.keyCornerRadiusDp.coerceIn(4, 16).dp
-    val fontScale = settings.fontScale.coerceIn(0.70f, 1.25f)
+    val fontScale = settings.fontScale.coerceIn(0.75f, 1.25f)
 
     val effectiveUpperCase = shiftActive xor capsActive
 
@@ -151,9 +191,9 @@ fun PcKeyboardDeck(
 
         if (spec.id == "num_toggle_top" || spec.id == "num_toggle") {
             val nextMode = when (settings.layoutMode) {
-                KeyboardLayoutMode.PC_STANDARD -> KeyboardLayoutMode.PC_WITH_NUMPAD
                 KeyboardLayoutMode.PC_WITH_NUMPAD -> KeyboardLayoutMode.NUMPAD_ONLY
                 KeyboardLayoutMode.NUMPAD_ONLY -> KeyboardLayoutMode.PC_STANDARD
+                else -> KeyboardLayoutMode.PC_WITH_NUMPAD
             }
             onChangeLayoutMode(nextMode)
             return
@@ -195,7 +235,8 @@ fun PcKeyboardDeck(
         clearStickyModifiersIfNeeded()
     }
 
-    val isTightDeck = settings.keyHeightDp <= 31
+    val isTightDeck = settings.keyHeightDp <= 32
+    val borderCol = if (settings.showKeyBorder) palette.keyBorder.copy(alpha = 0.85f) else null
 
     Column(
         modifier = modifier
@@ -204,114 +245,149 @@ fun PcKeyboardDeck(
             .padding(horizontal = deckPadding, vertical = deckPadding),
         verticalArrangement = Arrangement.spacedBy(vGap),
     ) {
-        // Soft Neumorphic Mode Strip (can be hidden for extra-slim deck height)
-        if (settings.showModeStrip) {
+        // Uncluttered Top Bar: Drag Handle + Essential Mode Pills + Resize + Quick Settings Gear (+ Minimize/Close in overlay)
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .then(
+                    if (isOverlay && onOverlayDrag != null) {
+                        Modifier.pointerInput(Unit) {
+                            detectDragGestures { change, dragAmount ->
+                                change.consume()
+                                onOverlayDrag(dragAmount.x, dragAmount.y)
+                            }
+                        }
+                    } else {
+                        Modifier
+                    },
+                )
+                .padding(horizontal = 2.dp, vertical = 1.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween,
+        ) {
             Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 2.dp, vertical = 1.dp),
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.SpaceBetween,
+                horizontalArrangement = Arrangement.spacedBy(5.dp),
             ) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(6.dp),
-                ) {
-                    DeckModeChip(
-                        label = "PC",
-                        selected = settings.layoutMode == KeyboardLayoutMode.PC_STANDARD,
-                        palette = palette,
-                        compact = isTightDeck,
-                        testTag = "deck_mode_pc",
-                        onClick = { onChangeLayoutMode(KeyboardLayoutMode.PC_STANDARD) },
-                    )
-                    DeckModeChip(
-                        label = "PC+NUM",
-                        selected = settings.layoutMode == KeyboardLayoutMode.PC_WITH_NUMPAD,
-                        palette = palette,
-                        compact = isTightDeck,
-                        testTag = "deck_mode_split",
-                        onClick = { onChangeLayoutMode(KeyboardLayoutMode.PC_WITH_NUMPAD) },
-                    )
-                    DeckModeChip(
-                        label = "NUM",
-                        selected = settings.layoutMode == KeyboardLayoutMode.NUMPAD_ONLY,
-                        palette = palette,
-                        compact = isTightDeck,
-                        testTag = "deck_mode_numpad",
-                        onClick = { onChangeLayoutMode(KeyboardLayoutMode.NUMPAD_ONLY) },
-                    )
-                    DeckModeChip(
-                        label = "F1-12",
-                        selected = settings.showFunctionRow || fnActive,
-                        palette = palette,
-                        compact = isTightDeck,
-                        testTag = "deck_mode_fn_row",
-                        onClick = onToggleFunctionRow,
+                if (isOverlay) {
+                    Icon(
+                        imageVector = Icons.Default.DragHandle,
+                        contentDescription = "Drag floating keyboard",
+                        tint = palette.secondaryText,
+                        modifier = Modifier.size(16.dp),
                     )
                 }
-
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(6.dp),
-                ) {
-                    Box(
-                        modifier = Modifier
-                            .neumorphicInset(
-                                surfaceColor = palette.activeFill,
-                                shadowLight = palette.shadowLight,
-                                shadowDark = palette.shadowDark,
-                                cornerRadius = 10.dp,
-                                depth = 2.dp,
-                            )
-                            .padding(horizontal = 8.dp, vertical = 3.dp),
-                    ) {
-                        Text(
-                            text = routeLabel,
-                            color = palette.accentBg,
-                            fontFamily = MonoFontFamily,
-                            fontSize = 9.5.sp,
-                            fontWeight = FontWeight.Bold,
+                if (settings.showModeStrip) {
+                    KeyboardLayoutMode.entries.forEach { mode ->
+                        DeckModeChip(
+                            label = mode.shortLabel,
+                            selected = settings.layoutMode == mode,
+                            palette = palette,
+                            borderColor = borderCol,
+                            compact = isTightDeck,
+                            testTag = "deck_mode_${mode.name.lowercase()}",
+                            onClick = { onChangeLayoutMode(mode) },
                         )
                     }
-                    if (onMinimize != null && !isOverlay) {
-                        Box(
-                            modifier = Modifier
-                                .neumorphicRaised(
-                                    surfaceColor = palette.keyBg,
-                                    shadowLight = palette.shadowLight,
-                                    shadowDark = palette.shadowDark,
-                                    cornerRadius = 10.dp,
-                                    shadowOffset = 2.dp,
-                                    blurRadius = 4.dp,
-                                )
-                                .clickable(onClick = onMinimize)
-                                .padding(4.dp)
-                                .testTag("ime_minimize_button"),
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.KeyboardHide,
-                                contentDescription = "Hide keyboard",
-                                tint = palette.secondaryText,
-                                modifier = Modifier.size(14.dp),
-                            )
-                        }
-                    }
+                } else {
+                    Text(
+                        text = routeLabel,
+                        fontFamily = BodyFontFamily,
+                        fontSize = 10.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        color = palette.secondaryText,
+                    )
+                }
+            }
+
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(5.dp),
+            ) {
+                // Resize Toggle in Top Area
+                TopActionIconChip(
+                    icon = Icons.Default.OpenInFull,
+                    contentDescription = "Resize keyboard",
+                    active = showResizeStrip,
+                    palette = palette,
+                    borderColor = borderCol,
+                    testTag = "deck_top_resize_toggle",
+                    onClick = {
+                        showResizeStrip = !showResizeStrip
+                        if (showResizeStrip) showQuickSettingsPopup = false
+                    },
+                )
+                // Quick Settings Popup Toggle
+                TopActionIconChip(
+                    icon = Icons.Default.Settings,
+                    contentDescription = "Quick keyboard settings",
+                    active = showQuickSettingsPopup,
+                    palette = palette,
+                    borderColor = borderCol,
+                    testTag = "deck_top_settings_toggle",
+                    onClick = {
+                        showQuickSettingsPopup = !showQuickSettingsPopup
+                        if (showQuickSettingsPopup) showResizeStrip = false
+                    },
+                )
+                if (onMinimize != null) {
+                    TopActionIconChip(
+                        icon = Icons.Default.KeyboardHide,
+                        contentDescription = "Minimize keyboard",
+                        active = false,
+                        palette = palette,
+                        borderColor = borderCol,
+                        testTag = "ime_minimize_button",
+                        onClick = onMinimize,
+                    )
+                }
+                if (isOverlay && onCloseOverlay != null) {
+                    TopActionIconChip(
+                        icon = Icons.Default.Close,
+                        contentDescription = "Close floating keyboard",
+                        active = true,
+                        palette = palette,
+                        borderColor = borderCol,
+                        testTag = "overlay_close_button",
+                        onClick = onCloseOverlay,
+                    )
                 }
             }
         }
 
-        // Soft Neumorphic Customizable Hotkey Shortcuts Strip
-        if (settings.showHotkeyBar && hotkeys.isNotEmpty()) {
+        // Expandable Top Resize Controls
+        AnimatedVisibility(visible = showResizeStrip) {
+            DeckQuickResizeStrip(
+                settings = settings,
+                palette = palette,
+                isOverlay = isOverlay,
+                onUpdateSettings = onUpdateSettings,
+                onResizeDragDelta = onResizeDragDelta,
+            )
+        }
+
+        // Expandable Quick Feature Settings Popup
+        AnimatedVisibility(visible = showQuickSettingsPopup) {
+            DeckQuickSettingsPopup(
+                settings = settings,
+                palette = palette,
+                onUpdateSettings = onUpdateSettings,
+                onDismiss = { showQuickSettingsPopup = false },
+            )
+        }
+
+        // Compact Shortcut Bar (capped to 4 concise favorites so top area stays clean!)
+        if (settings.showHotkeyBar && hotkeys.isNotEmpty() && settings.layoutMode != KeyboardLayoutMode.GAMING) {
+            val topFavorites = remember(hotkeys) { hotkeys.take(4) }
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
                     .horizontalScroll(rememberScrollState())
-                    .padding(horizontal = 2.dp, vertical = 2.dp),
-                horizontalArrangement = Arrangement.spacedBy(if (isTightDeck) 5.dp else 7.dp),
+                    .padding(horizontal = 2.dp, vertical = 1.dp),
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                hotkeys.forEach { hotkey ->
+                topFavorites.forEach { hotkey ->
                     val accentColor = Color(hotkey.accentHex)
                     Row(
                         modifier = Modifier
@@ -319,15 +395,13 @@ fun PcKeyboardDeck(
                                 surfaceColor = palette.keyBg,
                                 shadowLight = palette.shadowLight,
                                 shadowDark = palette.shadowDark,
-                                cornerRadius = 12.dp,
+                                cornerRadius = 10.dp,
                                 shadowOffset = 2.dp,
                                 blurRadius = 4.dp,
+                                borderColor = borderCol,
                             )
                             .clickable { onHotkeyDispatch(hotkey) }
-                            .padding(
-                                horizontal = if (isTightDeck) 7.dp else 9.dp,
-                                vertical = if (isTightDeck) 3.5.dp else 5.dp,
-                            )
+                            .padding(horizontal = 8.dp, vertical = 4.dp)
                             .testTag("hotkey_chip_${hotkey.id}"),
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(5.dp),
@@ -342,15 +416,15 @@ fun PcKeyboardDeck(
                             text = hotkey.label,
                             color = palette.primaryText,
                             fontFamily = BodyFontFamily,
-                            fontSize = (if (isTightDeck) 9.5f else 10.5f * fontScale.coerceAtMost(1.06f)).sp,
+                            fontSize = 10.5.sp,
                             fontWeight = FontWeight.SemiBold,
                             maxLines = 1,
                         )
                         Text(
                             text = hotkey.comboText(),
                             color = accentColor,
-                            fontFamily = MonoFontFamily,
-                            fontSize = (if (isTightDeck) 8.5f else 9.5f).sp,
+                            fontFamily = BodyFontFamily,
+                            fontSize = 9.5.sp,
                             fontWeight = FontWeight.Bold,
                             maxLines = 1,
                         )
@@ -359,9 +433,9 @@ fun PcKeyboardDeck(
             }
         }
 
-        // Top Function Row matching HTML Soft UI: esc, f1..f12, num
-        if (settings.showFunctionRow || fnActive) {
-            val fnHeight = (keyHeight * 0.80f).coerceAtLeast(22.dp)
+        // Optional Top Function Row (Esc, F1..F12) for PC modes
+        if ((settings.showFunctionRow || fnActive) && settings.layoutMode != KeyboardLayoutMode.GAMING && settings.layoutMode != KeyboardLayoutMode.NUMPAD_ONLY) {
+            val fnHeight = (keyHeight * 0.78f).coerceAtLeast(24.dp)
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(hGap),
@@ -378,6 +452,9 @@ fun PcKeyboardDeck(
                         fnActive = false,
                         isModifierLit = spec.id == "num_toggle_top" && settings.layoutMode != KeyboardLayoutMode.PC_STANDARD,
                         compact = true,
+                        showKeyBorder = settings.showKeyBorder,
+                        rgbActive = rgbActive,
+                        rgbPhaseDeg = rgbPhaseDeg,
                         modifier = Modifier.weight(spec.weight),
                         onClick = { handleKeyTap(spec) },
                     )
@@ -385,10 +462,56 @@ fun PcKeyboardDeck(
             }
         }
 
-        // Main Keyboard Deck Area (PC Standard / Split PC+Numpad / Dedicated Numpad)
+        // Main Deck Body
         when (settings.layoutMode) {
+            KeyboardLayoutMode.PC_WITH_NUMPAD -> {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(hGap + 3.dp),
+                ) {
+                    KeyGridBlock(
+                        rows = PcKeyboardLayoutData.splitPcRows,
+                        palette = palette,
+                        keyHeight = keyHeight,
+                        hGap = hGap,
+                        vGap = vGap,
+                        keyCorner = (keyCorner - 1.dp).coerceAtLeast(5.dp),
+                        fontScale = fontScale * 0.92f,
+                        upperCaseLetters = effectiveUpperCase,
+                        ctrlActive = ctrlActive,
+                        altActive = altActive,
+                        shiftActive = shiftActive,
+                        capsActive = capsActive,
+                        metaActive = metaActive,
+                        fnActive = fnActive,
+                        compact = true,
+                        showKeyBorder = settings.showKeyBorder,
+                        rgbActive = rgbActive,
+                        rgbPhaseDeg = rgbPhaseDeg,
+                        modifier = Modifier.weight(0.68f),
+                        onKeyTap = { handleKeyTap(it, isFromNumpad = false) },
+                    )
+                    NumpadBlock(
+                        palette = palette,
+                        keyHeight = keyHeight,
+                        hGap = hGap,
+                        vGap = vGap,
+                        keyCorner = (keyCorner - 1.dp).coerceAtLeast(5.dp),
+                        fontScale = fontScale * 0.94f,
+                        numLockOn = settings.numLockOn,
+                        compact = true,
+                        showKeyBorder = settings.showKeyBorder,
+                        rgbActive = rgbActive,
+                        rgbPhaseDeg = rgbPhaseDeg,
+                        modifier = Modifier.weight(0.32f),
+                        onKeyTap = { handleKeyTap(it, isFromNumpad = true) },
+                    )
+                }
+            }
+
             KeyboardLayoutMode.PC_STANDARD -> {
-                PcMainBlock(
+                KeyGridBlock(
+                    rows = PcKeyboardLayoutData.mainRows,
                     palette = palette,
                     keyHeight = keyHeight,
                     hGap = hGap,
@@ -403,68 +526,82 @@ fun PcKeyboardDeck(
                     metaActive = metaActive,
                     fnActive = fnActive,
                     compact = isTightDeck,
+                    showKeyBorder = settings.showKeyBorder,
+                    rgbActive = rgbActive,
+                    rgbPhaseDeg = rgbPhaseDeg,
                     onKeyTap = { handleKeyTap(it, isFromNumpad = false) },
                 )
-            }
-
-            KeyboardLayoutMode.PC_WITH_NUMPAD -> {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(hGap + 2.dp),
-                ) {
-                    PcMainBlock(
-                        palette = palette,
-                        keyHeight = keyHeight,
-                        hGap = (hGap - 0.5.dp).coerceAtLeast(1.dp),
-                        vGap = vGap,
-                        keyCorner = (keyCorner - 2.dp).coerceAtLeast(4.dp),
-                        fontScale = fontScale * 0.84f,
-                        upperCaseLetters = effectiveUpperCase,
-                        ctrlActive = ctrlActive,
-                        altActive = altActive,
-                        shiftActive = shiftActive,
-                        capsActive = capsActive,
-                        metaActive = metaActive,
-                        fnActive = fnActive,
-                        compact = true,
-                        modifier = Modifier.weight(0.73f),
-                        onKeyTap = { handleKeyTap(it, isFromNumpad = false) },
-                    )
-                    NumpadBlock(
-                        palette = palette,
-                        keyHeight = keyHeight,
-                        hGap = (hGap - 0.5.dp).coerceAtLeast(1.dp),
-                        vGap = vGap,
-                        keyCorner = (keyCorner - 2.dp).coerceAtLeast(4.dp),
-                        fontScale = fontScale * 0.88f,
-                        numLockOn = settings.numLockOn,
-                        compact = true,
-                        modifier = Modifier.weight(0.27f),
-                        onKeyTap = { handleKeyTap(it, isFromNumpad = true) },
-                    )
-                }
             }
 
             KeyboardLayoutMode.NUMPAD_ONLY -> {
                 NumpadBlock(
                     palette = palette,
-                    keyHeight = (keyHeight + 4.dp),
+                    keyHeight = (keyHeight + 5.dp),
                     hGap = hGap + 1.dp,
                     vGap = vGap + 1.dp,
                     keyCorner = keyCorner,
-                    fontScale = fontScale * 1.05f,
+                    fontScale = fontScale * 1.08f,
                     numLockOn = settings.numLockOn,
                     compact = false,
+                    showKeyBorder = settings.showKeyBorder,
+                    rgbActive = rgbActive,
+                    rgbPhaseDeg = rgbPhaseDeg,
                     modifier = Modifier.fillMaxWidth(),
                     onKeyTap = { handleKeyTap(it, isFromNumpad = true) },
                 )
+            }
+
+            KeyboardLayoutMode.GAMING -> {
+                val gameKeyHeight = (keyHeight + 2.dp).coerceAtLeast(36.dp)
+                val totalPadHeight = gameKeyHeight * 4 + vGap * 3
+                val padWeight = settings.touchpadWidthFraction.coerceIn(0.30f, 0.55f)
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .testTag("gaming_mode_deck"),
+                    horizontalArrangement = Arrangement.spacedBy(hGap + 4.dp),
+                    verticalAlignment = Alignment.Top,
+                ) {
+                    GamingKeysBlock(
+                        rows = PcKeyboardLayoutData.gamingLeftRows,
+                        palette = palette,
+                        keyHeight = gameKeyHeight,
+                        hGap = hGap,
+                        vGap = vGap,
+                        keyCorner = keyCorner,
+                        fontScale = fontScale,
+                        showKeyBorder = settings.showKeyBorder,
+                        rgbActive = rgbActive,
+                        rgbPhaseDeg = rgbPhaseDeg,
+                        modifier = Modifier.weight(1f - padWeight),
+                        onKeyHold = { spec, isDown ->
+                            if (onKeyHoldDispatch != null) {
+                                onKeyHoldDispatch(spec.keyCode, 0, isDown, spec.label)
+                            } else if (isDown) {
+                                onKeyDispatch(spec.keyCode, 0, spec.charPrimary, spec.label)
+                            }
+                        },
+                    )
+                    GamingMouseTouchpad(
+                        palette = palette,
+                        settings = settings,
+                        rgbPhaseDeg = rgbPhaseDeg,
+                        rgbEnabled = rgbActive,
+                        totalHeight = totalPadHeight,
+                        cornerRadius = keyCorner,
+                        modifier = Modifier.weight(padWeight),
+                        onMouseMove = { dx, dy -> onMouseMove?.invoke(dx, dy) },
+                        onMouseClick = { isRight -> onMouseClick?.invoke(isRight) },
+                    )
+                }
             }
         }
     }
 }
 
 @Composable
-private fun PcMainBlock(
+private fun KeyGridBlock(
+    rows: List<List<KeySpec>>,
     palette: ResolvedKeyboardPalette,
     keyHeight: Dp,
     hGap: Dp,
@@ -479,6 +616,9 @@ private fun PcMainBlock(
     metaActive: Boolean,
     fnActive: Boolean,
     compact: Boolean,
+    showKeyBorder: Boolean,
+    rgbActive: Boolean,
+    rgbPhaseDeg: Float,
     modifier: Modifier = Modifier,
     onKeyTap: (KeySpec) -> Unit,
 ) {
@@ -486,7 +626,7 @@ private fun PcMainBlock(
         modifier = modifier.fillMaxWidth(),
         verticalArrangement = Arrangement.spacedBy(vGap),
     ) {
-        PcKeyboardLayoutData.mainRows.forEach { row ->
+        rows.forEach { row ->
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(hGap),
@@ -512,12 +652,160 @@ private fun PcMainBlock(
                         fnActive = fnActive,
                         isModifierLit = isLit,
                         compact = compact,
+                        showKeyBorder = showKeyBorder,
+                        rgbActive = rgbActive,
+                        rgbPhaseDeg = rgbPhaseDeg,
                         modifier = Modifier.weight(spec.weight),
                         onClick = { onKeyTap(spec) },
                     )
                 }
             }
         }
+    }
+}
+
+@Composable
+private fun GamingKeysBlock(
+    rows: List<List<KeySpec>>,
+    palette: ResolvedKeyboardPalette,
+    keyHeight: Dp,
+    hGap: Dp,
+    vGap: Dp,
+    keyCorner: Dp,
+    fontScale: Float,
+    showKeyBorder: Boolean,
+    rgbActive: Boolean,
+    rgbPhaseDeg: Float,
+    modifier: Modifier = Modifier,
+    onKeyHold: (KeySpec, Boolean) -> Unit,
+) {
+    Column(
+        modifier = modifier.fillMaxWidth(),
+        verticalArrangement = Arrangement.spacedBy(vGap),
+    ) {
+        rows.forEach { row ->
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(hGap),
+            ) {
+                row.forEach { spec ->
+                    GamingHoldKeyCap(
+                        spec = spec,
+                        palette = palette,
+                        keyHeight = keyHeight,
+                        keyCorner = keyCorner,
+                        fontScale = fontScale,
+                        showKeyBorder = showKeyBorder,
+                        rgbActive = rgbActive,
+                        rgbPhaseDeg = rgbPhaseDeg,
+                        modifier = Modifier.weight(spec.weight),
+                        onHoldChanged = { isDown -> onKeyHold(spec, isDown) },
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun GamingHoldKeyCap(
+    spec: KeySpec,
+    palette: ResolvedKeyboardPalette,
+    keyHeight: Dp,
+    keyCorner: Dp,
+    fontScale: Float,
+    showKeyBorder: Boolean,
+    rgbActive: Boolean,
+    rgbPhaseDeg: Float,
+    modifier: Modifier = Modifier,
+    onHoldChanged: (Boolean) -> Unit,
+) {
+    var held by remember { mutableStateOf(false) }
+    val pressOffsetY by animateDpAsState(
+        targetValue = if (held) 1.5.dp else 0.dp,
+        animationSpec = spring(stiffness = 950f),
+        label = "gaming_key_offset",
+    )
+
+    val borderCol = if (showKeyBorder) palette.keyBorder.copy(alpha = 0.85f) else null
+    val keyBg = when {
+        held -> palette.activeFill
+        spec.isAccent -> palette.activeFill.copy(alpha = 0.75f)
+        spec.isModifier -> palette.modifierBg
+        else -> palette.keyBg
+    }
+    val textColor = when {
+        held || spec.isAccent -> palette.accentBg
+        else -> palette.primaryText
+    }
+
+    Box(
+        modifier = modifier
+            .height(keyHeight)
+            .offset(y = pressOffsetY)
+            .then(
+                if (held) {
+                    Modifier.neumorphicInset(
+                        surfaceColor = keyBg,
+                        shadowLight = palette.shadowLight,
+                        shadowDark = palette.shadowDark,
+                        cornerRadius = keyCorner,
+                        depth = 3.dp,
+                        borderColor = borderCol,
+                    )
+                } else {
+                    Modifier.neumorphicRaised(
+                        surfaceColor = keyBg,
+                        shadowLight = palette.shadowLight,
+                        shadowDark = palette.shadowDark,
+                        cornerRadius = keyCorner,
+                        shadowOffset = 3.dp,
+                        blurRadius = 6.dp,
+                        borderColor = borderCol,
+                    )
+                },
+            )
+            .then(
+                if (rgbActive) {
+                    Modifier.rgbAnimatedBorder(
+                        phaseDegrees = rgbPhaseDeg,
+                        cornerRadius = keyCorner,
+                        strokeWidth = if (held || spec.isAccent) 1.8.dp else 1.3.dp,
+                        alpha = if (held) 0.98f else 0.80f,
+                    )
+                } else {
+                    Modifier
+                },
+            )
+            .pointerInput(spec.id) {
+                awaitEachGesture {
+                    awaitFirstDown(requireUnconsumed = false)
+                    held = true
+                    onHoldChanged(true)
+                    try {
+                        while (true) {
+                            val event = awaitPointerEvent()
+                            if (event.changes.all { !it.pressed }) {
+                                break
+                            }
+                        }
+                    } finally {
+                        held = false
+                        onHoldChanged(false)
+                    }
+                }
+            }
+            .testTag("key_${spec.id}"),
+        contentAlignment = Alignment.Center,
+    ) {
+        Text(
+            text = spec.label,
+            color = textColor,
+            fontFamily = BodyFontFamily,
+            fontSize = (if (spec.label.length > 2) 10f else 13f * fontScale).coerceIn(8f, 16f).sp,
+            fontWeight = FontWeight.Bold,
+            maxLines = 1,
+        )
     }
 }
 
@@ -531,19 +819,24 @@ private fun NumpadBlock(
     fontScale: Float,
     numLockOn: Boolean,
     compact: Boolean,
+    showKeyBorder: Boolean,
+    rgbActive: Boolean,
+    rgbPhaseDeg: Float,
     modifier: Modifier = Modifier,
     onKeyTap: (KeySpec) -> Unit,
 ) {
+    val borderCol = if (showKeyBorder) palette.keyBorder.copy(alpha = 0.72f) else null
     Column(
         modifier = modifier
             .neumorphicInset(
                 surfaceColor = palette.deckBg,
                 shadowLight = palette.shadowLight,
                 shadowDark = palette.shadowDark,
-                cornerRadius = keyCorner + 3.dp,
-                depth = 3.dp,
+                cornerRadius = keyCorner + 2.dp,
+                depth = 2.5.dp,
+                borderColor = borderCol,
             )
-            .padding(3.dp),
+            .padding(2.5.dp),
         verticalArrangement = Arrangement.spacedBy(vGap),
     ) {
         PcKeyboardLayoutData.numpadRows.forEach { row ->
@@ -570,6 +863,9 @@ private fun NumpadBlock(
                         fnActive = false,
                         isModifierLit = isNumLockKey && numLockOn,
                         compact = compact,
+                        showKeyBorder = showKeyBorder,
+                        rgbActive = rgbActive,
+                        rgbPhaseDeg = rgbPhaseDeg,
                         modifier = Modifier.weight(spec.weight),
                         onClick = { onKeyTap(spec) },
                     )
@@ -591,6 +887,9 @@ private fun PcKeyCap(
     fnActive: Boolean,
     isModifierLit: Boolean,
     compact: Boolean,
+    showKeyBorder: Boolean,
+    rgbActive: Boolean,
+    rgbPhaseDeg: Float,
     modifier: Modifier = Modifier,
     onClick: () -> Unit,
 ) {
@@ -613,7 +912,7 @@ private fun PcKeyCap(
     }
 
     val cornerText = when {
-        keyHeight < 28.dp -> null
+        keyHeight < 29.dp -> null
         fnActive && spec.fnLabel != null -> spec.label
         !shiftActive && spec.shiftLabel != null && !isLetter -> spec.shiftLabel
         else -> null
@@ -632,9 +931,10 @@ private fun PcKeyCap(
         else -> palette.primaryText
     }
 
-    val shadowDepth = if (compact) 2.5.dp else 3.5.dp
-    val blurRadius = if (compact) 5.dp else 7.dp
-    val iconSize = (keyHeight * 0.40f).coerceIn(10.dp, 17.dp)
+    val borderCol = if (showKeyBorder) palette.keyBorder.copy(alpha = 0.85f) else null
+    val shadowDepth = if (compact) 2.dp else 3.dp
+    val blurRadius = if (compact) 4.dp else 6.dp
+    val iconSize = (keyHeight * 0.38f).coerceIn(11.dp, 17.dp)
 
     val neumorphicModifier = if (isEngaged) {
         Modifier.neumorphicInset(
@@ -642,7 +942,8 @@ private fun PcKeyCap(
             shadowLight = palette.shadowLight,
             shadowDark = palette.shadowDark,
             cornerRadius = keyCorner,
-            depth = 3.dp,
+            depth = 2.5.dp,
+            borderColor = borderCol,
         )
     } else {
         Modifier.neumorphicRaised(
@@ -652,6 +953,7 @@ private fun PcKeyCap(
             cornerRadius = keyCorner,
             shadowOffset = shadowDepth,
             blurRadius = blurRadius,
+            borderColor = borderCol,
         )
     }
 
@@ -660,6 +962,18 @@ private fun PcKeyCap(
             .height(keyHeight)
             .offset(y = pressOffsetY)
             .then(neumorphicModifier)
+            .then(
+                if (rgbActive) {
+                    Modifier.rgbAnimatedBorder(
+                        phaseDegrees = rgbPhaseDeg,
+                        cornerRadius = keyCorner,
+                        strokeWidth = if (isEngaged) 1.6.dp else 1.15.dp,
+                        alpha = if (isEngaged) 0.95f else 0.70f,
+                    )
+                } else {
+                    Modifier
+                },
+            )
             .clickable(
                 interactionSource = interactionSource,
                 indication = null,
@@ -671,10 +985,10 @@ private fun PcKeyCap(
         if (cornerText != null) {
             Text(
                 text = cornerText,
-                color = palette.secondaryText.copy(alpha = 0.78f),
-                fontFamily = MonoFontFamily,
-                fontSize = (if (compact) 6.5f else 7.5f * fontScale.coerceAtMost(1.05f)).sp,
-                lineHeight = 8.sp,
+                color = palette.secondaryText.copy(alpha = 0.80f),
+                fontFamily = BodyFontFamily,
+                fontSize = (if (compact) 7f else 8f * fontScale.coerceAtMost(1.05f)).sp,
+                lineHeight = 9.sp,
                 maxLines = 1,
                 modifier = Modifier
                     .align(Alignment.TopEnd)
@@ -770,18 +1084,18 @@ private fun PcKeyCap(
                 }
                 null -> {
                     val baseSp = when {
-                        compact && primaryText.length > 3 -> 7.2f
-                        compact && primaryText.length > 1 -> 8.5f
-                        compact -> 10.5f
-                        primaryText.length > 3 -> 8.5f
-                        primaryText.length > 1 -> 9.8f
-                        else -> 12.8f
+                        compact && primaryText.length > 3 -> 8.2f
+                        compact && primaryText.length > 1 -> 9.4f
+                        compact -> 11.4f
+                        primaryText.length > 3 -> 9.2f
+                        primaryText.length > 1 -> 10.6f
+                        else -> 13.2f
                     }
                     Text(
                         text = primaryText,
                         color = textColor,
                         fontFamily = BodyFontFamily,
-                        fontSize = (baseSp * fontScale).coerceIn(7f, 16f).sp,
+                        fontSize = (baseSp * fontScale).coerceIn(8f, 17f).sp,
                         fontWeight = FontWeight.SemiBold,
                         maxLines = 1,
                         overflow = TextOverflow.Clip,
@@ -843,6 +1157,7 @@ private fun DeckModeChip(
     label: String,
     selected: Boolean,
     palette: ResolvedKeyboardPalette,
+    borderColor: Color?,
     compact: Boolean,
     testTag: String,
     onClick: () -> Unit,
@@ -852,17 +1167,19 @@ private fun DeckModeChip(
             surfaceColor = palette.activeFill,
             shadowLight = palette.shadowLight,
             shadowDark = palette.shadowDark,
-            cornerRadius = 10.dp,
+            cornerRadius = 9.dp,
             depth = 2.dp,
+            borderColor = borderColor,
         )
     } else {
         Modifier.neumorphicRaised(
             surfaceColor = palette.keyBg,
             shadowLight = palette.shadowLight,
             shadowDark = palette.shadowDark,
-            cornerRadius = 10.dp,
+            cornerRadius = 9.dp,
             shadowOffset = 2.dp,
             blurRadius = 4.dp,
+            borderColor = borderColor,
         )
     }
     Box(
@@ -870,7 +1187,7 @@ private fun DeckModeChip(
             .clickable(onClick = onClick)
             .padding(
                 horizontal = if (compact) 7.dp else 9.dp,
-                vertical = if (compact) 3.dp else 4.dp,
+                vertical = if (compact) 3.5.dp else 4.5.dp,
             )
             .testTag(testTag),
         contentAlignment = Alignment.Center,
@@ -878,9 +1195,55 @@ private fun DeckModeChip(
         Text(
             text = label,
             color = if (selected) palette.activeIndicator else palette.secondaryText,
-            fontFamily = MonoFontFamily,
-            fontSize = if (compact) 8.5.sp else 9.5.sp,
+            fontFamily = BodyFontFamily,
+            fontSize = if (compact) 9.5.sp else 10.sp,
             fontWeight = FontWeight.Bold,
+        )
+    }
+}
+
+@Composable
+private fun TopActionIconChip(
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    contentDescription: String,
+    active: Boolean,
+    palette: ResolvedKeyboardPalette,
+    borderColor: Color?,
+    testTag: String,
+    onClick: () -> Unit,
+) {
+    val mod = if (active) {
+        Modifier.neumorphicInset(
+            surfaceColor = palette.activeFill,
+            shadowLight = palette.shadowLight,
+            shadowDark = palette.shadowDark,
+            cornerRadius = 9.dp,
+            depth = 2.dp,
+            borderColor = borderColor,
+        )
+    } else {
+        Modifier.neumorphicRaised(
+            surfaceColor = palette.keyBg,
+            shadowLight = palette.shadowLight,
+            shadowDark = palette.shadowDark,
+            cornerRadius = 9.dp,
+            shadowOffset = 2.dp,
+            blurRadius = 4.dp,
+            borderColor = borderColor,
+        )
+    }
+    Box(
+        modifier = mod
+            .size(26.dp)
+            .clickable(onClick = onClick)
+            .testTag(testTag),
+        contentAlignment = Alignment.Center,
+    ) {
+        Icon(
+            imageVector = icon,
+            contentDescription = contentDescription,
+            tint = if (active) palette.accentBg else palette.primaryText,
+            modifier = Modifier.size(14.dp),
         )
     }
 }

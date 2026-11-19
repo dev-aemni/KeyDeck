@@ -239,6 +239,7 @@ private fun KeyDeckApp(viewModel: KeyDeckViewModel) {
                 onChangeLayoutMode = { viewModel.setLayoutMode(it) },
                 onToggleNumLock = { viewModel.updateSettings { it.copy(numLockOn = !it.numLockOn) } },
                 onToggleFunctionRow = { viewModel.updateSettings { it.copy(showFunctionRow = !it.showFunctionRow) } },
+                onUpdateSettings = { viewModel.updateSettings(it) },
                 modifier = Modifier.padding(innerPadding),
             )
 
@@ -254,6 +255,7 @@ private fun KeyDeckApp(viewModel: KeyDeckViewModel) {
 
             KeyDeckTab.WEB_LAB -> WebSandboxScreen(
                 isOverlayRunning = isOverlayRunning,
+                suppressSystemKeyboard = isOverlayRunning || settings.suppressAutoImeOnInput,
                 onLaunchFloatingOverWeb = {
                     if (isOverlayRunning) {
                         viewModel.toggleFloatingExpansion()

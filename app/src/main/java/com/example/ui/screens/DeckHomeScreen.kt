@@ -47,16 +47,20 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.InterceptPlatformTextInput
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.PlatformTextInputInterceptor
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import kotlinx.coroutines.awaitCancellation
 import com.example.keyboard.CustomHotkey
 import com.example.keyboard.DispatchedKeyRecord
 import com.example.keyboard.KeyDeckSettings
@@ -66,7 +70,6 @@ import com.example.keyboard.KeyboardLayoutMode
 import com.example.keyboard.PcKeyboardDeck
 import com.example.ui.SystemReadinessState
 import com.example.ui.theme.BodyFontFamily
-import com.example.ui.theme.MonoFontFamily
 import com.example.ui.theme.NeuActiveFill
 import com.example.ui.theme.NeuAmber
 import com.example.ui.theme.NeuBg
@@ -99,11 +102,13 @@ fun DeckHomeScreen(
     onChangeLayoutMode: (KeyboardLayoutMode) -> Unit,
     onToggleNumLock: () -> Unit,
     onToggleFunctionRow: () -> Unit,
+    onUpdateSettings: ((KeyDeckSettings) -> KeyDeckSettings) -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     val context = LocalContext.current
     var testText by remember { mutableStateOf("") }
     var showInlinePreview by remember { mutableStateOf(true) }
+    var inlineMouseInfo by remember { mutableStateOf<String?>(null) }
 
     DisposableEffect(showInlinePreview) {
         if (showInlinePreview) {
@@ -142,11 +147,27 @@ fun DeckHomeScreen(
                     }
                     return true
                 }
+
+                override fun onDirectKeyHold(keyCode: Int, metaState: Int, isDown: Boolean): Boolean {
+                    inlineMouseInfo = if (isDown) "Holding ${KeyEvent.keyCodeToString(keyCode).removePrefix("KEYCODE_")}" else null
+                    return true
+                }
+            }
+            val mouseTarget = object : KeyDispatcher.DirectMouseTarget {
+                override fun onMouseDelta(dx: Float, dy: Float) {
+                    inlineMouseInfo = "Look Δ(${dx.toInt()}, ${dy.toInt()})"
+                }
+
+                override fun onMouseClick(isRightClick: Boolean) {
+                    inlineMouseInfo = if (isRightClick) "Right Click (Use)" else "Left Click (Attack)"
+                }
             }
             KeyDispatcher.setDirectTarget(target)
+            KeyDispatcher.setDirectMouseTarget(mouseTarget)
         }
         onDispose {
             KeyDispatcher.setDirectTarget(null)
+            KeyDispatcher.setDirectMouseTarget(null)
         }
     }
 
@@ -199,7 +220,7 @@ fun DeckHomeScreen(
                             color = NeuTextPrimary,
                         )
                         Text(
-                            text = "PC Deck • Numpad • Hotkeys",
+                            text = "PC Deck • Numpad • Gaming",
                             style = MaterialTheme.typography.bodyMedium,
                             color = NeuTextSecondary,
                         )
@@ -245,7 +266,7 @@ fun DeckHomeScreen(
                         )
                         Text(
                             text = if (isOverlayRunning) "ACTIVE" else "OFF",
-                            fontFamily = MonoFontFamily,
+                            fontFamily = BodyFontFamily,
                             fontSize = 11.sp,
                             fontWeight = FontWeight.Bold,
                             color = if (isOverlayRunning) NeuIndigo else NeuTextSecondary,
@@ -527,7 +548,15 @@ fun DeckHomeScreen(
                 }
             }
 
-            // Concave Inset Text Input Well
+            // Concave Inset Text Input Well (suppresses system/IME popup when KeyDeck is active)
+            @OptIn(ExperimentalComposeUiApi::class)
+            val suppressTestWellIme = showInlinePreview || isOverlayRunning || settings.suppressAutoImeOnInput
+            @OptIn(ExperimentalComposeUiApi::class)
+            val noSoftKeyboardInterceptor = remember {
+                PlatformTextInputInterceptor { _, _ ->
+                    awaitCancellation()
+                }
+            }
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -540,44 +569,54 @@ fun DeckHomeScreen(
                     )
                     .padding(horizontal = 14.dp, vertical = 14.dp),
             ) {
-                BasicTextField(
-                    value = testText,
-                    onValueChange = { testText = it },
-                    textStyle = TextStyle(
-                        fontFamily = BodyFontFamily,
-                        fontSize = 15.sp,
-                        color = NeuTextPrimary,
-                    ),
-                    cursorBrush = SolidColor(NeuIndigo),
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .testTag("try_keyboard_input"),
-                    decorationBox = { innerTextField ->
-                        if (testText.isEmpty()) {
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Default.EditNote,
-                                    contentDescription = null,
-                                    tint = NeuIndigo,
-                                    modifier = Modifier.size(18.dp),
-                                )
-                                Text(
-                                    text = "Tap here to test typing...",
-                                    color = NeuTextSecondary,
-                                    fontSize = 14.sp,
-                                )
+                val inputContent: @Composable () -> Unit = {
+                    BasicTextField(
+                        value = testText,
+                        onValueChange = { testText = it },
+                        textStyle = TextStyle(
+                            fontFamily = BodyFontFamily,
+                            fontSize = 15.sp,
+                            color = NeuTextPrimary,
+                        ),
+                        cursorBrush = SolidColor(NeuIndigo),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .testTag("try_keyboard_input"),
+                        decorationBox = { innerTextField ->
+                            if (testText.isEmpty()) {
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.EditNote,
+                                        contentDescription = null,
+                                        tint = NeuIndigo,
+                                        modifier = Modifier.size(18.dp),
+                                    )
+                                    Text(
+                                        text = "Tap here to test typing...",
+                                        color = NeuTextSecondary,
+                                        fontSize = 14.sp,
+                                    )
+                                }
                             }
-                        }
-                        innerTextField()
-                    },
-                )
+                            innerTextField()
+                        },
+                    )
+                }
+                if (suppressTestWellIme) {
+                    @OptIn(ExperimentalComposeUiApi::class)
+                    InterceptPlatformTextInput(interceptor = noSoftKeyboardInterceptor) {
+                        inputContent()
+                    }
+                } else {
+                    inputContent()
+                }
             }
 
-            // Live Dispatched Key Telemetry Chip
-            if (lastDispatchedKey != null) {
+            // Live Dispatched Key & Gaming Mouse Telemetry Chip
+            if (lastDispatchedKey != null || inlineMouseInfo != null) {
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -593,15 +632,15 @@ fun DeckHomeScreen(
                     horizontalArrangement = Arrangement.SpaceBetween,
                 ) {
                     Text(
-                        text = "Key: ${lastDispatchedKey.comboLabel}",
-                        fontFamily = MonoFontFamily,
+                        text = inlineMouseInfo ?: "Key: ${lastDispatchedKey?.comboLabel ?: ""}",
+                        fontFamily = BodyFontFamily,
                         fontSize = 12.sp,
                         fontWeight = FontWeight.Bold,
                         color = NeuIndigo,
                     )
                     Text(
-                        text = lastDispatchedKey.detail,
-                        fontFamily = MonoFontFamily,
+                        text = lastDispatchedKey?.detail ?: "Touchpad Ready",
+                        fontFamily = BodyFontFamily,
                         fontSize = 11.sp,
                         color = NeuTextSecondary,
                         maxLines = 1,
@@ -611,7 +650,7 @@ fun DeckHomeScreen(
             }
         }
 
-        // Extruded Neumorphic Keyboard Frame (matching .keyboard in HTML!)
+        // Extruded Neumorphic Keyboard Frame
         AnimatedVisibility(visible = showInlinePreview) {
             val palette = settings.resolvePalette()
             val dockAlign = when (settings.dockAlignment) {
@@ -619,17 +658,18 @@ fun DeckHomeScreen(
                 KeyboardDockAlignment.CENTER -> Alignment.Center
                 KeyboardDockAlignment.RIGHT -> Alignment.CenterEnd
             }
-            val outerCorner = (settings.keyCornerRadiusDp + 10).coerceIn(14, 28).dp
+            val outerCorner = (settings.keyCornerRadiusDp + 8).coerceIn(12, 24).dp
+            val borderCol = if (settings.showKeyBorder) palette.keyBorder.copy(alpha = 0.85f) else null
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(top = 4.dp, bottom = 14.dp, start = 8.dp, end = 8.dp),
+                    .padding(top = 4.dp, bottom = 14.dp, start = 6.dp, end = 6.dp),
                 contentAlignment = dockAlign,
             ) {
                 PcKeyboardDeck(
                     settings = settings,
                     hotkeys = hotkeys,
-                    routeLabel = "In-App Direct",
+                    routeLabel = "In-App",
                     isOverlay = false,
                     onKeyDispatch = { keyCode, metaState, charToCommit, comboLabel ->
                         KeyDispatcher.dispatchKey(
@@ -638,6 +678,32 @@ fun DeckHomeScreen(
                             metaState = metaState,
                             charToCommit = charToCommit,
                             comboLabel = comboLabel,
+                            hapticEnabled = settings.hapticFeedback,
+                        )
+                    },
+                    onKeyHoldDispatch = { keyCode, metaState, isDown, comboLabel ->
+                        KeyDispatcher.dispatchKeyHold(
+                            context = context,
+                            keyCode = keyCode,
+                            metaState = metaState,
+                            isDown = isDown,
+                            comboLabel = comboLabel,
+                            hapticEnabled = settings.hapticFeedback,
+                        )
+                    },
+                    onMouseMove = { dx, dy ->
+                        KeyDispatcher.dispatchMouseMove(
+                            dx = dx,
+                            dy = dy,
+                            sensitivity = settings.touchpadSensitivity,
+                            mcpeLookMode = settings.gamingMcpeLookMode,
+                        )
+                    },
+                    onMouseClick = { isRight ->
+                        KeyDispatcher.dispatchMouseClick(
+                            context = context,
+                            isRightClick = isRight,
+                            mcpeLookMode = settings.gamingMcpeLookMode,
                             hapticEnabled = settings.hapticFeedback,
                         )
                     },
@@ -651,6 +717,7 @@ fun DeckHomeScreen(
                     onChangeLayoutMode = onChangeLayoutMode,
                     onToggleNumLock = onToggleNumLock,
                     onToggleFunctionRow = onToggleFunctionRow,
+                    onUpdateSettings = onUpdateSettings,
                     modifier = Modifier
                         .fillMaxWidth(settings.keyboardWidthFraction.coerceIn(0.60f, 1.0f))
                         .neumorphicRaised(
@@ -658,8 +725,9 @@ fun DeckHomeScreen(
                             shadowLight = palette.shadowLight,
                             shadowDark = palette.shadowDark,
                             cornerRadius = outerCorner,
-                            shadowOffset = 6.dp,
-                            blurRadius = 12.dp,
+                            shadowOffset = 5.dp,
+                            blurRadius = 10.dp,
+                            borderColor = borderCol,
                         ),
                 )
             }

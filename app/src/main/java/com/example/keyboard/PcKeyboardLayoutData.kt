@@ -4,27 +4,26 @@ import android.view.KeyEvent
 
 object PcKeyboardLayoutData {
 
-    // Top row matching the HTML Soft UI layout: esc, f1..f12 + numpad toggle
+    // Top Function Row: esc, f1..f12 + numpad toggle
     val functionRow: List<KeySpec> = listOf(
-        KeySpec("esc", "esc", keyCode = KeyEvent.KEYCODE_ESCAPE, weight = 1.15f, isModifier = true),
-        KeySpec("f1", "f1", keyCode = KeyEvent.KEYCODE_F1),
-        KeySpec("f2", "f2", keyCode = KeyEvent.KEYCODE_F2),
-        KeySpec("f3", "f3", keyCode = KeyEvent.KEYCODE_F3),
-        KeySpec("f4", "f4", keyCode = KeyEvent.KEYCODE_F4),
-        KeySpec("f5", "f5", keyCode = KeyEvent.KEYCODE_F5),
-        KeySpec("f6", "f6", keyCode = KeyEvent.KEYCODE_F6),
-        KeySpec("f7", "f7", keyCode = KeyEvent.KEYCODE_F7),
-        KeySpec("f8", "f8", keyCode = KeyEvent.KEYCODE_F8),
-        KeySpec("f9", "f9", keyCode = KeyEvent.KEYCODE_F9),
-        KeySpec("f10", "f10", keyCode = KeyEvent.KEYCODE_F10),
-        KeySpec("f11", "f11", keyCode = KeyEvent.KEYCODE_F11),
-        KeySpec("f12", "f12", keyCode = KeyEvent.KEYCODE_F12),
+        KeySpec("esc", "Esc", keyCode = KeyEvent.KEYCODE_ESCAPE, weight = 1.15f, isModifier = true),
+        KeySpec("f1", "F1", keyCode = KeyEvent.KEYCODE_F1),
+        KeySpec("f2", "F2", keyCode = KeyEvent.KEYCODE_F2),
+        KeySpec("f3", "F3", keyCode = KeyEvent.KEYCODE_F3),
+        KeySpec("f4", "F4", keyCode = KeyEvent.KEYCODE_F4),
+        KeySpec("f5", "F5", keyCode = KeyEvent.KEYCODE_F5),
+        KeySpec("f6", "F6", keyCode = KeyEvent.KEYCODE_F6),
+        KeySpec("f7", "F7", keyCode = KeyEvent.KEYCODE_F7),
+        KeySpec("f8", "F8", keyCode = KeyEvent.KEYCODE_F8),
+        KeySpec("f9", "F9", keyCode = KeyEvent.KEYCODE_F9),
+        KeySpec("f10", "F10", keyCode = KeyEvent.KEYCODE_F10),
+        KeySpec("f11", "F11", keyCode = KeyEvent.KEYCODE_F11),
+        KeySpec("f12", "F12", keyCode = KeyEvent.KEYCODE_F12),
         KeySpec("num_toggle_top", "123", keyCode = KeyEvent.KEYCODE_NUM_LOCK, weight = 1.1f, isModifier = true, iconType = KeyIconType.MIC_OR_NUM),
     )
 
-    // Matches the HTML Soft UI Keyboard rows + arrow navigation & numpad toggle
+    // Full 5-row main PC QWERTY layout (14 columns)
     val mainRows: List<List<KeySpec>> = listOf(
-        // Row 1: ` 1 2 3 4 5 6 7 8 9 0 - = backspace
         listOf(
             KeySpec("grave", "`", "~", keyCode = KeyEvent.KEYCODE_GRAVE, charPrimary = '`', charShift = '~'),
             KeySpec("1", "1", "!", keyCode = KeyEvent.KEYCODE_1, charPrimary = '1', charShift = '!'),
@@ -39,11 +38,10 @@ object PcKeyboardLayoutData {
             KeySpec("0", "0", ")", keyCode = KeyEvent.KEYCODE_0, charPrimary = '0', charShift = ')'),
             KeySpec("minus", "-", "_", keyCode = KeyEvent.KEYCODE_MINUS, charPrimary = '-', charShift = '_'),
             KeySpec("equals", "=", "+", keyCode = KeyEvent.KEYCODE_EQUALS, charPrimary = '=', charShift = '+'),
-            KeySpec("bksp", "⌫", fnLabel = "del", keyCode = KeyEvent.KEYCODE_DEL, fnKeyCode = KeyEvent.KEYCODE_FORWARD_DEL, weight = 1.65f, isModifier = true, iconType = KeyIconType.BACKSPACE),
+            KeySpec("bksp", "⌫", fnLabel = "Del", keyCode = KeyEvent.KEYCODE_DEL, fnKeyCode = KeyEvent.KEYCODE_FORWARD_DEL, weight = 1.65f, isModifier = true, iconType = KeyIconType.BACKSPACE),
         ),
-        // Row 2: tab q w e r t y u i o p [ ] \
         listOf(
-            KeySpec("tab", "tab", keyCode = KeyEvent.KEYCODE_TAB, weight = 1.35f, isModifier = true),
+            KeySpec("tab", "Tab", keyCode = KeyEvent.KEYCODE_TAB, weight = 1.35f, isModifier = true),
             KeySpec("q", "q", "Q", keyCode = KeyEvent.KEYCODE_Q, charPrimary = 'q', charShift = 'Q'),
             KeySpec("w", "w", "W", keyCode = KeyEvent.KEYCODE_W, charPrimary = 'w', charShift = 'W'),
             KeySpec("e", "e", "E", keyCode = KeyEvent.KEYCODE_E, charPrimary = 'e', charShift = 'E'),
@@ -58,9 +56,8 @@ object PcKeyboardLayoutData {
             KeySpec("rbracket", "]", "}", keyCode = KeyEvent.KEYCODE_RIGHT_BRACKET, charPrimary = ']', charShift = '}'),
             KeySpec("bslash", "\\", "|", keyCode = KeyEvent.KEYCODE_BACKSLASH, charPrimary = '\\', charShift = '|', weight = 1.25f),
         ),
-        // Row 3: caps a s d f g h j k l ; ' enter
         listOf(
-            KeySpec("caps", "caps", keyCode = KeyEvent.KEYCODE_CAPS_LOCK, weight = 1.55f, isModifier = true, modifierType = ModifierKey.CAPS),
+            KeySpec("caps", "Caps", keyCode = KeyEvent.KEYCODE_CAPS_LOCK, weight = 1.55f, isModifier = true, modifierType = ModifierKey.CAPS),
             KeySpec("a", "a", "A", keyCode = KeyEvent.KEYCODE_A, charPrimary = 'a', charShift = 'A'),
             KeySpec("s", "s", "S", keyCode = KeyEvent.KEYCODE_S, charPrimary = 's', charShift = 'S'),
             KeySpec("d", "d", "D", keyCode = KeyEvent.KEYCODE_D, charPrimary = 'd', charShift = 'D'),
@@ -72,11 +69,10 @@ object PcKeyboardLayoutData {
             KeySpec("l", "l", "L", keyCode = KeyEvent.KEYCODE_L, charPrimary = 'l', charShift = 'L'),
             KeySpec("semi", ";", ":", keyCode = KeyEvent.KEYCODE_SEMICOLON, charPrimary = ';', charShift = ':'),
             KeySpec("quote", "'", "\"", keyCode = KeyEvent.KEYCODE_APOSTROPHE, charPrimary = '\'', charShift = '"'),
-            KeySpec("enter", "enter", keyCode = KeyEvent.KEYCODE_ENTER, weight = 1.85f, isModifier = true),
+            KeySpec("enter", "Enter", keyCode = KeyEvent.KEYCODE_ENTER, weight = 1.85f, isModifier = true),
         ),
-        // Row 4: shift z x c v b n m , . / up shift
         listOf(
-            KeySpec("shift_l", "shift", keyCode = KeyEvent.KEYCODE_SHIFT_LEFT, weight = 1.85f, isModifier = true, modifierType = ModifierKey.SHIFT),
+            KeySpec("shift_l", "Shift", keyCode = KeyEvent.KEYCODE_SHIFT_LEFT, weight = 1.85f, isModifier = true, modifierType = ModifierKey.SHIFT),
             KeySpec("z", "z", "Z", keyCode = KeyEvent.KEYCODE_Z, charPrimary = 'z', charShift = 'Z'),
             KeySpec("x", "x", "X", keyCode = KeyEvent.KEYCODE_X, charPrimary = 'x', charShift = 'X'),
             KeySpec("c", "c", "C", keyCode = KeyEvent.KEYCODE_C, charPrimary = 'c', charShift = 'C'),
@@ -87,35 +83,134 @@ object PcKeyboardLayoutData {
             KeySpec("comma", ",", "<", keyCode = KeyEvent.KEYCODE_COMMA, charPrimary = ',', charShift = '<'),
             KeySpec("period", ".", ">", keyCode = KeyEvent.KEYCODE_PERIOD, charPrimary = '.', charShift = '>'),
             KeySpec("slash", "/", "?", keyCode = KeyEvent.KEYCODE_SLASH, charPrimary = '/', charShift = '?'),
-            KeySpec("up", "△", fnLabel = "pgup", keyCode = KeyEvent.KEYCODE_DPAD_UP, fnKeyCode = KeyEvent.KEYCODE_PAGE_UP, isModifier = true, iconType = KeyIconType.ARROW_UP),
-            KeySpec("shift_r", "shift", keyCode = KeyEvent.KEYCODE_SHIFT_RIGHT, weight = 1.25f, isModifier = true, modifierType = ModifierKey.SHIFT),
+            KeySpec("up", "↑", fnLabel = "PgUp", keyCode = KeyEvent.KEYCODE_DPAD_UP, fnKeyCode = KeyEvent.KEYCODE_PAGE_UP, isModifier = true, iconType = KeyIconType.ARROW_UP),
+            KeySpec("shift_r", "Shift", keyCode = KeyEvent.KEYCODE_SHIFT_RIGHT, weight = 1.25f, isModifier = true, modifierType = ModifierKey.SHIFT),
         ),
-        // Row 5: ctrl win alt space alt fn left down right
         listOf(
-            KeySpec("ctrl", "ctrl", keyCode = KeyEvent.KEYCODE_CTRL_LEFT, weight = 1.25f, isModifier = true, modifierType = ModifierKey.CTRL),
-            KeySpec("meta", "win", keyCode = KeyEvent.KEYCODE_META_LEFT, weight = 1.05f, isModifier = true, modifierType = ModifierKey.META),
-            KeySpec("alt", "alt", keyCode = KeyEvent.KEYCODE_ALT_LEFT, weight = 1.05f, isModifier = true, modifierType = ModifierKey.ALT),
-            KeySpec("space", "space", keyCode = KeyEvent.KEYCODE_SPACE, charPrimary = ' ', charShift = ' ', weight = 4.2f),
-            KeySpec("alt_r", "alt", keyCode = KeyEvent.KEYCODE_ALT_RIGHT, weight = 1.0f, isModifier = true, modifierType = ModifierKey.ALT),
-            KeySpec("fn", "fn", keyCode = KeyEvent.KEYCODE_FUNCTION, weight = 0.95f, isModifier = true, modifierType = ModifierKey.FN),
-            KeySpec("left", "◁", fnLabel = "home", keyCode = KeyEvent.KEYCODE_DPAD_LEFT, fnKeyCode = KeyEvent.KEYCODE_MOVE_HOME, isModifier = true, iconType = KeyIconType.ARROW_LEFT),
-            KeySpec("down", "▽", fnLabel = "pgdn", keyCode = KeyEvent.KEYCODE_DPAD_DOWN, fnKeyCode = KeyEvent.KEYCODE_PAGE_DOWN, isModifier = true, iconType = KeyIconType.ARROW_DOWN),
-            KeySpec("right", "▷", fnLabel = "end", keyCode = KeyEvent.KEYCODE_DPAD_RIGHT, fnKeyCode = KeyEvent.KEYCODE_MOVE_END, isModifier = true, iconType = KeyIconType.ARROW_RIGHT),
+            KeySpec("ctrl", "Ctrl", keyCode = KeyEvent.KEYCODE_CTRL_LEFT, weight = 1.25f, isModifier = true, modifierType = ModifierKey.CTRL),
+            KeySpec("meta", "Win", keyCode = KeyEvent.KEYCODE_META_LEFT, weight = 1.05f, isModifier = true, modifierType = ModifierKey.META),
+            KeySpec("alt", "Alt", keyCode = KeyEvent.KEYCODE_ALT_LEFT, weight = 1.05f, isModifier = true, modifierType = ModifierKey.ALT),
+            KeySpec("space", "Space", keyCode = KeyEvent.KEYCODE_SPACE, charPrimary = ' ', charShift = ' ', weight = 4.2f),
+            KeySpec("alt_r", "Alt", keyCode = KeyEvent.KEYCODE_ALT_RIGHT, weight = 1.0f, isModifier = true, modifierType = ModifierKey.ALT),
+            KeySpec("fn", "Fn", keyCode = KeyEvent.KEYCODE_FUNCTION, weight = 0.95f, isModifier = true, modifierType = ModifierKey.FN),
+            KeySpec("left", "←", fnLabel = "Home", keyCode = KeyEvent.KEYCODE_DPAD_LEFT, fnKeyCode = KeyEvent.KEYCODE_MOVE_HOME, isModifier = true, iconType = KeyIconType.ARROW_LEFT),
+            KeySpec("down", "↓", fnLabel = "PgDn", keyCode = KeyEvent.KEYCODE_DPAD_DOWN, fnKeyCode = KeyEvent.KEYCODE_PAGE_DOWN, isModifier = true, iconType = KeyIconType.ARROW_DOWN),
+            KeySpec("right", "→", fnLabel = "End", keyCode = KeyEvent.KEYCODE_DPAD_RIGHT, fnKeyCode = KeyEvent.KEYCODE_MOVE_END, isModifier = true, iconType = KeyIconType.ARROW_RIGHT),
+        ),
+    )
+
+    // Ergonomic 10-col x 5-row QWERTY block paired with 4-col x 5-row Numpad (14 total columns -> large tappable keys!)
+    val splitPcRows: List<List<KeySpec>> = listOf(
+        // Row 1: utility + essential symbols (numbers live on the dedicated right Numpad!)
+        listOf(
+            KeySpec("sp_esc", "Esc", keyCode = KeyEvent.KEYCODE_ESCAPE, weight = 1.05f, isModifier = true),
+            KeySpec("sp_tab", "Tab", keyCode = KeyEvent.KEYCODE_TAB, weight = 1.05f, isModifier = true),
+            KeySpec("sp_grave", "`", "~", keyCode = KeyEvent.KEYCODE_GRAVE, charPrimary = '`', charShift = '~'),
+            KeySpec("sp_lbr", "[", "{", keyCode = KeyEvent.KEYCODE_LEFT_BRACKET, charPrimary = '[', charShift = '{'),
+            KeySpec("sp_rbr", "]", "}", keyCode = KeyEvent.KEYCODE_RIGHT_BRACKET, charPrimary = ']', charShift = '}'),
+            KeySpec("sp_semi", ";", ":", keyCode = KeyEvent.KEYCODE_SEMICOLON, charPrimary = ';', charShift = ':'),
+            KeySpec("sp_quote", "'", "\"", keyCode = KeyEvent.KEYCODE_APOSTROPHE, charPrimary = '\'', charShift = '"'),
+            KeySpec("sp_slash", "/", "?", keyCode = KeyEvent.KEYCODE_SLASH, charPrimary = '/', charShift = '?'),
+            KeySpec("sp_bsl", "\\", "|", keyCode = KeyEvent.KEYCODE_BACKSLASH, charPrimary = '\\', charShift = '|'),
+            KeySpec("sp_fn", "Fn", keyCode = KeyEvent.KEYCODE_FUNCTION, weight = 1.0f, isModifier = true, modifierType = ModifierKey.FN),
+        ),
+        // Row 2: Q..P
+        listOf(
+            KeySpec("q", "q", "Q", keyCode = KeyEvent.KEYCODE_Q, charPrimary = 'q', charShift = 'Q'),
+            KeySpec("w", "w", "W", keyCode = KeyEvent.KEYCODE_W, charPrimary = 'w', charShift = 'W'),
+            KeySpec("e", "e", "E", keyCode = KeyEvent.KEYCODE_E, charPrimary = 'e', charShift = 'E'),
+            KeySpec("r", "r", "R", keyCode = KeyEvent.KEYCODE_R, charPrimary = 'r', charShift = 'R'),
+            KeySpec("t", "t", "T", keyCode = KeyEvent.KEYCODE_T, charPrimary = 't', charShift = 'T'),
+            KeySpec("y", "y", "Y", keyCode = KeyEvent.KEYCODE_Y, charPrimary = 'y', charShift = 'Y'),
+            KeySpec("u", "u", "U", keyCode = KeyEvent.KEYCODE_U, charPrimary = 'u', charShift = 'U'),
+            KeySpec("i", "i", "I", keyCode = KeyEvent.KEYCODE_I, charPrimary = 'i', charShift = 'I'),
+            KeySpec("o", "o", "O", keyCode = KeyEvent.KEYCODE_O, charPrimary = 'o', charShift = 'O'),
+            KeySpec("p", "p", "P", keyCode = KeyEvent.KEYCODE_P, charPrimary = 'p', charShift = 'P'),
+        ),
+        // Row 3: Caps + A..L
+        listOf(
+            KeySpec("sp_caps", "Caps", keyCode = KeyEvent.KEYCODE_CAPS_LOCK, weight = 1.05f, isModifier = true, modifierType = ModifierKey.CAPS),
+            KeySpec("a", "a", "A", keyCode = KeyEvent.KEYCODE_A, charPrimary = 'a', charShift = 'A'),
+            KeySpec("s", "s", "S", keyCode = KeyEvent.KEYCODE_S, charPrimary = 's', charShift = 'S'),
+            KeySpec("d", "d", "D", keyCode = KeyEvent.KEYCODE_D, charPrimary = 'd', charShift = 'D'),
+            KeySpec("f", "f", "F", keyCode = KeyEvent.KEYCODE_F, charPrimary = 'f', charShift = 'F'),
+            KeySpec("g", "g", "G", keyCode = KeyEvent.KEYCODE_G, charPrimary = 'g', charShift = 'G'),
+            KeySpec("h", "h", "H", keyCode = KeyEvent.KEYCODE_H, charPrimary = 'h', charShift = 'H'),
+            KeySpec("j", "j", "J", keyCode = KeyEvent.KEYCODE_J, charPrimary = 'j', charShift = 'J'),
+            KeySpec("k", "k", "K", keyCode = KeyEvent.KEYCODE_K, charPrimary = 'k', charShift = 'K'),
+            KeySpec("l", "l", "L", keyCode = KeyEvent.KEYCODE_L, charPrimary = 'l', charShift = 'L'),
+        ),
+        // Row 4: Shift + Z..M + , + Bksp
+        listOf(
+            KeySpec("sp_shift", "⇧", keyCode = KeyEvent.KEYCODE_SHIFT_LEFT, weight = 1.25f, isModifier = true, modifierType = ModifierKey.SHIFT, iconType = KeyIconType.SHIFT),
+            KeySpec("z", "z", "Z", keyCode = KeyEvent.KEYCODE_Z, charPrimary = 'z', charShift = 'Z'),
+            KeySpec("x", "x", "X", keyCode = KeyEvent.KEYCODE_X, charPrimary = 'x', charShift = 'X'),
+            KeySpec("c", "c", "C", keyCode = KeyEvent.KEYCODE_C, charPrimary = 'c', charShift = 'C'),
+            KeySpec("v", "v", "V", keyCode = KeyEvent.KEYCODE_V, charPrimary = 'v', charShift = 'V'),
+            KeySpec("b", "b", "B", keyCode = KeyEvent.KEYCODE_B, charPrimary = 'b', charShift = 'B'),
+            KeySpec("n", "n", "N", keyCode = KeyEvent.KEYCODE_N, charPrimary = 'n', charShift = 'N'),
+            KeySpec("m", "m", "M", keyCode = KeyEvent.KEYCODE_M, charPrimary = 'm', charShift = 'M'),
+            KeySpec("sp_comma", ",", "<", keyCode = KeyEvent.KEYCODE_COMMA, charPrimary = ',', charShift = '<'),
+            KeySpec("sp_bksp", "⌫", fnLabel = "Del", keyCode = KeyEvent.KEYCODE_DEL, fnKeyCode = KeyEvent.KEYCODE_FORWARD_DEL, weight = 1.25f, isModifier = true, iconType = KeyIconType.BACKSPACE),
+        ),
+        // Row 5: Ctrl + Alt + Space + . + Arrows + Enter
+        listOf(
+            KeySpec("sp_ctrl", "Ctrl", keyCode = KeyEvent.KEYCODE_CTRL_LEFT, weight = 1.2f, isModifier = true, modifierType = ModifierKey.CTRL),
+            KeySpec("sp_alt", "Alt", keyCode = KeyEvent.KEYCODE_ALT_LEFT, weight = 1.0f, isModifier = true, modifierType = ModifierKey.ALT),
+            KeySpec("sp_space", "Space", keyCode = KeyEvent.KEYCODE_SPACE, charPrimary = ' ', charShift = ' ', weight = 2.6f),
+            KeySpec("sp_dot", ".", ">", keyCode = KeyEvent.KEYCODE_PERIOD, charPrimary = '.', charShift = '>', weight = 0.85f),
+            KeySpec("sp_left", "←", fnLabel = "Hm", keyCode = KeyEvent.KEYCODE_DPAD_LEFT, fnKeyCode = KeyEvent.KEYCODE_MOVE_HOME, weight = 0.9f, isModifier = true, iconType = KeyIconType.ARROW_LEFT),
+            KeySpec("sp_up", "↑", fnLabel = "PU", keyCode = KeyEvent.KEYCODE_DPAD_UP, fnKeyCode = KeyEvent.KEYCODE_PAGE_UP, weight = 0.9f, isModifier = true, iconType = KeyIconType.ARROW_UP),
+            KeySpec("sp_down", "↓", fnLabel = "PD", keyCode = KeyEvent.KEYCODE_DPAD_DOWN, fnKeyCode = KeyEvent.KEYCODE_PAGE_DOWN, weight = 0.9f, isModifier = true, iconType = KeyIconType.ARROW_DOWN),
+            KeySpec("sp_right", "→", fnLabel = "En", keyCode = KeyEvent.KEYCODE_DPAD_RIGHT, fnKeyCode = KeyEvent.KEYCODE_MOVE_END, weight = 0.9f, isModifier = true, iconType = KeyIconType.ARROW_RIGHT),
+            KeySpec("sp_enter", "↵", keyCode = KeyEvent.KEYCODE_ENTER, weight = 1.25f, isModifier = true, iconType = KeyIconType.ENTER),
+        ),
+    )
+
+    // Left-hand Gaming Cluster (Minecraft PE / PC Games): Hotbar 1-5, Esc, Tab, Q W E R, A S D F G, Shift C Space Ctrl
+    val gamingLeftRows: List<List<KeySpec>> = listOf(
+        listOf(
+            KeySpec("gm_esc", "Esc", keyCode = KeyEvent.KEYCODE_ESCAPE, weight = 1.05f, isModifier = true),
+            KeySpec("gm_1", "1", keyCode = KeyEvent.KEYCODE_1, charPrimary = '1'),
+            KeySpec("gm_2", "2", keyCode = KeyEvent.KEYCODE_2, charPrimary = '2'),
+            KeySpec("gm_3", "3", keyCode = KeyEvent.KEYCODE_3, charPrimary = '3'),
+            KeySpec("gm_4", "4", keyCode = KeyEvent.KEYCODE_4, charPrimary = '4'),
+            KeySpec("gm_5", "5", keyCode = KeyEvent.KEYCODE_5, charPrimary = '5'),
+        ),
+        listOf(
+            KeySpec("gm_q", "Q", keyCode = KeyEvent.KEYCODE_Q, charPrimary = 'q', charShift = 'Q'),
+            KeySpec("gm_w", "W", keyCode = KeyEvent.KEYCODE_W, charPrimary = 'w', charShift = 'W', isAccent = true),
+            KeySpec("gm_e", "E", keyCode = KeyEvent.KEYCODE_E, charPrimary = 'e', charShift = 'E'),
+            KeySpec("gm_r", "R", keyCode = KeyEvent.KEYCODE_R, charPrimary = 'r', charShift = 'R'),
+            KeySpec("gm_tab", "Tab", keyCode = KeyEvent.KEYCODE_TAB, isModifier = true),
+        ),
+        listOf(
+            KeySpec("gm_a", "A", keyCode = KeyEvent.KEYCODE_A, charPrimary = 'a', charShift = 'A', isAccent = true),
+            KeySpec("gm_s", "S", keyCode = KeyEvent.KEYCODE_S, charPrimary = 's', charShift = 'S', isAccent = true),
+            KeySpec("gm_d", "D", keyCode = KeyEvent.KEYCODE_D, charPrimary = 'd', charShift = 'D', isAccent = true),
+            KeySpec("gm_f", "F", keyCode = KeyEvent.KEYCODE_F, charPrimary = 'f', charShift = 'F'),
+            KeySpec("gm_g", "G", keyCode = KeyEvent.KEYCODE_G, charPrimary = 'g', charShift = 'G'),
+        ),
+        listOf(
+            KeySpec("gm_shift", "Shift", keyCode = KeyEvent.KEYCODE_SHIFT_LEFT, weight = 1.3f, isModifier = true),
+            KeySpec("gm_c", "C", keyCode = KeyEvent.KEYCODE_C, charPrimary = 'c', charShift = 'C'),
+            KeySpec("gm_space", "Space", keyCode = KeyEvent.KEYCODE_SPACE, charPrimary = ' ', weight = 2.0f, isModifier = true),
+            KeySpec("gm_ctrl", "Ctrl", keyCode = KeyEvent.KEYCODE_CTRL_LEFT, weight = 1.1f, isModifier = true),
         ),
     )
 
     // Dedicated 4x5 PC Numeric Pad
     val numpadRows: List<List<KeySpec>> = listOf(
         listOf(
-            KeySpec("num_lock", "num", keyCode = KeyEvent.KEYCODE_NUM_LOCK, isModifier = true),
+            KeySpec("num_lock", "Num", keyCode = KeyEvent.KEYCODE_NUM_LOCK, isModifier = true),
             KeySpec("num_div", "/", keyCode = KeyEvent.KEYCODE_NUMPAD_DIVIDE, charPrimary = '/', isModifier = true),
             KeySpec("num_mul", "*", keyCode = KeyEvent.KEYCODE_NUMPAD_MULTIPLY, charPrimary = '*', isModifier = true),
             KeySpec("num_sub", "-", keyCode = KeyEvent.KEYCODE_NUMPAD_SUBTRACT, charPrimary = '-', isModifier = true),
         ),
         listOf(
-            KeySpec("num_7", "7", fnLabel = "hom", keyCode = KeyEvent.KEYCODE_NUMPAD_7, fnKeyCode = KeyEvent.KEYCODE_MOVE_HOME, charPrimary = '7'),
+            KeySpec("num_7", "7", fnLabel = "Hm", keyCode = KeyEvent.KEYCODE_NUMPAD_7, fnKeyCode = KeyEvent.KEYCODE_MOVE_HOME, charPrimary = '7'),
             KeySpec("num_8", "8", fnLabel = "↑", keyCode = KeyEvent.KEYCODE_NUMPAD_8, fnKeyCode = KeyEvent.KEYCODE_DPAD_UP, charPrimary = '8'),
-            KeySpec("num_9", "9", fnLabel = "pgu", keyCode = KeyEvent.KEYCODE_NUMPAD_9, fnKeyCode = KeyEvent.KEYCODE_PAGE_UP, charPrimary = '9'),
+            KeySpec("num_9", "9", fnLabel = "PU", keyCode = KeyEvent.KEYCODE_NUMPAD_9, fnKeyCode = KeyEvent.KEYCODE_PAGE_UP, charPrimary = '9'),
             KeySpec("num_add", "+", keyCode = KeyEvent.KEYCODE_NUMPAD_ADD, charPrimary = '+', isModifier = true),
         ),
         listOf(
@@ -125,14 +220,14 @@ object PcKeyboardLayoutData {
             KeySpec("num_bksp", "⌫", keyCode = KeyEvent.KEYCODE_DEL, isModifier = true, iconType = KeyIconType.BACKSPACE),
         ),
         listOf(
-            KeySpec("num_1", "1", fnLabel = "end", keyCode = KeyEvent.KEYCODE_NUMPAD_1, fnKeyCode = KeyEvent.KEYCODE_MOVE_END, charPrimary = '1'),
+            KeySpec("num_1", "1", fnLabel = "En", keyCode = KeyEvent.KEYCODE_NUMPAD_1, fnKeyCode = KeyEvent.KEYCODE_MOVE_END, charPrimary = '1'),
             KeySpec("num_2", "2", fnLabel = "↓", keyCode = KeyEvent.KEYCODE_NUMPAD_2, fnKeyCode = KeyEvent.KEYCODE_DPAD_DOWN, charPrimary = '2'),
-            KeySpec("num_3", "3", fnLabel = "pgd", keyCode = KeyEvent.KEYCODE_NUMPAD_3, fnKeyCode = KeyEvent.KEYCODE_PAGE_DOWN, charPrimary = '3'),
-            KeySpec("num_enter", "ent", keyCode = KeyEvent.KEYCODE_NUMPAD_ENTER, isAccent = true),
+            KeySpec("num_3", "3", fnLabel = "PD", keyCode = KeyEvent.KEYCODE_NUMPAD_3, fnKeyCode = KeyEvent.KEYCODE_PAGE_DOWN, charPrimary = '3'),
+            KeySpec("num_enter", "Ent", keyCode = KeyEvent.KEYCODE_NUMPAD_ENTER, isAccent = true),
         ),
         listOf(
-            KeySpec("num_0", "0", fnLabel = "ins", keyCode = KeyEvent.KEYCODE_NUMPAD_0, fnKeyCode = KeyEvent.KEYCODE_INSERT, charPrimary = '0', weight = 2f),
-            KeySpec("num_dot", ".", fnLabel = "del", keyCode = KeyEvent.KEYCODE_NUMPAD_DOT, fnKeyCode = KeyEvent.KEYCODE_FORWARD_DEL, charPrimary = '.'),
+            KeySpec("num_0", "0", fnLabel = "Ins", keyCode = KeyEvent.KEYCODE_NUMPAD_0, fnKeyCode = KeyEvent.KEYCODE_INSERT, charPrimary = '0', weight = 2f),
+            KeySpec("num_dot", ".", fnLabel = "Del", keyCode = KeyEvent.KEYCODE_NUMPAD_DOT, fnKeyCode = KeyEvent.KEYCODE_FORWARD_DEL, charPrimary = '.'),
             KeySpec("num_eq", "=", keyCode = KeyEvent.KEYCODE_NUMPAD_EQUALS, charPrimary = '=', isModifier = true),
         ),
     )

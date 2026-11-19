@@ -18,6 +18,7 @@ import com.example.keyboard.KeyboardDockAlignment
 import com.example.keyboard.KeyboardLayoutMode
 import com.example.keyboard.KeyboardThemeId
 import com.example.keyboard.PcKeyboardLayoutData
+import com.example.keyboard.RgbBorderMode
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -94,6 +95,7 @@ class KeyDeckRepository(private val context: Context) {
         val NUM_LOCK_ON = booleanPreferencesKey("num_lock_on")
         val STICKY_MODIFIERS = booleanPreferencesKey("sticky_modifiers")
         val HAPTIC_FEEDBACK = booleanPreferencesKey("haptic_feedback")
+        val SUPPRESS_AUTO_IME_ON_INPUT = booleanPreferencesKey("suppress_auto_ime_on_input")
         val KEY_HEIGHT_DP = intPreferencesKey("key_height_dp")
         val WIDTH_FRACTION = floatPreferencesKey("width_fraction")
         val DOCK_ALIGNMENT = stringPreferencesKey("dock_alignment")
@@ -104,6 +106,11 @@ class KeyDeckRepository(private val context: Context) {
         val FONT_SCALE = floatPreferencesKey("font_scale")
         val OVERLAY_OPACITY = floatPreferencesKey("overlay_opacity")
         val BUBBLE_SIZE_DP = intPreferencesKey("bubble_size_dp")
+        val RGB_BORDER_MODE = stringPreferencesKey("rgb_border_mode")
+        val SHOW_KEY_BORDER = booleanPreferencesKey("show_key_border")
+        val TOUCHPAD_SENSITIVITY = floatPreferencesKey("touchpad_sensitivity")
+        val TOUCHPAD_WIDTH_FRACTION = floatPreferencesKey("touchpad_width_fraction")
+        val GAMING_MCPE_LOOK_MODE = booleanPreferencesKey("gaming_mcpe_look_mode")
         val OVERRIDE_ACCENT_HEX = longPreferencesKey("override_accent_hex")
         val CUSTOM_DECK_HEX = longPreferencesKey("custom_deck_hex")
         val CUSTOM_KEY_HEX = longPreferencesKey("custom_key_hex")
@@ -138,6 +145,7 @@ class KeyDeckRepository(private val context: Context) {
             prefs[Keys.NUM_LOCK_ON] = updated.numLockOn
             prefs[Keys.STICKY_MODIFIERS] = updated.stickyModifiers
             prefs[Keys.HAPTIC_FEEDBACK] = updated.hapticFeedback
+            prefs[Keys.SUPPRESS_AUTO_IME_ON_INPUT] = updated.suppressAutoImeOnInput
             prefs[Keys.KEY_HEIGHT_DP] = updated.keyHeightDp
             prefs[Keys.WIDTH_FRACTION] = updated.keyboardWidthFraction
             prefs[Keys.DOCK_ALIGNMENT] = updated.dockAlignment.name
@@ -148,6 +156,11 @@ class KeyDeckRepository(private val context: Context) {
             prefs[Keys.FONT_SCALE] = updated.fontScale
             prefs[Keys.OVERLAY_OPACITY] = updated.overlayOpacity
             prefs[Keys.BUBBLE_SIZE_DP] = updated.bubbleSizeDp
+            prefs[Keys.RGB_BORDER_MODE] = updated.rgbBorderMode.name
+            prefs[Keys.SHOW_KEY_BORDER] = updated.showKeyBorder
+            prefs[Keys.TOUCHPAD_SENSITIVITY] = updated.touchpadSensitivity
+            prefs[Keys.TOUCHPAD_WIDTH_FRACTION] = updated.touchpadWidthFraction
+            prefs[Keys.GAMING_MCPE_LOOK_MODE] = updated.gamingMcpeLookMode
             prefs[Keys.OVERRIDE_ACCENT_HEX] = updated.overrideAccentHex
             prefs[Keys.CUSTOM_DECK_HEX] = updated.customDeckHex
             prefs[Keys.CUSTOM_KEY_HEX] = updated.customKeyHex
@@ -161,6 +174,7 @@ class KeyDeckRepository(private val context: Context) {
         val layoutName = prefs[Keys.LAYOUT_MODE] ?: KeyboardLayoutMode.PC_STANDARD.name
         val themeName = prefs[Keys.THEME_ID] ?: KeyboardThemeId.SOFT_NEUMORPH.name
         val dockName = prefs[Keys.DOCK_ALIGNMENT] ?: KeyboardDockAlignment.CENTER.name
+        val rgbName = prefs[Keys.RGB_BORDER_MODE] ?: RgbBorderMode.GAMING_ONLY.name
         return KeyDeckSettings(
             layoutMode = runCatching { KeyboardLayoutMode.valueOf(layoutName) }
                 .getOrDefault(KeyboardLayoutMode.PC_STANDARD),
@@ -168,26 +182,33 @@ class KeyDeckRepository(private val context: Context) {
                 .getOrDefault(KeyboardThemeId.SOFT_NEUMORPH),
             showHotkeyBar = prefs[Keys.SHOW_HOTKEY_BAR] ?: true,
             showModeStrip = prefs[Keys.SHOW_MODE_STRIP] ?: true,
-            showFunctionRow = prefs[Keys.SHOW_FUNCTION_ROW] ?: true,
+            showFunctionRow = prefs[Keys.SHOW_FUNCTION_ROW] ?: false,
             numLockOn = prefs[Keys.NUM_LOCK_ON] ?: true,
             stickyModifiers = prefs[Keys.STICKY_MODIFIERS] ?: true,
             hapticFeedback = prefs[Keys.HAPTIC_FEEDBACK] ?: true,
-            keyHeightDp = (prefs[Keys.KEY_HEIGHT_DP] ?: 34).coerceIn(24, 54),
+            suppressAutoImeOnInput = prefs[Keys.SUPPRESS_AUTO_IME_ON_INPUT] ?: true,
+            keyHeightDp = (prefs[Keys.KEY_HEIGHT_DP] ?: 38).coerceIn(26, 54),
             keyboardWidthFraction = (prefs[Keys.WIDTH_FRACTION] ?: 1.0f).coerceIn(0.60f, 1.0f),
             dockAlignment = runCatching { KeyboardDockAlignment.valueOf(dockName) }
                 .getOrDefault(KeyboardDockAlignment.CENTER),
             keyHorizontalGapDp = (prefs[Keys.KEY_H_GAP_DP] ?: 3).coerceIn(1, 6),
             keyVerticalGapDp = (prefs[Keys.KEY_V_GAP_DP] ?: 4).coerceIn(1, 7),
             deckPaddingDp = (prefs[Keys.DECK_PADDING_DP] ?: 6).coerceIn(1, 10),
-            keyCornerRadiusDp = (prefs[Keys.KEY_CORNER_DP] ?: 11).coerceIn(4, 16),
-            fontScale = (prefs[Keys.FONT_SCALE] ?: 0.92f).coerceIn(0.70f, 1.25f),
-            overlayOpacity = (prefs[Keys.OVERLAY_OPACITY] ?: 0.97f).coerceIn(0.50f, 1.0f),
+            keyCornerRadiusDp = (prefs[Keys.KEY_CORNER_DP] ?: 10).coerceIn(4, 16),
+            fontScale = (prefs[Keys.FONT_SCALE] ?: 0.96f).coerceIn(0.75f, 1.25f),
+            overlayOpacity = (prefs[Keys.OVERLAY_OPACITY] ?: 0.96f).coerceIn(0.50f, 1.0f),
             bubbleSizeDp = (prefs[Keys.BUBBLE_SIZE_DP] ?: 48).coerceIn(36, 68),
+            rgbBorderMode = runCatching { RgbBorderMode.valueOf(rgbName) }
+                .getOrDefault(RgbBorderMode.GAMING_ONLY),
+            showKeyBorder = prefs[Keys.SHOW_KEY_BORDER] ?: true,
+            touchpadSensitivity = (prefs[Keys.TOUCHPAD_SENSITIVITY] ?: 1.6f).coerceIn(0.6f, 3.5f),
+            touchpadWidthFraction = (prefs[Keys.TOUCHPAD_WIDTH_FRACTION] ?: 0.42f).coerceIn(0.30f, 0.55f),
+            gamingMcpeLookMode = prefs[Keys.GAMING_MCPE_LOOK_MODE] ?: true,
             overrideAccentHex = prefs[Keys.OVERRIDE_ACCENT_HEX] ?: 0L,
-            customDeckHex = prefs[Keys.CUSTOM_DECK_HEX] ?: 0xFFE0E5EC,
-            customKeyHex = prefs[Keys.CUSTOM_KEY_HEX] ?: 0xFFE0E5EC,
-            customModifierHex = prefs[Keys.CUSTOM_MOD_HEX] ?: 0xFFE0E5EC,
-            customTextHex = prefs[Keys.CUSTOM_TEXT_HEX] ?: 0xFF4B5563,
+            customDeckHex = prefs[Keys.CUSTOM_DECK_HEX] ?: 0xFFD5DCE5,
+            customKeyHex = prefs[Keys.CUSTOM_KEY_HEX] ?: 0xFFDCE1EA,
+            customModifierHex = prefs[Keys.CUSTOM_MOD_HEX] ?: 0xFFCFD6E2,
+            customTextHex = prefs[Keys.CUSTOM_TEXT_HEX] ?: 0xFF1F2937,
             customAccentHex = prefs[Keys.CUSTOM_ACCENT_HEX] ?: 0xFF4F46E5,
         )
     }
@@ -242,7 +263,7 @@ class KeyDeckRepository(private val context: Context) {
                             category = runCatching {
                                 HotkeyCategory.valueOf(obj.optString("category", HotkeyCategory.CUSTOM.name))
                             }.getOrDefault(HotkeyCategory.CUSTOM),
-                            accentHex = obj.optLong("accentHex", 0xFFE95663),
+                            accentHex = obj.optLong("accentHex", 0xFF4F46E5),
                         ),
                     )
                 }

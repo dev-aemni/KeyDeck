@@ -60,7 +60,7 @@ import com.example.keyboard.CustomHotkey
 import com.example.keyboard.HotkeyCategory
 import com.example.keyboard.KeyDispatcher
 import com.example.keyboard.PcKeyboardLayoutData
-import com.example.ui.theme.MonoFontFamily
+import com.example.ui.theme.BodyFontFamily
 import com.example.ui.theme.NeuActiveFill
 import com.example.ui.theme.NeuBg
 import com.example.ui.theme.NeuCoral
@@ -294,7 +294,7 @@ fun HotkeysScreen(
                                             ) {
                                                 Text(
                                                     text = hk.comboText(),
-                                                    fontFamily = MonoFontFamily,
+                                                    fontFamily = BodyFontFamily,
                                                     fontSize = 11.sp,
                                                     fontWeight = FontWeight.Bold,
                                                     color = accent,
@@ -529,7 +529,7 @@ private fun HotkeyEditorDialog(
                             ) {
                                 Text(
                                     text = option.label,
-                                    fontFamily = MonoFontFamily,
+                                    fontFamily = BodyFontFamily,
                                     fontSize = 12.sp,
                                     fontWeight = FontWeight.Bold,
                                     color = if (active) NeuIndigo else NeuTextPrimary,
@@ -634,7 +634,7 @@ private fun ModifierTogglePill(
     ) {
         Text(
             text = label,
-            fontFamily = MonoFontFamily,
+            fontFamily = BodyFontFamily,
             fontSize = 12.sp,
             fontWeight = FontWeight.Bold,
             color = if (active) NeuIndigo else NeuTextSecondary,

@@ -16,21 +16,32 @@ object KeyDispatcher {
 
     interface DirectKeyTarget {
         fun onDirectKeyEvent(keyCode: Int, metaState: Int, charToCommit: Char?): Boolean
+        fun onDirectKeyHold(keyCode: Int, metaState: Int, isDown: Boolean): Boolean = false
+    }
+
+    interface DirectMouseTarget {
+        fun onMouseDelta(dx: Float, dy: Float)
+        fun onMouseClick(isRightClick: Boolean)
     }
 
     private var directTargetRef: WeakReference<DirectKeyTarget>? = null
+    private var directMouseRef: WeakReference<DirectMouseTarget>? = null
 
     fun setDirectTarget(target: DirectKeyTarget?) {
         directTargetRef = target?.let { WeakReference(it) }
     }
 
+    fun setDirectMouseTarget(target: DirectMouseTarget?) {
+        directMouseRef = target?.let { WeakReference(it) }
+    }
+
     fun activeRouteLabel(): String {
         val direct = if (KeyDeckRuntimeState.isAppInForeground.value) directTargetRef?.get() else null
         return when {
-            direct != null -> "In-App Direct"
-            KeyDeckImeService.hasActiveInputConnection() -> "IME Input"
-            KeyDeckAccessibilityService.activeInstance != null -> "A11y Global"
-            else -> "Overlay Preview"
+            direct != null -> "In-App"
+            KeyDeckImeService.hasActiveInputConnection() -> "IME"
+            KeyDeckAccessibilityService.activeInstance != null -> "A11y"
+            else -> "Preview"
         }
     }
 
@@ -48,7 +59,6 @@ object KeyDispatcher {
 
         val now = SystemClock.uptimeMillis()
 
-        // 1. Try direct in-app target ONLY when app is actively in foreground
         val directTarget = if (KeyDeckRuntimeState.isAppInForeground.value) directTargetRef?.get() else null
         if (directTarget != null && directTarget.onDirectKeyEvent(keyCode, metaState, charToCommit)) {
             KeyDeckRuntimeState.recordDispatchedKey(
@@ -56,14 +66,13 @@ object KeyDispatcher {
                     timestampMs = System.currentTimeMillis(),
                     comboLabel = comboLabel,
                     keyCode = keyCode,
-                    route = "In-App Direct",
+                    route = "In-App",
                     detail = formatMetaDetail(keyCode, metaState),
                 ),
             )
             return
         }
 
-        // 2. Try active InputMethodService InputConnection
         val ime = KeyDeckImeService.activeInstance
         if (ime != null && ime.dispatchPcKey(keyCode, metaState, charToCommit, now)) {
             KeyDeckRuntimeState.recordDispatchedKey(
@@ -71,14 +80,13 @@ object KeyDispatcher {
                     timestampMs = System.currentTimeMillis(),
                     comboLabel = comboLabel,
                     keyCode = keyCode,
-                    route = "IME Input",
+                    route = "IME",
                     detail = formatMetaDetail(keyCode, metaState),
                 ),
             )
             return
         }
 
-        // 3. Try Accessibility Service global/node/scroll/media action (no text field focused!)
         val a11y = KeyDeckAccessibilityService.activeInstance
         if (a11y != null) {
             val handledDetail = a11y.dispatchPcShortcut(keyCode, metaState, charToCommit)
@@ -87,14 +95,13 @@ object KeyDispatcher {
                     timestampMs = System.currentTimeMillis(),
                     comboLabel = comboLabel,
                     keyCode = keyCode,
-                    route = "A11y Global",
+                    route = "A11y",
                     detail = handledDetail,
                 ),
             )
             return
         }
 
-        // 4. Record local telemetry if no external target is bound yet
         KeyDeckRuntimeState.recordDispatchedKey(
             DispatchedKeyRecord(
                 timestampMs = System.currentTimeMillis(),
@@ -102,6 +109,124 @@ object KeyDispatcher {
                 keyCode = keyCode,
                 route = "Preview",
                 detail = "Enable Accessibility or select KeyDeck IME for external apps",
+            ),
+        )
+    }
+
+    fun dispatchKeyHold(
+        context: Context,
+        keyCode: Int,
+        metaState: Int,
+        isDown: Boolean,
+        comboLabel: String,
+        hapticEnabled: Boolean = true,
+    ) {
+        if (isDown && hapticEnabled) {
+            triggerHaptic(context)
+        }
+        val now = SystemClock.uptimeMillis()
+
+        val directTarget = if (KeyDeckRuntimeState.isAppInForeground.value) directTargetRef?.get() else null
+        if (directTarget != null && directTarget.onDirectKeyHold(keyCode, metaState, isDown)) {
+            if (isDown) {
+                KeyDeckRuntimeState.recordDispatchedKey(
+                    DispatchedKeyRecord(
+                        timestampMs = System.currentTimeMillis(),
+                        comboLabel = "$comboLabel (Hold)",
+                        keyCode = keyCode,
+                        route = "In-App",
+                        detail = "Hold Active",
+                    ),
+                )
+            }
+            return
+        }
+
+        val ime = KeyDeckImeService.activeInstance
+        if (ime != null && ime.dispatchKeyHoldEvent(keyCode, metaState, isDown, now)) {
+            if (isDown) {
+                KeyDeckRuntimeState.recordDispatchedKey(
+                    DispatchedKeyRecord(
+                        timestampMs = System.currentTimeMillis(),
+                        comboLabel = "$comboLabel (Hold)",
+                        keyCode = keyCode,
+                        route = "IME",
+                        detail = "Raw Key Hold",
+                    ),
+                )
+            }
+            return
+        }
+
+        if (isDown) {
+            val a11y = KeyDeckAccessibilityService.activeInstance
+            val detail = a11y?.dispatchPcShortcut(keyCode, metaState, null) ?: "Game key $comboLabel"
+            KeyDeckRuntimeState.recordDispatchedKey(
+                DispatchedKeyRecord(
+                    timestampMs = System.currentTimeMillis(),
+                    comboLabel = comboLabel,
+                    keyCode = keyCode,
+                    route = if (a11y != null) "A11y" else "GamePad",
+                    detail = detail,
+                ),
+            )
+        }
+    }
+
+    fun dispatchMouseMove(
+        dx: Float,
+        dy: Float,
+        sensitivity: Float,
+        mcpeLookMode: Boolean,
+    ) {
+        val scaledDx = dx * sensitivity
+        val scaledDy = dy * sensitivity
+
+        val directMouse = if (KeyDeckRuntimeState.isAppInForeground.value) directMouseRef?.get() else null
+        if (directMouse != null) {
+            directMouse.onMouseDelta(scaledDx, scaledDy)
+            return
+        }
+
+        val a11y = KeyDeckAccessibilityService.activeInstance
+        a11y?.dispatchMouseLookOrMove(scaledDx, scaledDy, mcpeLookMode)
+    }
+
+    fun dispatchMouseClick(
+        context: Context,
+        isRightClick: Boolean,
+        mcpeLookMode: Boolean,
+        hapticEnabled: Boolean = true,
+    ) {
+        if (hapticEnabled) {
+            triggerHaptic(context)
+        }
+
+        val directMouse = if (KeyDeckRuntimeState.isAppInForeground.value) directMouseRef?.get() else null
+        if (directMouse != null) {
+            directMouse.onMouseClick(isRightClick)
+            KeyDeckRuntimeState.recordDispatchedKey(
+                DispatchedKeyRecord(
+                    timestampMs = System.currentTimeMillis(),
+                    comboLabel = if (isRightClick) "RMB" else "LMB",
+                    keyCode = 0,
+                    route = "Mouse",
+                    detail = if (isRightClick) "Right Click / Use" else "Left Click / Attack",
+                ),
+            )
+            return
+        }
+
+        val a11y = KeyDeckAccessibilityService.activeInstance
+        val detail = a11y?.dispatchMouseTap(isRightClick, mcpeLookMode)
+            ?: "Enable Accessibility for external touch/mouse clicks"
+        KeyDeckRuntimeState.recordDispatchedKey(
+            DispatchedKeyRecord(
+                timestampMs = System.currentTimeMillis(),
+                comboLabel = if (isRightClick) "RMB" else "LMB",
+                keyCode = 0,
+                route = if (a11y != null) "A11y Mouse" else "Mouse",
+                detail = detail,
             ),
         )
     }
@@ -129,7 +254,7 @@ object KeyDispatcher {
             if (metaState and KeyEvent.META_META_ON != 0) add("META")
         }
         val flagText = if (flags.isEmpty()) "NONE" else flags.joinToString("|")
-        return "KeyCode $keyCode • Meta: $flagText"
+        return "KeyCode $keyCode • $flagText"
     }
 
     @Suppress("DEPRECATION")

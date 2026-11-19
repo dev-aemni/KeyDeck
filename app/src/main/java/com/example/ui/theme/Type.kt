@@ -9,39 +9,33 @@ import androidx.compose.ui.unit.sp
 import com.example.R
 
 val DisplayFontFamily = FontFamily(
-    Font(R.font.space_grotesk, FontWeight.Normal),
-    Font(R.font.space_grotesk, FontWeight.SemiBold),
-    Font(R.font.space_grotesk, FontWeight.Bold),
+    Font(R.font.outfit, FontWeight.Normal),
+    Font(R.font.outfit, FontWeight.Medium),
+    Font(R.font.outfit, FontWeight.SemiBold),
+    Font(R.font.outfit, FontWeight.Bold),
 )
 
 val BodyFontFamily = FontFamily(
-    Font(R.font.plus_jakarta_sans, FontWeight.Normal),
-    Font(R.font.plus_jakarta_sans, FontWeight.Medium),
-    Font(R.font.plus_jakarta_sans, FontWeight.SemiBold),
-    Font(R.font.plus_jakarta_sans, FontWeight.Bold),
-)
-
-val MonoFontFamily = FontFamily(
-    Font(R.font.jetbrains_mono, FontWeight.Normal),
-    Font(R.font.jetbrains_mono, FontWeight.Medium),
-    Font(R.font.jetbrains_mono, FontWeight.SemiBold),
-    Font(R.font.jetbrains_mono, FontWeight.Bold),
+    Font(R.font.inter, FontWeight.Normal),
+    Font(R.font.inter, FontWeight.Medium),
+    Font(R.font.inter, FontWeight.SemiBold),
+    Font(R.font.inter, FontWeight.Bold),
 )
 
 val KeyDeckTypography = Typography(
     headlineLarge = TextStyle(
         fontFamily = DisplayFontFamily,
         fontWeight = FontWeight.Bold,
-        fontSize = 28.sp,
-        lineHeight = 34.sp,
-        letterSpacing = (-0.5).sp,
+        fontSize = 26.sp,
+        lineHeight = 32.sp,
+        letterSpacing = (-0.4).sp,
     ),
     headlineMedium = TextStyle(
         fontFamily = DisplayFontFamily,
         fontWeight = FontWeight.Bold,
-        fontSize = 22.sp,
-        lineHeight = 28.sp,
-        letterSpacing = (-0.3).sp,
+        fontSize = 21.sp,
+        lineHeight = 27.sp,
+        letterSpacing = (-0.2).sp,
     ),
     titleLarge = TextStyle(
         fontFamily = DisplayFontFamily,
@@ -52,8 +46,8 @@ val KeyDeckTypography = Typography(
     titleMedium = TextStyle(
         fontFamily = BodyFontFamily,
         fontWeight = FontWeight.SemiBold,
-        fontSize = 16.sp,
-        lineHeight = 22.sp,
+        fontSize = 15.sp,
+        lineHeight = 21.sp,
     ),
     bodyLarge = TextStyle(
         fontFamily = BodyFontFamily,
@@ -74,13 +68,13 @@ val KeyDeckTypography = Typography(
         lineHeight = 20.sp,
     ),
     labelMedium = TextStyle(
-        fontFamily = MonoFontFamily,
-        fontWeight = FontWeight.Medium,
+        fontFamily = BodyFontFamily,
+        fontWeight = FontWeight.SemiBold,
         fontSize = 12.sp,
         lineHeight = 16.sp,
     ),
     labelSmall = TextStyle(
-        fontFamily = MonoFontFamily,
+        fontFamily = BodyFontFamily,
         fontWeight = FontWeight.Medium,
         fontSize = 10.sp,
         lineHeight = 14.sp,

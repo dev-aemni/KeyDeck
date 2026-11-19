@@ -25,6 +25,7 @@ import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Dialpad
 import androidx.compose.material.icons.filled.Keyboard
 import androidx.compose.material.icons.filled.RestartAlt
+import androidx.compose.material.icons.filled.SportsEsports
 import androidx.compose.material.icons.filled.ViewColumn
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
@@ -53,7 +54,8 @@ import com.example.keyboard.KeyboardLayoutMode
 import com.example.keyboard.KeyboardSizePreset
 import com.example.keyboard.KeyboardThemeId
 import com.example.keyboard.ResolvedKeyboardPalette
-import com.example.ui.theme.MonoFontFamily
+import com.example.keyboard.RgbBorderMode
+import com.example.ui.theme.BodyFontFamily
 import com.example.ui.theme.NeuActiveFill
 import com.example.ui.theme.NeuBg
 import com.example.ui.theme.NeuEmerald
@@ -80,25 +82,25 @@ private val ACCENT_SWATCHES = listOf(
 )
 
 private val DECK_BG_SWATCHES = listOf(
-    0xFFE0E5ECL, // Classic Soft UI
-    0xFFE6E4F2L, // Soft Lavender
-    0xFFECE6DFL, // Warm Sand
-    0xFFDCE9E5L, // Mint Mist
-    0xFFF2E4E8L, // Rose Blush
-    0xFF262A34L, // Dark Neumorph
-    0xFF1B2233L, // Midnight Velvet
-    0xFF181B1FL, // Deep Carbon
+    0xFFD5DCE5L, // Soft UI Slate
+    0xFFDCD9ECL, // Soft Lavender
+    0xFFE2DCD4L, // Warm Stone
+    0xFFD1DFDAL, // Sage Mist
+    0xFFE7D9DDL, // Dusty Rose
+    0xFF222630L, // Dark Neumorph
+    0xFF171D2BL, // Midnight Gaming
+    0xFF16191DL, // Carbon Stealth
 )
 
 private val KEY_BG_SWATCHES = listOf(
-    0xFFE0E5ECL,
-    0xFFE6E4F2L,
-    0xFFECE6DFL,
-    0xFFDCE9E5L,
-    0xFFF2E4E8L,
-    0xFFFFFFFFL,
-    0xFF262A34L,
-    0xFF1B2233L,
+    0xFFDCE1EAL,
+    0xFFE3E0F1L,
+    0xFFE9E4DCL,
+    0xFFD9E6E1L,
+    0xFFEEE1E5L,
+    0xFFCFD6E2L,
+    0xFF282D39L,
+    0xFF1D2436L,
 )
 
 private val TEXT_SWATCHES = listOf(
@@ -143,6 +145,7 @@ fun ThemePickerSheet(
                 palette = resolvedPalette,
                 cornerDp = settings.keyCornerRadiusDp,
                 opacity = settings.overlayOpacity,
+                showKeyBorder = settings.showKeyBorder,
             )
 
             Text(
@@ -300,6 +303,65 @@ fun ThemePickerSheet(
                 }
             }
 
+            Text(
+                text = "RGB Animated Key Border",
+                style = MaterialTheme.typography.labelLarge,
+                color = NeuTextSecondary,
+            )
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                RgbBorderMode.entries.forEach { mode ->
+                    val selected = settings.rgbBorderMode == mode
+                    Box(
+                        modifier = Modifier
+                            .weight(1f)
+                            .height(48.dp)
+                            .then(
+                                if (selected) {
+                                    Modifier.neumorphicInset(
+                                        surfaceColor = NeuActiveFill,
+                                        shadowLight = NeuShadowLight,
+                                        shadowDark = NeuShadowDark,
+                                        cornerRadius = 12.dp,
+                                        depth = 4.dp,
+                                    )
+                                } else {
+                                    Modifier.neumorphicRaised(
+                                        surfaceColor = NeuBg,
+                                        shadowLight = NeuShadowLight,
+                                        shadowDark = NeuShadowDark,
+                                        cornerRadius = 12.dp,
+                                        shadowOffset = 4.dp,
+                                        blurRadius = 7.dp,
+                                    )
+                                },
+                            )
+                            .clickable { onUpdateSettings { it.copy(rgbBorderMode = mode) } }
+                            .testTag("rgb_mode_${mode.name.lowercase()}"),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        Text(
+                            text = mode.label,
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            color = if (selected) NeuIndigo else NeuTextPrimary,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                    }
+                }
+            }
+
+            SettingsSwitchRow(
+                title = "Black Key Borders",
+                subtitle = "Define key edges cleanly with a crisp black border (Gaming uses RGB)",
+                checked = settings.showKeyBorder,
+                testTag = "switch_key_border",
+                onCheckedChange = { enabled -> onUpdateSettings { it.copy(showKeyBorder = enabled) } },
+            )
+
             LabeledSlider(
                 label = "Key Corner Softness",
                 valueLabel = "${settings.keyCornerRadiusDp} dp",
@@ -437,6 +499,7 @@ fun LayoutPickerSheet(
                     palette = palette,
                     cornerDp = settings.keyCornerRadiusDp,
                     opacity = settings.overlayOpacity,
+                    showKeyBorder = settings.showKeyBorder,
                     modifier = Modifier.fillMaxWidth(settings.keyboardWidthFraction),
                 )
             }
@@ -549,6 +612,7 @@ fun LayoutPickerSheet(
                     KeyboardLayoutMode.PC_STANDARD -> Icons.Default.Keyboard
                     KeyboardLayoutMode.PC_WITH_NUMPAD -> Icons.Default.ViewColumn
                     KeyboardLayoutMode.NUMPAD_ONLY -> Icons.Default.Dialpad
+                    KeyboardLayoutMode.GAMING -> Icons.Default.SportsEsports
                 }
                 Box(
                     modifier = Modifier
@@ -677,6 +741,14 @@ fun SettingsSheet(
             )
 
             SettingsSwitchRow(
+                title = "Manual Bubble Only (No Input Auto-Open)",
+                subtitle = "Prevent keyboards from popping open on input taps so two keyboards never stack",
+                checked = settings.suppressAutoImeOnInput,
+                testTag = "switch_suppress_auto_ime",
+                onCheckedChange = { checked -> onUpdateSettings { it.copy(suppressAutoImeOnInput = checked) } },
+            )
+
+            SettingsSwitchRow(
                 title = "Sticky Modifiers (Ctrl / Alt / Shift)",
                 subtitle = "Tap Ctrl once, then tap C — modifier clears automatically after key",
                 checked = settings.stickyModifiers,
@@ -698,6 +770,32 @@ fun SettingsSheet(
                 checked = settings.numLockOn,
                 testTag = "switch_numlock",
                 onCheckedChange = { checked -> onUpdateSettings { it.copy(numLockOn = checked) } },
+            )
+
+            SettingsSwitchRow(
+                title = "Gaming MCPE Camera Look Mode",
+                subtitle = "Touchpad swipes look around in Minecraft PE; turn off for cursor pointer",
+                checked = settings.gamingMcpeLookMode,
+                testTag = "switch_mcpe_look",
+                onCheckedChange = { checked -> onUpdateSettings { it.copy(gamingMcpeLookMode = checked) } },
+            )
+
+            LabeledSlider(
+                label = "Gaming Touchpad Sensitivity",
+                valueLabel = "${String.format("%.1fx", settings.touchpadSensitivity)}",
+                value = settings.touchpadSensitivity,
+                range = 0.6f..3.5f,
+                accentColor = NeuIndigo,
+                onValueChange = { v -> onUpdateSettings { it.copy(touchpadSensitivity = v) } },
+            )
+
+            LabeledSlider(
+                label = "Gaming Touchpad Width Split",
+                valueLabel = "${(settings.touchpadWidthFraction * 100).roundToInt()}%",
+                value = settings.touchpadWidthFraction,
+                range = 0.30f..0.55f,
+                accentColor = NeuEmerald,
+                onValueChange = { v -> onUpdateSettings { it.copy(touchpadWidthFraction = v) } },
             )
 
             LabeledSlider(
@@ -808,9 +906,15 @@ private fun MiniKeyboardPreviewCard(
     palette: ResolvedKeyboardPalette,
     cornerDp: Int,
     opacity: Float,
+    showKeyBorder: Boolean,
     modifier: Modifier = Modifier,
 ) {
     val corner = (cornerDp - 2).coerceIn(4, 14).dp
+    val borderMod = if (showKeyBorder) {
+        Modifier.border(1.dp, palette.keyBorder.copy(alpha = 0.85f), RoundedCornerShape(corner))
+    } else {
+        Modifier
+    }
     Column(
         modifier = modifier
             .neumorphicRaised(
@@ -851,12 +955,13 @@ private fun MiniKeyboardPreviewCard(
                                     blurRadius = 4.dp,
                                 )
                             },
-                        ),
+                        )
+                        .then(borderMod),
                     contentAlignment = Alignment.Center,
                 ) {
                     Text(
                         text = label,
-                        fontFamily = MonoFontFamily,
+                        fontFamily = BodyFontFamily,
                         fontSize = 9.sp,
                         fontWeight = FontWeight.SemiBold,
                         color = if (isAcc) palette.accentBg else palette.primaryText,
@@ -879,12 +984,13 @@ private fun MiniKeyboardPreviewCard(
                             cornerRadius = corner,
                             shadowOffset = 2.dp,
                             blurRadius = 4.dp,
-                        ),
+                        )
+                        .then(borderMod),
                     contentAlignment = Alignment.Center,
                 ) {
                     Text(
                         text = label,
-                        fontFamily = MonoFontFamily,
+                        fontFamily = BodyFontFamily,
                         fontSize = 8.5.sp,
                         fontWeight = FontWeight.SemiBold,
                         color = if (label == "fn") palette.activeIndicator else palette.primaryText,
@@ -960,7 +1066,7 @@ private fun LabeledSlider(
             Text(label, style = MaterialTheme.typography.bodyMedium, color = NeuTextPrimary)
             Text(
                 valueLabel,
-                fontFamily = MonoFontFamily,
+                fontFamily = BodyFontFamily,
                 fontSize = 12.sp,
                 fontWeight = FontWeight.Bold,
                 color = accentColor,
