@@ -3,6 +3,7 @@ package com.example.service
 import android.inputmethodservice.InputMethodService
 import android.view.KeyEvent
 import android.view.View
+import android.view.WindowManager
 import android.view.inputmethod.EditorInfo
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
@@ -188,10 +189,13 @@ class KeyDeckImeService : InputMethodService() {
                 }
             }
         }
-        window?.window?.decorView?.let { decor ->
-            decor.setViewTreeLifecycleOwner(lifecycleOwner)
-            decor.setViewTreeSavedStateRegistryOwner(lifecycleOwner)
-            decor.setViewTreeViewModelStoreOwner(lifecycleOwner)
+        window?.window?.let { win ->
+            win.addFlags(WindowManager.LayoutParams.FLAG_HARDWARE_ACCELERATED)
+            win.decorView.let { decor ->
+                decor.setViewTreeLifecycleOwner(lifecycleOwner)
+                decor.setViewTreeSavedStateRegistryOwner(lifecycleOwner)
+                decor.setViewTreeViewModelStoreOwner(lifecycleOwner)
+            }
         }
         return composeView
     }

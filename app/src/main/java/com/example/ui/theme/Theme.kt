@@ -1,8 +1,11 @@
 package com.example.ui.theme
 
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.LocalUseFallbackRippleImplementation
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.graphics.Color
 
 private val KeyDeckNeuColorScheme = lightColorScheme(
@@ -26,6 +29,7 @@ private val KeyDeckNeuColorScheme = lightColorScheme(
     outlineVariant = NeuShadowDark.copy(alpha = 0.4f),
 )
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun KeyDeckTheme(
     darkTheme: Boolean = false,
@@ -34,6 +38,11 @@ fun KeyDeckTheme(
     MaterialTheme(
         colorScheme = KeyDeckNeuColorScheme,
         typography = KeyDeckTypography,
-        content = content,
-    )
+    ) {
+        @Suppress("DEPRECATION")
+        CompositionLocalProvider(
+            LocalUseFallbackRippleImplementation provides true,
+            content = content,
+        )
+    }
 }
