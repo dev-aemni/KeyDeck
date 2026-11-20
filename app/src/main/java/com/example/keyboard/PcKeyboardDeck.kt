@@ -16,7 +16,6 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.gestures.detectDragGestures
-import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Arrangement
@@ -29,7 +28,6 @@ import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Backspace
@@ -68,6 +66,7 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.ui.theme.BodyFontFamily
+import com.example.ui.theme.KeyDeckColors
 import com.example.ui.theme.neumorphicInset
 import com.example.ui.theme.neumorphicRaised
 import com.example.ui.theme.rgbAnimatedBorder
@@ -75,11 +74,9 @@ import com.example.ui.theme.rgbAnimatedBorder
 @Composable
 fun PcKeyboardDeck(
     settings: KeyDeckSettings,
-    hotkeys: List<CustomHotkey>,
     routeLabel: String,
     isOverlay: Boolean,
     onKeyDispatch: (keyCode: Int, metaState: Int, charToCommit: Char?, comboLabel: String) -> Unit,
-    onHotkeyDispatch: (CustomHotkey) -> Unit,
     onChangeLayoutMode: (KeyboardLayoutMode) -> Unit,
     onToggleNumLock: () -> Unit,
     onToggleFunctionRow: () -> Unit,
@@ -93,7 +90,8 @@ fun PcKeyboardDeck(
     onCloseOverlay: (() -> Unit)? = null,
     modifier: Modifier = Modifier,
 ) {
-    val palette = remember(settings) { settings.resolvePalette() }
+    val isAppDark = KeyDeckColors.current.isDark
+    val palette = remember(settings, isAppDark) { settings.resolvePalette(isAppDark) }
     var ctrlActive by remember { mutableStateOf(false) }
     var altActive by remember { mutableStateOf(false) }
     var shiftActive by remember { mutableStateOf(false) }
@@ -374,63 +372,6 @@ fun PcKeyboardDeck(
                 onUpdateSettings = onUpdateSettings,
                 onDismiss = { showQuickSettingsPopup = false },
             )
-        }
-
-        // Compact Shortcut Bar (capped to 4 concise favorites so top area stays clean!)
-        if (settings.showHotkeyBar && hotkeys.isNotEmpty() && settings.layoutMode != KeyboardLayoutMode.GAMING) {
-            val topFavorites = remember(hotkeys) { hotkeys.take(4) }
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .horizontalScroll(rememberScrollState())
-                    .padding(horizontal = 2.dp, vertical = 1.dp),
-                horizontalArrangement = Arrangement.spacedBy(6.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                topFavorites.forEach { hotkey ->
-                    val accentColor = Color(hotkey.accentHex)
-                    Row(
-                        modifier = Modifier
-                            .neumorphicRaised(
-                                surfaceColor = palette.keyBg,
-                                shadowLight = palette.shadowLight,
-                                shadowDark = palette.shadowDark,
-                                cornerRadius = 10.dp,
-                                shadowOffset = 2.dp,
-                                blurRadius = 4.dp,
-                                borderColor = borderCol,
-                            )
-                            .clickable { onHotkeyDispatch(hotkey) }
-                            .padding(horizontal = 8.dp, vertical = 4.dp)
-                            .testTag("hotkey_chip_${hotkey.id}"),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(5.dp),
-                    ) {
-                        Box(
-                            modifier = Modifier
-                                .size(6.dp)
-                                .clip(CircleShape)
-                                .background(accentColor),
-                        )
-                        Text(
-                            text = hotkey.label,
-                            color = palette.primaryText,
-                            fontFamily = BodyFontFamily,
-                            fontSize = 10.5.sp,
-                            fontWeight = FontWeight.SemiBold,
-                            maxLines = 1,
-                        )
-                        Text(
-                            text = hotkey.comboText(),
-                            color = accentColor,
-                            fontFamily = BodyFontFamily,
-                            fontSize = 9.5.sp,
-                            fontWeight = FontWeight.Bold,
-                            maxLines = 1,
-                        )
-                    }
-                }
-            }
         }
 
         // Optional Top Function Row (Esc, F1..F12) for PC modes

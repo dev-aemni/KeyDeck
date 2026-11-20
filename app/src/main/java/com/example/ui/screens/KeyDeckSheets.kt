@@ -48,6 +48,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.keyboard.AppThemeMode
 import com.example.keyboard.KeyDeckSettings
 import com.example.keyboard.KeyboardDockAlignment
 import com.example.keyboard.KeyboardLayoutMode
@@ -56,14 +57,7 @@ import com.example.keyboard.KeyboardThemeId
 import com.example.keyboard.ResolvedKeyboardPalette
 import com.example.keyboard.RgbBorderMode
 import com.example.ui.theme.BodyFontFamily
-import com.example.ui.theme.NeuActiveFill
-import com.example.ui.theme.NeuBg
-import com.example.ui.theme.NeuEmerald
-import com.example.ui.theme.NeuIndigo
-import com.example.ui.theme.NeuShadowDark
-import com.example.ui.theme.NeuShadowLight
-import com.example.ui.theme.NeuTextPrimary
-import com.example.ui.theme.NeuTextSecondary
+import com.example.ui.theme.KeyDeckColors
 import com.example.ui.theme.neumorphicInset
 import com.example.ui.theme.neumorphicRaised
 import kotlin.math.roundToInt
@@ -120,12 +114,13 @@ fun ThemePickerSheet(
     onUpdateSettings: ((KeyDeckSettings) -> KeyDeckSettings) -> Unit,
     onDismiss: () -> Unit,
 ) {
-    val resolvedPalette = settings.resolvePalette()
+    val colors = KeyDeckColors.current
+    val resolvedPalette = settings.resolvePalette(colors.isDark)
 
     ModalBottomSheet(
         onDismissRequest = onDismiss,
-        containerColor = NeuBg,
-        contentColor = NeuTextPrimary,
+        containerColor = colors.bg,
+        contentColor = colors.textPrimary,
     ) {
         Column(
             modifier = Modifier
@@ -138,7 +133,20 @@ fun ThemePickerSheet(
             Text(
                 text = "Themes & Color Studio",
                 style = MaterialTheme.typography.headlineMedium,
-                color = NeuTextPrimary,
+                color = colors.textPrimary,
+            )
+
+            AppThemeModeSelector(
+                selectedMode = settings.appThemeMode,
+                onSelectMode = { mode -> onUpdateSettings { it.copy(appThemeMode = mode) } },
+            )
+
+            SettingsSwitchRow(
+                title = "Auto Dark Keyboard",
+                subtitle = "Switch default Soft UI keyboard to Dark Neumorph in Dark Mode",
+                checked = settings.syncKeyboardWithDarkMode,
+                testTag = "switch_sync_keyboard_dark",
+                onCheckedChange = { enabled -> onUpdateSettings { it.copy(syncKeyboardWithDarkMode = enabled) } },
             )
 
             MiniKeyboardPreviewCard(
@@ -151,7 +159,7 @@ fun ThemePickerSheet(
             Text(
                 text = "Soft Neumorphic Presets",
                 style = MaterialTheme.typography.labelLarge,
-                color = NeuTextSecondary,
+                color = colors.textSecondary,
             )
             Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 KeyboardThemeId.entries.chunked(2).forEach { pair ->
@@ -167,20 +175,22 @@ fun ThemePickerSheet(
                                     .then(
                                         if (selected) {
                                             Modifier.neumorphicInset(
-                                                surfaceColor = NeuActiveFill,
-                                                shadowLight = NeuShadowLight,
-                                                shadowDark = NeuShadowDark,
+                                                surfaceColor = colors.activeFill,
+                                                shadowLight = colors.shadowLight,
+                                                shadowDark = colors.shadowDark,
                                                 cornerRadius = 14.dp,
                                                 depth = 4.dp,
+                                                borderColor = colors.keyBorder.copy(alpha = 0.45f),
                                             )
                                         } else {
                                             Modifier.neumorphicRaised(
-                                                surfaceColor = NeuBg,
-                                                shadowLight = NeuShadowLight,
-                                                shadowDark = NeuShadowDark,
+                                                surfaceColor = colors.bg,
+                                                shadowLight = colors.shadowLight,
+                                                shadowDark = colors.shadowDark,
                                                 cornerRadius = 14.dp,
                                                 shadowOffset = 4.dp,
                                                 blurRadius = 8.dp,
+                                                borderColor = colors.keyBorder.copy(alpha = 0.45f),
                                             )
                                         },
                                     )
@@ -209,7 +219,7 @@ fun ThemePickerSheet(
                                             text = theme.displayName,
                                             fontSize = 12.sp,
                                             fontWeight = FontWeight.SemiBold,
-                                            color = if (selected) NeuIndigo else NeuTextPrimary,
+                                            color = if (selected) colors.indigo else colors.textPrimary,
                                             maxLines = 1,
                                             overflow = TextOverflow.Ellipsis,
                                         )
@@ -218,7 +228,7 @@ fun ThemePickerSheet(
                                         Icon(
                                             imageVector = Icons.Default.CheckCircle,
                                             contentDescription = "Selected",
-                                            tint = NeuIndigo,
+                                            tint = colors.indigo,
                                             modifier = Modifier.size(16.dp),
                                         )
                                     }
@@ -238,12 +248,12 @@ fun ThemePickerSheet(
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    Text("Accent Color", style = MaterialTheme.typography.labelLarge, color = NeuTextSecondary)
+                    Text("Accent Color", style = MaterialTheme.typography.labelLarge, color = colors.textSecondary)
                     if (settings.overrideAccentHex != 0L) {
                         Text(
                             text = "Reset",
                             fontSize = 12.sp,
-                            color = NeuIndigo,
+                            color = colors.indigo,
                             fontWeight = FontWeight.SemiBold,
                             modifier = Modifier
                                 .clip(RoundedCornerShape(8.dp))
@@ -264,23 +274,24 @@ fun ThemePickerSheet(
                     modifier = Modifier
                         .fillMaxWidth()
                         .neumorphicInset(
-                            surfaceColor = NeuBg,
-                            shadowLight = NeuShadowLight,
-                            shadowDark = NeuShadowDark,
+                            surfaceColor = colors.bg,
+                            shadowLight = colors.shadowLight,
+                            shadowDark = colors.shadowDark,
                             cornerRadius = 16.dp,
                             depth = 4.dp,
+                            borderColor = colors.keyBorder.copy(alpha = 0.45f),
                         )
                         .padding(14.dp),
                     verticalArrangement = Arrangement.spacedBy(10.dp),
                 ) {
-                    Text("Custom Studio Colors", style = MaterialTheme.typography.titleMedium, color = NeuIndigo)
-                    Text("Deck Surface", fontSize = 12.sp, color = NeuTextSecondary)
+                    Text("Custom Studio Colors", style = MaterialTheme.typography.titleMedium, color = colors.indigo)
+                    Text("Deck Surface", fontSize = 12.sp, color = colors.textSecondary)
                     ColorSwatchRow(
                         swatches = DECK_BG_SWATCHES,
                         selectedHex = settings.customDeckHex,
                         onSelect = { hex -> onUpdateSettings { it.copy(customDeckHex = hex) } },
                     )
-                    Text("Keycap Surface", fontSize = 12.sp, color = NeuTextSecondary)
+                    Text("Keycap Surface", fontSize = 12.sp, color = colors.textSecondary)
                     ColorSwatchRow(
                         swatches = KEY_BG_SWATCHES,
                         selectedHex = settings.customKeyHex,
@@ -294,7 +305,7 @@ fun ThemePickerSheet(
                             }
                         },
                     )
-                    Text("Legend Text", fontSize = 12.sp, color = NeuTextSecondary)
+                    Text("Legend Text", fontSize = 12.sp, color = colors.textSecondary)
                     ColorSwatchRow(
                         swatches = TEXT_SWATCHES,
                         selectedHex = settings.customTextHex,
@@ -306,7 +317,7 @@ fun ThemePickerSheet(
             Text(
                 text = "RGB Animated Key Border",
                 style = MaterialTheme.typography.labelLarge,
-                color = NeuTextSecondary,
+                color = colors.textSecondary,
             )
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -321,20 +332,22 @@ fun ThemePickerSheet(
                             .then(
                                 if (selected) {
                                     Modifier.neumorphicInset(
-                                        surfaceColor = NeuActiveFill,
-                                        shadowLight = NeuShadowLight,
-                                        shadowDark = NeuShadowDark,
+                                        surfaceColor = colors.activeFill,
+                                        shadowLight = colors.shadowLight,
+                                        shadowDark = colors.shadowDark,
                                         cornerRadius = 12.dp,
                                         depth = 4.dp,
+                                        borderColor = colors.keyBorder.copy(alpha = 0.45f),
                                     )
                                 } else {
                                     Modifier.neumorphicRaised(
-                                        surfaceColor = NeuBg,
-                                        shadowLight = NeuShadowLight,
-                                        shadowDark = NeuShadowDark,
+                                        surfaceColor = colors.bg,
+                                        shadowLight = colors.shadowLight,
+                                        shadowDark = colors.shadowDark,
                                         cornerRadius = 12.dp,
                                         shadowOffset = 4.dp,
                                         blurRadius = 7.dp,
+                                        borderColor = colors.keyBorder.copy(alpha = 0.45f),
                                     )
                                 },
                             )
@@ -346,7 +359,7 @@ fun ThemePickerSheet(
                             text = mode.label,
                             fontSize = 12.sp,
                             fontWeight = FontWeight.SemiBold,
-                            color = if (selected) NeuIndigo else NeuTextPrimary,
+                            color = if (selected) colors.indigo else colors.textPrimary,
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis,
                         )
@@ -367,7 +380,7 @@ fun ThemePickerSheet(
                 valueLabel = "${settings.keyCornerRadiusDp} dp",
                 value = settings.keyCornerRadiusDp.toFloat(),
                 range = 4f..16f,
-                accentColor = NeuIndigo,
+                accentColor = colors.indigo,
                 onValueChange = { v -> onUpdateSettings { it.copy(keyCornerRadiusDp = v.roundToInt()) } },
             )
 
@@ -376,7 +389,7 @@ fun ThemePickerSheet(
                 valueLabel = "${(settings.overlayOpacity * 100).roundToInt()}%",
                 value = settings.overlayOpacity,
                 range = 0.50f..1.0f,
-                accentColor = NeuIndigo,
+                accentColor = colors.indigo,
                 onValueChange = { v -> onUpdateSettings { it.copy(overlayOpacity = v) } },
             )
 
@@ -398,12 +411,13 @@ fun LayoutPickerSheet(
     onUpdateSettings: ((KeyDeckSettings) -> KeyDeckSettings) -> Unit,
     onDismiss: () -> Unit,
 ) {
-    val palette = settings.resolvePalette()
+    val colors = KeyDeckColors.current
+    val palette = settings.resolvePalette(colors.isDark)
 
     ModalBottomSheet(
         onDismissRequest = onDismiss,
-        containerColor = NeuBg,
-        contentColor = NeuTextPrimary,
+        containerColor = colors.bg,
+        contentColor = colors.textPrimary,
     ) {
         Column(
             modifier = Modifier
@@ -416,10 +430,10 @@ fun LayoutPickerSheet(
             Text(
                 text = "Size, Tightness & Layout",
                 style = MaterialTheme.typography.headlineMedium,
-                color = NeuTextPrimary,
+                color = colors.textPrimary,
             )
 
-            Text("Quick Size Presets", style = MaterialTheme.typography.labelLarge, color = NeuTextSecondary)
+            Text("Quick Size Presets", style = MaterialTheme.typography.labelLarge, color = colors.textSecondary)
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -434,20 +448,22 @@ fun LayoutPickerSheet(
                             .then(
                                 if (isActive) {
                                     Modifier.neumorphicInset(
-                                        surfaceColor = NeuActiveFill,
-                                        shadowLight = NeuShadowLight,
-                                        shadowDark = NeuShadowDark,
+                                        surfaceColor = colors.activeFill,
+                                        shadowLight = colors.shadowLight,
+                                        shadowDark = colors.shadowDark,
                                         cornerRadius = 12.dp,
                                         depth = 4.dp,
+                                        borderColor = colors.keyBorder.copy(alpha = 0.45f),
                                     )
                                 } else {
                                     Modifier.neumorphicRaised(
-                                        surfaceColor = NeuBg,
-                                        shadowLight = NeuShadowLight,
-                                        shadowDark = NeuShadowDark,
+                                        surfaceColor = colors.bg,
+                                        shadowLight = colors.shadowLight,
+                                        shadowDark = colors.shadowDark,
                                         cornerRadius = 12.dp,
                                         shadowOffset = 4.dp,
                                         blurRadius = 7.dp,
+                                        borderColor = colors.keyBorder.copy(alpha = 0.45f),
                                     )
                                 },
                             )
@@ -472,7 +488,7 @@ fun LayoutPickerSheet(
                             text = preset.label,
                             fontSize = 12.sp,
                             fontWeight = FontWeight.Bold,
-                            color = if (isActive) NeuIndigo else NeuTextPrimary,
+                            color = if (isActive) colors.indigo else colors.textPrimary,
                         )
                     }
                 }
@@ -482,11 +498,12 @@ fun LayoutPickerSheet(
                 modifier = Modifier
                     .fillMaxWidth()
                     .neumorphicInset(
-                        surfaceColor = NeuBg,
-                        shadowLight = NeuShadowLight,
-                        shadowDark = NeuShadowDark,
+                        surfaceColor = colors.bg,
+                        shadowLight = colors.shadowLight,
+                        shadowDark = colors.shadowDark,
                         cornerRadius = 14.dp,
                         depth = 4.dp,
+                        borderColor = colors.keyBorder.copy(alpha = 0.45f),
                     )
                     .padding(10.dp),
                 contentAlignment = when (settings.dockAlignment) {
@@ -509,7 +526,7 @@ fun LayoutPickerSheet(
                 valueLabel = "${settings.keyHeightDp} dp",
                 value = settings.keyHeightDp.toFloat(),
                 range = 24f..54f,
-                accentColor = NeuIndigo,
+                accentColor = colors.indigo,
                 onValueChange = { v -> onUpdateSettings { it.copy(keyHeightDp = v.roundToInt()) } },
             )
 
@@ -518,7 +535,7 @@ fun LayoutPickerSheet(
                 valueLabel = "${(settings.keyboardWidthFraction * 100).roundToInt()}%",
                 value = settings.keyboardWidthFraction,
                 range = 0.60f..1.0f,
-                accentColor = NeuIndigo,
+                accentColor = colors.indigo,
                 onValueChange = { v -> onUpdateSettings { it.copy(keyboardWidthFraction = v) } },
             )
 
@@ -527,7 +544,7 @@ fun LayoutPickerSheet(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.SpaceBetween,
             ) {
-                Text("Horizontal Dock", style = MaterialTheme.typography.bodyLarge, color = NeuTextPrimary)
+                Text("Horizontal Dock", style = MaterialTheme.typography.bodyLarge, color = colors.textPrimary)
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     KeyboardDockAlignment.entries.forEach { align ->
                         val selected = settings.dockAlignment == align
@@ -537,20 +554,22 @@ fun LayoutPickerSheet(
                                 .then(
                                     if (selected) {
                                         Modifier.neumorphicInset(
-                                            surfaceColor = NeuActiveFill,
-                                            shadowLight = NeuShadowLight,
-                                            shadowDark = NeuShadowDark,
+                                            surfaceColor = colors.activeFill,
+                                            shadowLight = colors.shadowLight,
+                                            shadowDark = colors.shadowDark,
                                             cornerRadius = 10.dp,
                                             depth = 3.dp,
+                                            borderColor = colors.keyBorder.copy(alpha = 0.45f),
                                         )
                                     } else {
                                         Modifier.neumorphicRaised(
-                                            surfaceColor = NeuBg,
-                                            shadowLight = NeuShadowLight,
-                                            shadowDark = NeuShadowDark,
+                                            surfaceColor = colors.bg,
+                                            shadowLight = colors.shadowLight,
+                                            shadowDark = colors.shadowDark,
                                             cornerRadius = 10.dp,
                                             shadowOffset = 3.dp,
                                             blurRadius = 6.dp,
+                                            borderColor = colors.keyBorder.copy(alpha = 0.45f),
                                         )
                                     },
                                 )
@@ -562,7 +581,7 @@ fun LayoutPickerSheet(
                                 text = align.label,
                                 fontSize = 11.sp,
                                 fontWeight = FontWeight.Bold,
-                                color = if (selected) NeuIndigo else NeuTextPrimary,
+                                color = if (selected) colors.indigo else colors.textPrimary,
                             )
                         }
                     }
@@ -574,7 +593,7 @@ fun LayoutPickerSheet(
                 valueLabel = "${settings.keyHorizontalGapDp} dp",
                 value = settings.keyHorizontalGapDp.toFloat(),
                 range = 1f..6f,
-                accentColor = NeuEmerald,
+                accentColor = colors.emerald,
                 onValueChange = { v -> onUpdateSettings { it.copy(keyHorizontalGapDp = v.roundToInt()) } },
             )
 
@@ -583,7 +602,7 @@ fun LayoutPickerSheet(
                 valueLabel = "${settings.keyVerticalGapDp} dp",
                 value = settings.keyVerticalGapDp.toFloat(),
                 range = 1f..7f,
-                accentColor = NeuEmerald,
+                accentColor = colors.emerald,
                 onValueChange = { v -> onUpdateSettings { it.copy(keyVerticalGapDp = v.roundToInt()) } },
             )
 
@@ -592,7 +611,7 @@ fun LayoutPickerSheet(
                 valueLabel = "${settings.deckPaddingDp} dp",
                 value = settings.deckPaddingDp.toFloat(),
                 range = 1f..10f,
-                accentColor = NeuEmerald,
+                accentColor = colors.emerald,
                 onValueChange = { v -> onUpdateSettings { it.copy(deckPaddingDp = v.roundToInt()) } },
             )
 
@@ -601,11 +620,11 @@ fun LayoutPickerSheet(
                 valueLabel = "${(settings.fontScale * 100).roundToInt()}%",
                 value = settings.fontScale,
                 range = 0.70f..1.25f,
-                accentColor = NeuIndigo,
+                accentColor = colors.indigo,
                 onValueChange = { v -> onUpdateSettings { it.copy(fontScale = v) } },
             )
 
-            Text("Keyboard Mode", style = MaterialTheme.typography.labelLarge, color = NeuTextSecondary)
+            Text("Keyboard Mode", style = MaterialTheme.typography.labelLarge, color = colors.textSecondary)
             KeyboardLayoutMode.entries.forEach { mode ->
                 val selected = settings.layoutMode == mode
                 val icon = when (mode) {
@@ -620,20 +639,22 @@ fun LayoutPickerSheet(
                         .then(
                             if (selected) {
                                 Modifier.neumorphicInset(
-                                    surfaceColor = NeuActiveFill,
-                                    shadowLight = NeuShadowLight,
-                                    shadowDark = NeuShadowDark,
+                                    surfaceColor = colors.activeFill,
+                                    shadowLight = colors.shadowLight,
+                                    shadowDark = colors.shadowDark,
                                     cornerRadius = 14.dp,
                                     depth = 4.dp,
+                                    borderColor = colors.keyBorder.copy(alpha = 0.45f),
                                 )
                             } else {
                                 Modifier.neumorphicRaised(
-                                    surfaceColor = NeuBg,
-                                    shadowLight = NeuShadowLight,
-                                    shadowDark = NeuShadowDark,
+                                    surfaceColor = colors.bg,
+                                    shadowLight = colors.shadowLight,
+                                    shadowDark = colors.shadowDark,
                                     cornerRadius = 14.dp,
                                     shadowOffset = 4.dp,
                                     blurRadius = 8.dp,
+                                    borderColor = colors.keyBorder.copy(alpha = 0.45f),
                                 )
                             },
                         )
@@ -653,18 +674,18 @@ fun LayoutPickerSheet(
                             Icon(
                                 imageVector = icon,
                                 contentDescription = mode.label,
-                                tint = if (selected) NeuIndigo else NeuTextSecondary,
+                                tint = if (selected) colors.indigo else colors.textSecondary,
                             )
                             Column {
                                 Text(
                                     mode.label,
                                     style = MaterialTheme.typography.titleMedium,
-                                    color = if (selected) NeuIndigo else NeuTextPrimary,
+                                    color = if (selected) colors.indigo else colors.textPrimary,
                                 )
                                 Text(
                                     mode.subtitle,
                                     style = MaterialTheme.typography.bodyMedium,
-                                    color = NeuTextSecondary,
+                                    color = colors.textSecondary,
                                 )
                             }
                         }
@@ -672,7 +693,7 @@ fun LayoutPickerSheet(
                             Icon(
                                 imageVector = Icons.Default.CheckCircle,
                                 contentDescription = "Selected layout",
-                                tint = NeuIndigo,
+                                tint = colors.indigo,
                             )
                         }
                     }
@@ -685,14 +706,6 @@ fun LayoutPickerSheet(
                 checked = settings.showModeStrip,
                 testTag = "switch_mode_strip",
                 onCheckedChange = { checked -> onUpdateSettings { it.copy(showModeStrip = checked) } },
-            )
-
-            SettingsSwitchRow(
-                title = "Show Customizable Hotkey Bar",
-                subtitle = "Pin quick-fire macro shortcuts above row 1",
-                checked = settings.showHotkeyBar,
-                testTag = "switch_hotkey_bar",
-                onCheckedChange = { checked -> onUpdateSettings { it.copy(showHotkeyBar = checked) } },
             )
 
             SettingsSwitchRow(
@@ -721,10 +734,11 @@ fun SettingsSheet(
     onResetHotkeys: () -> Unit,
     onDismiss: () -> Unit,
 ) {
+    val colors = KeyDeckColors.current
     ModalBottomSheet(
         onDismissRequest = onDismiss,
-        containerColor = NeuBg,
-        contentColor = NeuTextPrimary,
+        containerColor = colors.bg,
+        contentColor = colors.textPrimary,
     ) {
         Column(
             modifier = Modifier
@@ -737,7 +751,12 @@ fun SettingsSheet(
             Text(
                 text = "KeyDeck Settings",
                 style = MaterialTheme.typography.headlineMedium,
-                color = NeuTextPrimary,
+                color = colors.textPrimary,
+            )
+
+            AppThemeModeSelector(
+                selectedMode = settings.appThemeMode,
+                onSelectMode = { mode -> onUpdateSettings { it.copy(appThemeMode = mode) } },
             )
 
             SettingsSwitchRow(
@@ -785,7 +804,7 @@ fun SettingsSheet(
                 valueLabel = "${String.format("%.1fx", settings.touchpadSensitivity)}",
                 value = settings.touchpadSensitivity,
                 range = 0.6f..3.5f,
-                accentColor = NeuIndigo,
+                accentColor = colors.indigo,
                 onValueChange = { v -> onUpdateSettings { it.copy(touchpadSensitivity = v) } },
             )
 
@@ -794,7 +813,7 @@ fun SettingsSheet(
                 valueLabel = "${(settings.touchpadWidthFraction * 100).roundToInt()}%",
                 value = settings.touchpadWidthFraction,
                 range = 0.30f..0.55f,
-                accentColor = NeuEmerald,
+                accentColor = colors.emerald,
                 onValueChange = { v -> onUpdateSettings { it.copy(touchpadWidthFraction = v) } },
             )
 
@@ -803,7 +822,7 @@ fun SettingsSheet(
                 valueLabel = "${settings.bubbleSizeDp} dp",
                 value = settings.bubbleSizeDp.toFloat(),
                 range = 36f..68f,
-                accentColor = NeuIndigo,
+                accentColor = colors.indigo,
                 onValueChange = { v -> onUpdateSettings { it.copy(bubbleSizeDp = v.roundToInt()) } },
             )
 
@@ -811,18 +830,19 @@ fun SettingsSheet(
                 modifier = Modifier
                     .fillMaxWidth()
                     .neumorphicInset(
-                        surfaceColor = NeuBg,
-                        shadowLight = NeuShadowLight,
-                        shadowDark = NeuShadowDark,
+                        surfaceColor = colors.bg,
+                        shadowLight = colors.shadowLight,
+                        shadowDark = colors.shadowDark,
                         cornerRadius = 14.dp,
                         depth = 4.dp,
+                        borderColor = colors.keyBorder.copy(alpha = 0.45f),
                     )
                     .padding(14.dp),
             ) {
                 Text(
                     text = "Session Lifecycle: KeyDeck's floating keyboard is bound to the active app task (stopWithTask=true). Closing KeyDeck from Recents stops the overlay immediately.",
                     style = MaterialTheme.typography.bodyMedium,
-                    color = NeuTextSecondary,
+                    color = colors.textSecondary,
                 )
             }
 
@@ -831,12 +851,13 @@ fun SettingsSheet(
                     .fillMaxWidth()
                     .height(48.dp)
                     .neumorphicRaised(
-                        surfaceColor = NeuBg,
-                        shadowLight = NeuShadowLight,
-                        shadowDark = NeuShadowDark,
+                        surfaceColor = colors.bg,
+                        shadowLight = colors.shadowLight,
+                        shadowDark = colors.shadowDark,
                         cornerRadius = 14.dp,
                         shadowOffset = 4.dp,
                         blurRadius = 8.dp,
+                        borderColor = colors.keyBorder.copy(alpha = 0.45f),
                     )
                     .clickable { onResetHotkeys() }
                     .testTag("reset_hotkeys_button"),
@@ -849,12 +870,12 @@ fun SettingsSheet(
                     Icon(
                         Icons.Default.RestartAlt,
                         contentDescription = null,
-                        tint = NeuIndigo,
+                        tint = colors.indigo,
                         modifier = Modifier.size(18.dp),
                     )
                     Text(
                         "Restore Default Hotkeys",
-                        color = NeuIndigo,
+                        color = colors.indigo,
                         fontWeight = FontWeight.SemiBold,
                     )
                 }
@@ -871,22 +892,84 @@ fun SettingsSheet(
 }
 
 @Composable
+private fun AppThemeModeSelector(
+    selectedMode: AppThemeMode,
+    onSelectMode: (AppThemeMode) -> Unit,
+) {
+    val colors = KeyDeckColors.current
+    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        Text(
+            text = "App Appearance (Dark Mode)",
+            style = MaterialTheme.typography.labelLarge,
+            color = colors.textSecondary,
+        )
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            AppThemeMode.entries.forEach { mode ->
+                val selected = selectedMode == mode
+                Box(
+                    modifier = Modifier
+                        .weight(1f)
+                        .height(44.dp)
+                        .then(
+                            if (selected) {
+                                Modifier.neumorphicInset(
+                                    surfaceColor = colors.activeFill,
+                                    shadowLight = colors.shadowLight,
+                                    shadowDark = colors.shadowDark,
+                                    cornerRadius = 12.dp,
+                                    depth = 4.dp,
+                                    borderColor = colors.keyBorder.copy(alpha = 0.45f),
+                                )
+                            } else {
+                                Modifier.neumorphicRaised(
+                                    surfaceColor = colors.bg,
+                                    shadowLight = colors.shadowLight,
+                                    shadowDark = colors.shadowDark,
+                                    cornerRadius = 12.dp,
+                                    shadowOffset = 3.dp,
+                                    blurRadius = 6.dp,
+                                    borderColor = colors.keyBorder.copy(alpha = 0.45f),
+                                )
+                            },
+                        )
+                        .clickable { onSelectMode(mode) }
+                        .testTag("app_theme_mode_${mode.name.lowercase()}"),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Text(
+                        text = mode.label,
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        color = if (selected) colors.indigo else colors.textPrimary,
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
 private fun NeuSheetPrimaryButton(
     label: String,
     testTag: String,
     onClick: () -> Unit,
 ) {
+    val colors = KeyDeckColors.current
     Box(
         modifier = Modifier
             .fillMaxWidth()
             .height(48.dp)
             .neumorphicRaised(
-                surfaceColor = NeuIndigo,
-                shadowLight = NeuShadowLight,
-                shadowDark = NeuShadowDark,
+                surfaceColor = colors.accentFill,
+                shadowLight = colors.shadowLight,
+                shadowDark = colors.shadowDark,
                 cornerRadius = 14.dp,
                 shadowOffset = 4.dp,
                 blurRadius = 8.dp,
+                borderColor = null,
             )
             .clickable { onClick() }
             .testTag(testTag),
@@ -1007,6 +1090,7 @@ private fun ColorSwatchRow(
     selectedHex: Long,
     onSelect: (Long) -> Unit,
 ) {
+    val colors = KeyDeckColors.current
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -1022,15 +1106,15 @@ private fun ColorSwatchRow(
                     .size(34.dp)
                     .neumorphicRaised(
                         surfaceColor = swatchColor,
-                        shadowLight = NeuShadowLight,
-                        shadowDark = NeuShadowDark,
+                        shadowLight = colors.shadowLight,
+                        shadowDark = colors.shadowDark,
                         cornerRadius = 17.dp,
                         shadowOffset = 2.dp,
                         blurRadius = 4.dp,
                     )
                     .border(
                         width = if (selected) 2.5.dp else 1.dp,
-                        color = if (selected) NeuIndigo else NeuShadowDark.copy(alpha = 0.5f),
+                        color = if (selected) colors.indigo else colors.shadowDark.copy(alpha = 0.5f),
                         shape = CircleShape,
                     )
                     .clickable { onSelect(hex) },
@@ -1040,7 +1124,7 @@ private fun ColorSwatchRow(
                     Icon(
                         imageVector = Icons.Default.Check,
                         contentDescription = "Selected color",
-                        tint = if (isLight) NeuIndigo else Color.White,
+                        tint = if (isLight) colors.indigo else Color.White,
                         modifier = Modifier.size(16.dp),
                     )
                 }
@@ -1058,12 +1142,13 @@ private fun LabeledSlider(
     accentColor: Color,
     onValueChange: (Float) -> Unit,
 ) {
+    val colors = KeyDeckColors.current
     Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceBetween,
         ) {
-            Text(label, style = MaterialTheme.typography.bodyMedium, color = NeuTextPrimary)
+            Text(label, style = MaterialTheme.typography.bodyMedium, color = colors.textPrimary)
             Text(
                 valueLabel,
                 fontFamily = BodyFontFamily,
@@ -1079,7 +1164,7 @@ private fun LabeledSlider(
             colors = SliderDefaults.colors(
                 thumbColor = accentColor,
                 activeTrackColor = accentColor,
-                inactiveTrackColor = NeuShadowDark.copy(alpha = 0.45f),
+                inactiveTrackColor = colors.shadowDark.copy(alpha = 0.45f),
             ),
         )
     }
@@ -1093,16 +1178,18 @@ private fun SettingsSwitchRow(
     testTag: String,
     onCheckedChange: (Boolean) -> Unit,
 ) {
+    val colors = KeyDeckColors.current
     Row(
         modifier = Modifier
             .fillMaxWidth()
             .neumorphicRaised(
-                surfaceColor = NeuBg,
-                shadowLight = NeuShadowLight,
-                shadowDark = NeuShadowDark,
+                surfaceColor = colors.bg,
+                shadowLight = colors.shadowLight,
+                shadowDark = colors.shadowDark,
                 cornerRadius = 14.dp,
                 shadowOffset = 3.dp,
                 blurRadius = 6.dp,
+                borderColor = colors.keyBorder.copy(alpha = 0.45f),
             )
             .clickable { onCheckedChange(!checked) }
             .padding(horizontal = 14.dp, vertical = 10.dp)
@@ -1111,8 +1198,8 @@ private fun SettingsSwitchRow(
         horizontalArrangement = Arrangement.SpaceBetween,
     ) {
         Column(modifier = Modifier.weight(1f).padding(end = 12.dp)) {
-            Text(title, style = MaterialTheme.typography.titleMedium, color = NeuTextPrimary)
-            Text(subtitle, style = MaterialTheme.typography.bodyMedium, color = NeuTextSecondary)
+            Text(title, style = MaterialTheme.typography.titleMedium, color = colors.textPrimary)
+            Text(subtitle, style = MaterialTheme.typography.bodyMedium, color = colors.textSecondary)
         }
         Spacer(modifier = Modifier.width(4.dp))
         Switch(
@@ -1120,10 +1207,10 @@ private fun SettingsSwitchRow(
             onCheckedChange = onCheckedChange,
             colors = SwitchDefaults.colors(
                 checkedThumbColor = Color.White,
-                checkedTrackColor = NeuIndigo,
-                uncheckedThumbColor = NeuTextSecondary,
-                uncheckedTrackColor = NeuBg,
-                uncheckedBorderColor = NeuShadowDark,
+                checkedTrackColor = colors.accentFill,
+                uncheckedThumbColor = colors.textSecondary,
+                uncheckedTrackColor = colors.bg,
+                uncheckedBorderColor = colors.keyBorder,
             ),
         )
     }

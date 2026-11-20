@@ -24,11 +24,14 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.filled.AccessibilityNew
 import androidx.compose.material.icons.filled.Bolt
+import androidx.compose.material.icons.filled.BrightnessAuto
 import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.DarkMode
 import androidx.compose.material.icons.filled.DashboardCustomize
 import androidx.compose.material.icons.filled.EditNote
 import androidx.compose.material.icons.filled.Keyboard
 import androidx.compose.material.icons.filled.Layers
+import androidx.compose.material.icons.filled.LightMode
 import androidx.compose.material.icons.filled.Palette
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Visibility
@@ -61,6 +64,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.awaitCancellation
+import com.example.keyboard.AppThemeMode
 import com.example.keyboard.CustomHotkey
 import com.example.keyboard.DispatchedKeyRecord
 import com.example.keyboard.KeyDeckSettings
@@ -70,15 +74,7 @@ import com.example.keyboard.KeyboardLayoutMode
 import com.example.keyboard.PcKeyboardDeck
 import com.example.ui.SystemReadinessState
 import com.example.ui.theme.BodyFontFamily
-import com.example.ui.theme.NeuActiveFill
-import com.example.ui.theme.NeuAmber
-import com.example.ui.theme.NeuBg
-import com.example.ui.theme.NeuEmerald
-import com.example.ui.theme.NeuIndigo
-import com.example.ui.theme.NeuShadowDark
-import com.example.ui.theme.NeuShadowLight
-import com.example.ui.theme.NeuTextPrimary
-import com.example.ui.theme.NeuTextSecondary
+import com.example.ui.theme.KeyDeckColors
 import com.example.ui.theme.neumorphicInset
 import com.example.ui.theme.neumorphicRaised
 
@@ -106,6 +102,7 @@ fun DeckHomeScreen(
     modifier: Modifier = Modifier,
 ) {
     val context = LocalContext.current
+    val colors = KeyDeckColors.current
     var testText by remember { mutableStateOf("") }
     var showInlinePreview by remember { mutableStateOf(true) }
     var inlineMouseInfo by remember { mutableStateOf<String?>(null) }
@@ -174,7 +171,7 @@ fun DeckHomeScreen(
     Column(
         modifier = modifier
             .fillMaxSize()
-            .background(NeuBg)
+            .background(colors.bg)
             .verticalScroll(rememberScrollState()),
     ) {
         Column(
@@ -197,19 +194,20 @@ fun DeckHomeScreen(
                         modifier = Modifier
                             .size(44.dp)
                             .neumorphicRaised(
-                                surfaceColor = NeuBg,
-                                shadowLight = NeuShadowLight,
-                                shadowDark = NeuShadowDark,
+                                surfaceColor = colors.bg,
+                                shadowLight = colors.shadowLight,
+                                shadowDark = colors.shadowDark,
                                 cornerRadius = 14.dp,
                                 shadowOffset = 4.dp,
                                 blurRadius = 8.dp,
+                                borderColor = colors.keyBorder.copy(alpha = 0.45f),
                             ),
                         contentAlignment = Alignment.Center,
                     ) {
                         Icon(
                             imageVector = Icons.Default.Keyboard,
                             contentDescription = "KeyDeck icon",
-                            tint = NeuIndigo,
+                            tint = colors.indigo,
                             modifier = Modifier.size(22.dp),
                         )
                     }
@@ -217,60 +215,117 @@ fun DeckHomeScreen(
                         Text(
                             text = "Soft UI Keyboard",
                             style = MaterialTheme.typography.titleLarge,
-                            color = NeuTextPrimary,
+                            color = colors.textPrimary,
                         )
                         Text(
                             text = "PC Deck • Numpad • Gaming",
                             style = MaterialTheme.typography.bodyMedium,
-                            color = NeuTextSecondary,
+                            color = colors.textSecondary,
                         )
                     }
                 }
 
-                // Neumorphic Status Pill
-                Box(
-                    modifier = Modifier
-                        .then(
-                            if (isOverlayRunning) {
-                                Modifier.neumorphicInset(
-                                    surfaceColor = NeuActiveFill,
-                                    shadowLight = NeuShadowLight,
-                                    shadowDark = NeuShadowDark,
-                                    cornerRadius = 20.dp,
-                                    depth = 3.dp,
-                                )
-                            } else {
-                                Modifier.neumorphicRaised(
-                                    surfaceColor = NeuBg,
-                                    shadowLight = NeuShadowLight,
-                                    shadowDark = NeuShadowDark,
-                                    cornerRadius = 20.dp,
-                                    shadowOffset = 3.dp,
-                                    blurRadius = 6.dp,
-                                )
-                            },
-                        )
-                        .clickable { onToggleOverlay(!isOverlayRunning) }
-                        .padding(horizontal = 12.dp, vertical = 8.dp)
-                        .testTag("header_status_pill"),
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    // Quick Dark Mode Switcher Pill
+                    val themeIcon = when (settings.appThemeMode) {
+                        AppThemeMode.SYSTEM -> Icons.Default.BrightnessAuto
+                        AppThemeMode.LIGHT -> Icons.Default.LightMode
+                        AppThemeMode.DARK -> Icons.Default.DarkMode
+                    }
+                    Box(
+                        modifier = Modifier
+                            .size(36.dp)
+                            .then(
+                                if (colors.isDark) {
+                                    Modifier.neumorphicInset(
+                                        surfaceColor = colors.activeFill,
+                                        shadowLight = colors.shadowLight,
+                                        shadowDark = colors.shadowDark,
+                                        cornerRadius = 18.dp,
+                                        depth = 3.dp,
+                                        borderColor = colors.keyBorder.copy(alpha = 0.55f),
+                                    )
+                                } else {
+                                    Modifier.neumorphicRaised(
+                                        surfaceColor = colors.bg,
+                                        shadowLight = colors.shadowLight,
+                                        shadowDark = colors.shadowDark,
+                                        cornerRadius = 18.dp,
+                                        shadowOffset = 3.dp,
+                                        blurRadius = 6.dp,
+                                        borderColor = colors.keyBorder.copy(alpha = 0.45f),
+                                    )
+                                },
+                            )
+                            .clickable {
+                                val next = when (settings.appThemeMode) {
+                                    AppThemeMode.SYSTEM -> if (colors.isDark) AppThemeMode.LIGHT else AppThemeMode.DARK
+                                    AppThemeMode.DARK -> AppThemeMode.LIGHT
+                                    AppThemeMode.LIGHT -> AppThemeMode.DARK
+                                }
+                                onUpdateSettings { it.copy(appThemeMode = next) }
+                            }
+                            .testTag("header_dark_mode_toggle"),
+                        contentAlignment = Alignment.Center,
                     ) {
-                        Box(
-                            modifier = Modifier
-                                .size(8.dp)
-                                .clip(CircleShape)
-                                .background(if (isOverlayRunning) NeuIndigo else NeuTextSecondary),
+                        Icon(
+                            imageVector = themeIcon,
+                            contentDescription = "Theme: ${settings.appThemeMode.label}",
+                            tint = if (colors.isDark) colors.amber else colors.indigo,
+                            modifier = Modifier.size(18.dp),
                         )
-                        Text(
-                            text = if (isOverlayRunning) "ACTIVE" else "OFF",
-                            fontFamily = BodyFontFamily,
-                            fontSize = 11.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = if (isOverlayRunning) NeuIndigo else NeuTextSecondary,
-                        )
+                    }
+
+                    // Neumorphic Status Pill
+                    Box(
+                        modifier = Modifier
+                            .then(
+                                if (isOverlayRunning) {
+                                    Modifier.neumorphicInset(
+                                        surfaceColor = colors.activeFill,
+                                        shadowLight = colors.shadowLight,
+                                        shadowDark = colors.shadowDark,
+                                        cornerRadius = 20.dp,
+                                        depth = 3.dp,
+                                        borderColor = colors.keyBorder.copy(alpha = 0.45f),
+                                    )
+                                } else {
+                                    Modifier.neumorphicRaised(
+                                        surfaceColor = colors.bg,
+                                        shadowLight = colors.shadowLight,
+                                        shadowDark = colors.shadowDark,
+                                        cornerRadius = 20.dp,
+                                        shadowOffset = 3.dp,
+                                        blurRadius = 6.dp,
+                                        borderColor = colors.keyBorder.copy(alpha = 0.45f),
+                                    )
+                                },
+                            )
+                            .clickable { onToggleOverlay(!isOverlayRunning) }
+                            .padding(horizontal = 12.dp, vertical = 8.dp)
+                            .testTag("header_status_pill"),
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(6.dp),
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .size(8.dp)
+                                    .clip(CircleShape)
+                                    .background(if (isOverlayRunning) colors.indigo else colors.textSecondary),
+                            )
+                            Text(
+                                text = if (isOverlayRunning) "ACTIVE" else "OFF",
+                                fontFamily = BodyFontFamily,
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = if (isOverlayRunning) colors.indigo else colors.textSecondary,
+                            )
+                        }
                     }
                 }
             }
@@ -280,12 +335,13 @@ fun DeckHomeScreen(
                 modifier = Modifier
                     .fillMaxWidth()
                     .neumorphicRaised(
-                        surfaceColor = NeuBg,
-                        shadowLight = NeuShadowLight,
-                        shadowDark = NeuShadowDark,
+                        surfaceColor = colors.bg,
+                        shadowLight = colors.shadowLight,
+                        shadowDark = colors.shadowDark,
                         cornerRadius = 26.dp,
                         shadowOffset = 7.dp,
                         blurRadius = 14.dp,
+                        borderColor = colors.keyBorder.copy(alpha = 0.45f),
                     )
                     .padding(18.dp),
             ) {
@@ -299,7 +355,7 @@ fun DeckHomeScreen(
                             Text(
                                 text = if (isOverlayRunning) "Floating Keyboard Active" else "Turn On PC Keyboard",
                                 style = MaterialTheme.typography.titleLarge,
-                                color = if (isOverlayRunning) NeuIndigo else NeuTextPrimary,
+                                color = if (isOverlayRunning) colors.indigo else colors.textPrimary,
                             )
                             Spacer(modifier = Modifier.height(4.dp))
                             Text(
@@ -309,7 +365,7 @@ fun DeckHomeScreen(
                                     "Pops up a floating icon on any screen to open the PC deck at any time."
                                 },
                                 style = MaterialTheme.typography.bodyMedium,
-                                color = NeuTextSecondary,
+                                color = colors.textSecondary,
                             )
                         }
 
@@ -319,9 +375,9 @@ fun DeckHomeScreen(
                             modifier = Modifier.testTag("hero_floating_switch"),
                             colors = SwitchDefaults.colors(
                                 checkedThumbColor = Color.White,
-                                checkedTrackColor = NeuIndigo,
-                                uncheckedThumbColor = NeuTextSecondary,
-                                uncheckedTrackColor = NeuShadowDark.copy(alpha = 0.45f),
+                                checkedTrackColor = colors.accentFill,
+                                uncheckedThumbColor = colors.textSecondary,
+                                uncheckedTrackColor = colors.shadowDark.copy(alpha = 0.55f),
                                 uncheckedBorderColor = Color.Transparent,
                             ),
                         )
@@ -339,20 +395,22 @@ fun DeckHomeScreen(
                                 .then(
                                     if (isOverlayRunning) {
                                         Modifier.neumorphicInset(
-                                            surfaceColor = NeuActiveFill,
-                                            shadowLight = NeuShadowLight,
-                                            shadowDark = NeuShadowDark,
+                                            surfaceColor = colors.activeFill,
+                                            shadowLight = colors.shadowLight,
+                                            shadowDark = colors.shadowDark,
                                             cornerRadius = 16.dp,
                                             depth = 3.dp,
+                                            borderColor = colors.keyBorder.copy(alpha = 0.45f),
                                         )
                                     } else {
                                         Modifier.neumorphicRaised(
-                                            surfaceColor = NeuBg,
-                                            shadowLight = NeuShadowLight,
-                                            shadowDark = NeuShadowDark,
+                                            surfaceColor = colors.bg,
+                                            shadowLight = colors.shadowLight,
+                                            shadowDark = colors.shadowDark,
                                             cornerRadius = 16.dp,
                                             shadowOffset = 4.dp,
                                             blurRadius = 8.dp,
+                                            borderColor = colors.keyBorder.copy(alpha = 0.45f),
                                         )
                                     },
                                 )
@@ -374,14 +432,14 @@ fun DeckHomeScreen(
                                         isOverlayRunning -> "Open Keyboard"
                                         else -> "Turn On"
                                     },
-                                    color = NeuIndigo,
+                                    color = colors.indigo,
                                     fontWeight = FontWeight.Bold,
                                     fontSize = 14.sp,
                                 )
                                 Icon(
                                     imageVector = Icons.AutoMirrored.Filled.ArrowForward,
                                     contentDescription = null,
-                                    tint = NeuIndigo,
+                                    tint = colors.indigo,
                                     modifier = Modifier.size(16.dp),
                                 )
                             }
@@ -392,12 +450,13 @@ fun DeckHomeScreen(
                             modifier = Modifier
                                 .height(48.dp)
                                 .neumorphicRaised(
-                                    surfaceColor = NeuBg,
-                                    shadowLight = NeuShadowLight,
-                                    shadowDark = NeuShadowDark,
+                                    surfaceColor = colors.bg,
+                                    shadowLight = colors.shadowLight,
+                                    shadowDark = colors.shadowDark,
                                     cornerRadius = 16.dp,
                                     shadowOffset = 4.dp,
                                     blurRadius = 8.dp,
+                                    borderColor = colors.keyBorder.copy(alpha = 0.45f),
                                 )
                                 .clickable(onClick = onOpenImeSettingsOrPicker)
                                 .padding(horizontal = 16.dp)
@@ -406,7 +465,7 @@ fun DeckHomeScreen(
                         ) {
                             Text(
                                 text = if (readiness.isImeSelected) "IME Active" else "Select IME",
-                                color = if (readiness.isImeSelected) NeuEmerald else NeuTextPrimary,
+                                color = if (readiness.isImeSelected) colors.emerald else colors.textPrimary,
                                 fontWeight = FontWeight.SemiBold,
                                 fontSize = 13.sp,
                             )
@@ -450,7 +509,7 @@ fun DeckHomeScreen(
             Text(
                 text = "Quick Actions",
                 style = MaterialTheme.typography.titleLarge,
-                color = NeuTextPrimary,
+                color = colors.textPrimary,
             )
 
             Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
@@ -460,7 +519,7 @@ fun DeckHomeScreen(
                 ) {
                     NeuQuickActionCard(
                         icon = Icons.Default.Bolt,
-                        iconTint = NeuIndigo,
+                        iconTint = colors.indigo,
                         title = "Hotkeys",
                         subtitle = "${hotkeys.size} shortcuts",
                         testTag = "quick_action_hotkeys",
@@ -469,7 +528,7 @@ fun DeckHomeScreen(
                     )
                     NeuQuickActionCard(
                         icon = Icons.Default.Palette,
-                        iconTint = Color(0xFFD97706),
+                        iconTint = colors.amber,
                         title = "Themes",
                         subtitle = settings.themeId.displayName,
                         testTag = "quick_action_themes",
@@ -484,7 +543,7 @@ fun DeckHomeScreen(
                 ) {
                     NeuQuickActionCard(
                         icon = Icons.Default.DashboardCustomize,
-                        iconTint = NeuEmerald,
+                        iconTint = colors.emerald,
                         title = "Size & Layout",
                         subtitle = "${settings.keyHeightDp}dp • ${(settings.keyboardWidthFraction * 100).toInt()}%",
                         testTag = "quick_action_layout",
@@ -493,9 +552,9 @@ fun DeckHomeScreen(
                     )
                     NeuQuickActionCard(
                         icon = Icons.Default.Settings,
-                        iconTint = Color(0xFFE11D48),
+                        iconTint = colors.coral,
                         title = "Settings",
-                        subtitle = "Bubble ${settings.bubbleSizeDp}dp",
+                        subtitle = "${settings.appThemeMode.label} • ${settings.bubbleSizeDp}dp",
                         testTag = "quick_action_settings",
                         modifier = Modifier.weight(1f),
                         onClick = onOpenSettingsSheet,
@@ -512,17 +571,18 @@ fun DeckHomeScreen(
                 Text(
                     text = "Try Your Keyboard",
                     style = MaterialTheme.typography.titleLarge,
-                    color = NeuTextPrimary,
+                    color = colors.textPrimary,
                 )
                 Box(
                     modifier = Modifier
                         .neumorphicRaised(
-                            surfaceColor = NeuBg,
-                            shadowLight = NeuShadowLight,
-                            shadowDark = NeuShadowDark,
+                            surfaceColor = colors.bg,
+                            shadowLight = colors.shadowLight,
+                            shadowDark = colors.shadowDark,
                             cornerRadius = 12.dp,
                             shadowOffset = 3.dp,
                             blurRadius = 6.dp,
+                            borderColor = colors.keyBorder.copy(alpha = 0.45f),
                         )
                         .clickable { showInlinePreview = !showInlinePreview }
                         .padding(horizontal = 12.dp, vertical = 7.dp)
@@ -535,13 +595,13 @@ fun DeckHomeScreen(
                         Icon(
                             imageVector = if (showInlinePreview) Icons.Default.VisibilityOff else Icons.Default.Visibility,
                             contentDescription = null,
-                            tint = NeuIndigo,
+                            tint = colors.indigo,
                             modifier = Modifier.size(15.dp),
                         )
                         Text(
                             text = if (showInlinePreview) "Hide Deck" else "Show Deck",
                             fontSize = 12.sp,
-                            color = NeuTextPrimary,
+                            color = colors.textPrimary,
                             fontWeight = FontWeight.SemiBold,
                         )
                     }
@@ -561,11 +621,12 @@ fun DeckHomeScreen(
                 modifier = Modifier
                     .fillMaxWidth()
                     .neumorphicInset(
-                        surfaceColor = NeuBg,
-                        shadowLight = NeuShadowLight,
-                        shadowDark = NeuShadowDark,
+                        surfaceColor = colors.bg,
+                        shadowLight = colors.shadowLight,
+                        shadowDark = colors.shadowDark,
                         cornerRadius = 16.dp,
                         depth = 4.dp,
+                        borderColor = colors.keyBorder.copy(alpha = 0.45f),
                     )
                     .padding(horizontal = 14.dp, vertical = 14.dp),
             ) {
@@ -576,9 +637,9 @@ fun DeckHomeScreen(
                         textStyle = TextStyle(
                             fontFamily = BodyFontFamily,
                             fontSize = 15.sp,
-                            color = NeuTextPrimary,
+                            color = colors.textPrimary,
                         ),
-                        cursorBrush = SolidColor(NeuIndigo),
+                        cursorBrush = SolidColor(colors.indigo),
                         modifier = Modifier
                             .fillMaxWidth()
                             .testTag("try_keyboard_input"),
@@ -591,12 +652,12 @@ fun DeckHomeScreen(
                                     Icon(
                                         imageVector = Icons.Default.EditNote,
                                         contentDescription = null,
-                                        tint = NeuIndigo,
+                                        tint = colors.indigo,
                                         modifier = Modifier.size(18.dp),
                                     )
                                     Text(
                                         text = "Tap here to test typing...",
-                                        color = NeuTextSecondary,
+                                        color = colors.textSecondary,
                                         fontSize = 14.sp,
                                     )
                                 }
@@ -621,11 +682,12 @@ fun DeckHomeScreen(
                     modifier = Modifier
                         .fillMaxWidth()
                         .neumorphicInset(
-                            surfaceColor = NeuActiveFill,
-                            shadowLight = NeuShadowLight,
-                            shadowDark = NeuShadowDark,
+                            surfaceColor = colors.activeFill,
+                            shadowLight = colors.shadowLight,
+                            shadowDark = colors.shadowDark,
                             cornerRadius = 12.dp,
                             depth = 3.dp,
+                            borderColor = colors.keyBorder.copy(alpha = 0.45f),
                         )
                         .padding(horizontal = 12.dp, vertical = 8.dp),
                     verticalAlignment = Alignment.CenterVertically,
@@ -636,13 +698,13 @@ fun DeckHomeScreen(
                         fontFamily = BodyFontFamily,
                         fontSize = 12.sp,
                         fontWeight = FontWeight.Bold,
-                        color = NeuIndigo,
+                        color = colors.indigo,
                     )
                     Text(
                         text = lastDispatchedKey?.detail ?: "Touchpad Ready",
                         fontFamily = BodyFontFamily,
                         fontSize = 11.sp,
-                        color = NeuTextSecondary,
+                        color = colors.textSecondary,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
                     )
@@ -652,7 +714,7 @@ fun DeckHomeScreen(
 
         // Extruded Neumorphic Keyboard Frame
         AnimatedVisibility(visible = showInlinePreview) {
-            val palette = settings.resolvePalette()
+            val palette = settings.resolvePalette(colors.isDark)
             val dockAlign = when (settings.dockAlignment) {
                 KeyboardDockAlignment.LEFT -> Alignment.CenterStart
                 KeyboardDockAlignment.CENTER -> Alignment.Center
@@ -668,7 +730,6 @@ fun DeckHomeScreen(
             ) {
                 PcKeyboardDeck(
                     settings = settings,
-                    hotkeys = hotkeys,
                     routeLabel = "In-App",
                     isOverlay = false,
                     onKeyDispatch = { keyCode, metaState, charToCommit, comboLabel ->
@@ -707,13 +768,6 @@ fun DeckHomeScreen(
                             hapticEnabled = settings.hapticFeedback,
                         )
                     },
-                    onHotkeyDispatch = { hotkey ->
-                        KeyDispatcher.dispatchHotkey(
-                            context = context,
-                            hotkey = hotkey,
-                            hapticEnabled = settings.hapticFeedback,
-                        )
-                    },
                     onChangeLayoutMode = onChangeLayoutMode,
                     onToggleNumLock = onToggleNumLock,
                     onToggleFunctionRow = onToggleFunctionRow,
@@ -745,16 +799,18 @@ private fun NeuQuickActionCard(
     modifier: Modifier = Modifier,
     onClick: () -> Unit,
 ) {
+    val colors = KeyDeckColors.current
     Box(
         modifier = modifier
             .height(108.dp)
             .neumorphicRaised(
-                surfaceColor = NeuBg,
-                shadowLight = NeuShadowLight,
-                shadowDark = NeuShadowDark,
+                surfaceColor = colors.bg,
+                shadowLight = colors.shadowLight,
+                shadowDark = colors.shadowDark,
                 cornerRadius = 20.dp,
                 shadowOffset = 5.dp,
                 blurRadius = 10.dp,
+                borderColor = colors.keyBorder.copy(alpha = 0.45f),
             )
             .clickable(onClick = onClick)
             .padding(14.dp)
@@ -769,11 +825,12 @@ private fun NeuQuickActionCard(
                 modifier = Modifier
                     .size(38.dp)
                     .neumorphicInset(
-                        surfaceColor = NeuBg,
-                        shadowLight = NeuShadowLight,
-                        shadowDark = NeuShadowDark,
+                        surfaceColor = colors.bg,
+                        shadowLight = colors.shadowLight,
+                        shadowDark = colors.shadowDark,
                         cornerRadius = 12.dp,
                         depth = 3.dp,
+                        borderColor = colors.keyBorder.copy(alpha = 0.45f),
                     ),
                 contentAlignment = Alignment.Center,
             ) {
@@ -788,13 +845,13 @@ private fun NeuQuickActionCard(
             Text(
                 text = title,
                 style = MaterialTheme.typography.titleMedium,
-                color = NeuTextPrimary,
+                color = colors.textPrimary,
                 maxLines = 1,
             )
             Text(
                 text = subtitle,
                 style = MaterialTheme.typography.bodyMedium,
-                color = NeuTextSecondary,
+                color = colors.textSecondary,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
             )
@@ -811,22 +868,25 @@ private fun NeuReadinessChip(
     modifier: Modifier = Modifier,
     onClick: () -> Unit,
 ) {
+    val colors = KeyDeckColors.current
     val mod = if (ready) {
         Modifier.neumorphicInset(
-            surfaceColor = NeuActiveFill,
-            shadowLight = NeuShadowLight,
-            shadowDark = NeuShadowDark,
+            surfaceColor = colors.activeFill,
+            shadowLight = colors.shadowLight,
+            shadowDark = colors.shadowDark,
             cornerRadius = 14.dp,
             depth = 3.dp,
+            borderColor = colors.keyBorder.copy(alpha = 0.45f),
         )
     } else {
         Modifier.neumorphicRaised(
-            surfaceColor = NeuBg,
-            shadowLight = NeuShadowLight,
-            shadowDark = NeuShadowDark,
+            surfaceColor = colors.bg,
+            shadowLight = colors.shadowLight,
+            shadowDark = colors.shadowDark,
             cornerRadius = 14.dp,
             shadowOffset = 3.dp,
             blurRadius = 6.dp,
+            borderColor = colors.keyBorder.copy(alpha = 0.45f),
         )
     }
     Box(
@@ -845,7 +905,7 @@ private fun NeuReadinessChip(
             Icon(
                 imageVector = if (ready) Icons.Default.CheckCircle else icon,
                 contentDescription = title,
-                tint = if (ready) NeuIndigo else NeuAmber,
+                tint = if (ready) colors.indigo else colors.amber,
                 modifier = Modifier.size(16.dp),
             )
             Column {
@@ -853,13 +913,13 @@ private fun NeuReadinessChip(
                     text = title,
                     fontSize = 11.sp,
                     fontWeight = FontWeight.SemiBold,
-                    color = NeuTextPrimary,
+                    color = colors.textPrimary,
                     maxLines = 1,
                 )
                 Text(
                     text = if (ready) "Ready" else "Setup",
                     fontSize = 10.sp,
-                    color = if (ready) NeuIndigo else NeuAmber,
+                    color = if (ready) colors.indigo else colors.amber,
                     fontWeight = FontWeight.Medium,
                     maxLines = 1,
                 )

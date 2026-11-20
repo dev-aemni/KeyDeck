@@ -47,14 +47,7 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import com.example.keyboard.KeyDispatcher
 import com.example.ui.theme.BodyFontFamily
-import com.example.ui.theme.NeuActiveFill
-import com.example.ui.theme.NeuBg
-import com.example.ui.theme.NeuEmerald
-import com.example.ui.theme.NeuIndigo
-import com.example.ui.theme.NeuShadowDark
-import com.example.ui.theme.NeuShadowLight
-import com.example.ui.theme.NeuTextPrimary
-import com.example.ui.theme.NeuTextSecondary
+import com.example.ui.theme.KeyDeckColors
 import com.example.ui.theme.neumorphicInset
 import com.example.ui.theme.neumorphicRaised
 
@@ -78,6 +71,7 @@ fun WebSandboxScreen(
     onLaunchFloatingOverWeb: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    val colors = KeyDeckColors.current
     var urlInput by remember { mutableStateOf("playground://shortcuts") }
     var webViewRef by remember { mutableStateOf<SandboxWebView?>(null) }
 
@@ -128,7 +122,7 @@ fun WebSandboxScreen(
     Column(
         modifier = modifier
             .fillMaxSize()
-            .background(NeuBg)
+            .background(colors.bg)
             .padding(horizontal = 16.dp, vertical = 12.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
@@ -141,12 +135,12 @@ fun WebSandboxScreen(
                 Text(
                     text = "Web & Gaming Lab",
                     style = MaterialTheme.typography.headlineMedium,
-                    color = NeuTextPrimary,
+                    color = colors.textPrimary,
                 )
                 Text(
                     text = "Test shortcuts, numpad, WASD hold & mouse touchpad",
                     style = MaterialTheme.typography.bodyMedium,
-                    color = NeuTextSecondary,
+                    color = colors.textSecondary,
                 )
             }
             Box(
@@ -154,9 +148,9 @@ fun WebSandboxScreen(
                     .height(48.dp)
                     .then(
                         if (isOverlayRunning) {
-                            Modifier.neumorphicInset(NeuActiveFill, NeuShadowLight, NeuShadowDark, 14.dp, 3.dp)
+                            Modifier.neumorphicInset(colors.activeFill, colors.shadowLight, colors.shadowDark, 14.dp, 3.dp, colors.keyBorder.copy(alpha = 0.45f))
                         } else {
-                            Modifier.neumorphicRaised(NeuBg, NeuShadowLight, NeuShadowDark, 14.dp, 4.dp, 7.dp)
+                            Modifier.neumorphicRaised(colors.bg, colors.shadowLight, colors.shadowDark, 14.dp, 4.dp, 7.dp, colors.keyBorder.copy(alpha = 0.45f))
                         },
                     )
                     .clickable(onClick = onLaunchFloatingOverWeb)
@@ -168,7 +162,7 @@ fun WebSandboxScreen(
                     Icon(
                         Icons.Default.OpenInNew,
                         contentDescription = null,
-                        tint = if (isOverlayRunning) NeuEmerald else NeuIndigo,
+                        tint = if (isOverlayRunning) colors.emerald else colors.indigo,
                         modifier = Modifier.size(16.dp),
                     )
                     Spacer(modifier = Modifier.width(6.dp))
@@ -176,7 +170,7 @@ fun WebSandboxScreen(
                         text = if (isOverlayRunning) "Toggle Deck" else "Float Deck",
                         fontWeight = FontWeight.Bold,
                         fontSize = 12.sp,
-                        color = if (isOverlayRunning) NeuEmerald else NeuIndigo,
+                        color = if (isOverlayRunning) colors.emerald else colors.indigo,
                     )
                 }
             }
@@ -192,7 +186,7 @@ fun WebSandboxScreen(
                 modifier = Modifier
                     .weight(1f)
                     .height(48.dp)
-                    .neumorphicInset(NeuBg, NeuShadowLight, NeuShadowDark, 14.dp, 3.dp)
+                    .neumorphicInset(colors.bg, colors.shadowLight, colors.shadowDark, 14.dp, 3.dp, colors.keyBorder.copy(alpha = 0.45f))
                     .padding(horizontal = 12.dp),
                 contentAlignment = Alignment.CenterStart,
             ) {
@@ -203,7 +197,7 @@ fun WebSandboxScreen(
                     Icon(
                         Icons.Default.Public,
                         contentDescription = null,
-                        tint = NeuIndigo,
+                        tint = colors.indigo,
                         modifier = Modifier.size(18.dp),
                     )
                     BasicTextField(
@@ -213,9 +207,9 @@ fun WebSandboxScreen(
                         textStyle = TextStyle(
                             fontFamily = BodyFontFamily,
                             fontSize = 13.sp,
-                            color = NeuTextPrimary,
+                            color = colors.textPrimary,
                         ),
-                        cursorBrush = SolidColor(NeuIndigo),
+                        cursorBrush = SolidColor(colors.indigo),
                         modifier = Modifier
                             .fillMaxWidth()
                             .testTag("sandbox_url_input"),
@@ -226,12 +220,12 @@ fun WebSandboxScreen(
             Box(
                 modifier = Modifier
                     .height(48.dp)
-                    .neumorphicRaised(NeuBg, NeuShadowLight, NeuShadowDark, 14.dp, 4.dp, 7.dp)
+                    .neumorphicRaised(colors.bg, colors.shadowLight, colors.shadowDark, 14.dp, 4.dp, 7.dp, colors.keyBorder.copy(alpha = 0.45f))
                     .clickable {
                         val wv = webViewRef ?: return@clickable
                         val target = urlInput.trim()
                         if (target.startsWith("playground://") || target.isEmpty()) {
-                            wv.loadDataWithBaseURL("https://keydeck.local/", PLAYGROUND_HTML, "text/html", "UTF-8", null)
+                            wv.loadDataWithBaseURL("https://keydeck.local/", buildPlaygroundHtml(colors.isDark), "text/html", "UTF-8", null)
                         } else {
                             val normalized = if (target.startsWith("http://") || target.startsWith("https://")) {
                                 target
@@ -245,18 +239,18 @@ fun WebSandboxScreen(
                     .testTag("sandbox_go_button"),
                 contentAlignment = Alignment.Center,
             ) {
-                Text("Go", color = NeuIndigo, fontWeight = FontWeight.Bold)
+                Text("Go", color = colors.indigo, fontWeight = FontWeight.Bold)
             }
 
             Box(
                 modifier = Modifier
                     .size(48.dp)
-                    .neumorphicRaised(NeuBg, NeuShadowLight, NeuShadowDark, 14.dp, 4.dp, 7.dp)
+                    .neumorphicRaised(colors.bg, colors.shadowLight, colors.shadowDark, 14.dp, 4.dp, 7.dp, colors.keyBorder.copy(alpha = 0.45f))
                     .clickable {
                         urlInput = "playground://shortcuts"
                         webViewRef?.loadDataWithBaseURL(
                             "https://keydeck.local/",
-                            PLAYGROUND_HTML,
+                            buildPlaygroundHtml(colors.isDark),
                             "text/html",
                             "UTF-8",
                             null,
@@ -265,17 +259,18 @@ fun WebSandboxScreen(
                     .testTag("sandbox_reset_button"),
                 contentAlignment = Alignment.Center,
             ) {
-                Icon(Icons.Default.Refresh, contentDescription = "Reset shortcut playground", tint = NeuTextPrimary)
+                Icon(Icons.Default.Refresh, contentDescription = "Reset shortcut playground", tint = colors.textPrimary)
             }
         }
 
         // Embedded WebView inside a Soft UI Neumorphic frame
         val suppressIme = suppressSystemKeyboard
+        val isDark = colors.isDark
         Box(
             modifier = Modifier
                 .fillMaxWidth()
                 .weight(1f)
-                .neumorphicRaised(NeuBg, NeuShadowLight, NeuShadowDark, 20.dp, 5.dp, 9.dp)
+                .neumorphicRaised(colors.bg, colors.shadowLight, colors.shadowDark, 20.dp, 5.dp, 9.dp, colors.keyBorder.copy(alpha = 0.45f))
                 .padding(6.dp),
         ) {
             AndroidView(
@@ -289,7 +284,7 @@ fun WebSandboxScreen(
                         webViewClient = WebViewClient()
                         loadDataWithBaseURL(
                             "https://keydeck.local/",
-                            PLAYGROUND_HTML,
+                            buildPlaygroundHtml(isDark),
                             "text/html",
                             "UTF-8",
                             null,
@@ -299,6 +294,7 @@ fun WebSandboxScreen(
                 },
                 update = { wv ->
                     wv.suppressSystemKeyboard = suppressIme
+                    wv.evaluateJavascript("window.setKeyDeckDarkMode && window.setKeyDeckDarkMode($isDark);", null)
                     if (suppressIme) {
                         val imm = wv.context.getSystemService(Context.INPUT_METHOD_SERVICE) as? InputMethodManager
                         imm?.hideSoftInputFromWindow(wv.windowToken, 0)
@@ -310,7 +306,7 @@ fun WebSandboxScreen(
     }
 }
 
-private val PLAYGROUND_HTML = """
+private fun buildPlaygroundHtml(isDark: Boolean): String = """
 <!DOCTYPE html>
 <html>
 <head>
@@ -318,10 +314,27 @@ private val PLAYGROUND_HTML = """
 <style>
   :root {
     --bg: #d6dce5;
+    --surface: #dce1ea;
+    --arena: #cfd6e2;
     --shadow-light: #f1f4f9;
     --shadow-dark: #a5aebc;
     --text: #1f2937;
+    --muted: #4b5563;
     --accent: #4f46e5;
+    --active-bg: #cde0f8;
+    --border: rgba(139,149,165,0.65);
+  }
+  body.dark {
+    --bg: #1a1e28;
+    --surface: #212633;
+    --arena: #151922;
+    --shadow-light: #2e3547;
+    --shadow-dark: #0d1017;
+    --text: #f1f5f9;
+    --muted: #94a3b8;
+    --accent: #818cf8;
+    --active-bg: #233050;
+    --border: rgba(62,71,91,0.8);
   }
   body {
     margin: 0; padding: 12px; font-family: system-ui, -apple-system, sans-serif;
@@ -329,45 +342,45 @@ private val PLAYGROUND_HTML = """
   }
   .badge {
     display: inline-block; padding: 5px 11px; border-radius: 999px; font-size: 11px; font-weight: 700;
-    background: #cde0f8; color: var(--accent); border: 1px solid rgba(139,149,165,0.6);
+    background: var(--active-bg); color: var(--accent); border: 1px solid var(--border);
   }
   .card {
     background: var(--bg); border-radius: 16px; padding: 12px; margin-top: 10px;
-    border: 1px solid rgba(139,149,165,0.65);
+    border: 1px solid var(--border);
     box-shadow: 5px 5px 10px var(--shadow-dark), -5px -5px 10px var(--shadow-light);
   }
   .arena {
     position: relative; height: 110px; border-radius: 12px; margin-top: 8px; overflow: hidden;
-    background: #cfd6e2; border: 1px solid rgba(139,149,165,0.7);
+    background: var(--arena); border: 1px solid var(--border);
     box-shadow: inset 3px 3px 6px var(--shadow-dark), inset -3px -3px 6px var(--shadow-light);
   }
   .cursor {
     position: absolute; width: 16px; height: 16px; border-radius: 50%;
-    border: 2.5px solid #4f46e5; background: rgba(79,70,229,0.22);
+    border: 2.5px solid var(--accent); background: rgba(129,140,248,0.22);
     transform: translate(-50%, -50%); left: 50%; top: 50%; pointer-events: none;
   }
   .row { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 8px; }
   .pill {
-    padding: 6px 10px; border-radius: 9px; background: #dce1ea; font-size: 11px; font-weight: 600;
-    border: 1px solid rgba(139,149,165,0.65);
+    padding: 6px 10px; border-radius: 9px; background: var(--surface); font-size: 11px; font-weight: 600;
+    border: 1px solid var(--border);
   }
-  .pill.active { background: #cde0f8; color: var(--accent); border-color: #4f46e5; }
+  .pill.active { background: var(--active-bg); color: var(--accent); border-color: var(--accent); }
   .stage { display: flex; align-items: center; justify-content: space-between; margin-top: 4px; font-size: 13px; }
   .meter {
-    height: 8px; background: #cfd6e2; border-radius: 99px; overflow: hidden; margin-top: 8px;
+    height: 8px; background: var(--arena); border-radius: 99px; overflow: hidden; margin-top: 8px;
   }
-  .meter-fill { height: 100%; width: 35%; background: #4f46e5; border-radius: 99px; transition: width 0.12s; }
-  #log { font-size: 11px; color: #4b5563; max-height: 110px; overflow-y: auto; margin-top: 6px; }
-  .evt { padding: 4px 0; border-bottom: 1px solid rgba(139,149,165,0.35); }
+  .meter-fill { height: 100%; width: 35%; background: var(--accent); border-radius: 99px; transition: width 0.12s; }
+  #log { font-size: 11px; color: var(--muted); max-height: 110px; overflow-y: auto; margin-top: 6px; }
+  .evt { padding: 4px 0; border-bottom: 1px solid var(--border); }
   .k { color: var(--accent); font-weight: 700; }
 </style>
 </head>
-<body>
+<body class="${if (isDark) "dark" else ""}">
   <div class="badge">WEB + GAMING MODE TEST ARENA</div>
   <div class="card">
     <div class="stage">
       <strong id="playerState">WASD &amp; Mouse Aim Arena</strong>
-      <span id="clickCounts" style="color:#4f46e5;font-weight:700">LMB: 0 • RMB: 0</span>
+      <span id="clickCounts" style="color:var(--accent);font-weight:700">LMB: 0 • RMB: 0</span>
     </div>
     <div class="arena" id="arena">
       <div class="cursor" id="cursor"></div>
@@ -396,6 +409,10 @@ private val PLAYGROUND_HTML = """
   const log = document.getElementById('log');
   const fillEl = document.getElementById('fill');
   const numVal = document.getElementById('numVal');
+
+  window.setKeyDeckDarkMode = (dark) => {
+    document.body.classList.toggle('dark', !!dark);
+  };
 
   window.onKeyDeckMouseDelta = (dx, dy) => {
     cx = Math.max(5, Math.min(95, cx + dx * 0.25));

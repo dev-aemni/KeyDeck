@@ -53,12 +53,12 @@ import com.example.keyboard.KeyDeckSettings
 import com.example.keyboard.KeyDispatcher
 import com.example.keyboard.KeyboardDockAlignment
 import com.example.keyboard.PcKeyboardDeck
-import com.example.keyboard.PcKeyboardLayoutData
 import com.example.keyboard.ResolvedKeyboardPalette
+import com.example.ui.theme.KeyDeckColors
 import com.example.ui.theme.KeyDeckTheme
-import com.example.ui.theme.NeuEmerald
 import com.example.ui.theme.neumorphicInset
 import com.example.ui.theme.neumorphicRaised
+import com.example.ui.theme.resolveIsAppDark
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -219,8 +219,9 @@ class FloatingKeyboardService : Service() {
             setContent {
                 val settings by repository.settingsFlow.collectAsStateWithLifecycle(initialValue = KeyDeckSettings())
                 val expanded by KeyDeckRuntimeState.isKeyboardOverlayExpanded.collectAsStateWithLifecycle()
-                val palette = settings.resolvePalette()
-                KeyDeckTheme(darkTheme = false) {
+                val isDark = resolveIsAppDark(settings.appThemeMode)
+                val palette = settings.resolvePalette(isDark)
+                KeyDeckTheme(darkTheme = isDark) {
                     FloatingTriggerBubble(
                         sizeDp = settings.bubbleSizeDp,
                         palette = palette,
@@ -280,8 +281,8 @@ class FloatingKeyboardService : Service() {
             setViewTreeViewModelStoreOwner(lifecycleOwner)
             setContent {
                 val settings by repository.settingsFlow.collectAsStateWithLifecycle(initialValue = KeyDeckSettings())
-                val hotkeys by repository.hotkeysFlow.collectAsStateWithLifecycle(initialValue = PcKeyboardLayoutData.defaultHotkeys)
-                val palette = settings.resolvePalette()
+                val isDark = resolveIsAppDark(settings.appThemeMode)
+                val palette = settings.resolvePalette(isDark)
                 val dockAlign = when (settings.dockAlignment) {
                     KeyboardDockAlignment.LEFT -> Alignment.CenterStart
                     KeyboardDockAlignment.CENTER -> Alignment.Center
@@ -290,7 +291,7 @@ class FloatingKeyboardService : Service() {
                 val outerCorner = (settings.keyCornerRadiusDp + 8).coerceIn(12, 24).dp
                 val borderCol = if (settings.showKeyBorder) palette.keyBorder.copy(alpha = 0.65f) else null
 
-                KeyDeckTheme(darkTheme = false) {
+                KeyDeckTheme(darkTheme = isDark) {
                     Box(
                         modifier = Modifier
                             .fillMaxWidth()
@@ -299,7 +300,6 @@ class FloatingKeyboardService : Service() {
                     ) {
                         PcKeyboardDeck(
                             settings = settings,
-                            hotkeys = hotkeys,
                             routeLabel = KeyDispatcher.activeRouteLabel(),
                             isOverlay = true,
                             onKeyDispatch = { keyCode, metaState, charToCommit, comboLabel ->
@@ -335,13 +335,6 @@ class FloatingKeyboardService : Service() {
                                     context = this@FloatingKeyboardService,
                                     isRightClick = isRight,
                                     mcpeLookMode = settings.gamingMcpeLookMode,
-                                    hapticEnabled = settings.hapticFeedback,
-                                )
-                            },
-                            onHotkeyDispatch = { hotkey ->
-                                KeyDispatcher.dispatchHotkey(
-                                    context = this@FloatingKeyboardService,
-                                    hotkey = hotkey,
                                     hapticEnabled = settings.hapticFeedback,
                                 )
                             },
@@ -545,7 +538,7 @@ private fun FloatingTriggerBubble(
                 .padding(6.dp)
                 .size(7.dp)
                 .clip(CircleShape)
-                .background(if (expanded) palette.accentBg else NeuEmerald),
+                .background(if (expanded) palette.accentBg else KeyDeckColors.current.emerald),
         )
     }
 }

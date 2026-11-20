@@ -61,15 +61,7 @@ import com.example.keyboard.HotkeyCategory
 import com.example.keyboard.KeyDispatcher
 import com.example.keyboard.PcKeyboardLayoutData
 import com.example.ui.theme.BodyFontFamily
-import com.example.ui.theme.NeuActiveFill
-import com.example.ui.theme.NeuBg
-import com.example.ui.theme.NeuCoral
-import com.example.ui.theme.NeuEmerald
-import com.example.ui.theme.NeuIndigo
-import com.example.ui.theme.NeuShadowDark
-import com.example.ui.theme.NeuShadowLight
-import com.example.ui.theme.NeuTextPrimary
-import com.example.ui.theme.NeuTextSecondary
+import com.example.ui.theme.KeyDeckColors
 import com.example.ui.theme.neumorphicInset
 import com.example.ui.theme.neumorphicRaised
 
@@ -84,6 +76,7 @@ fun HotkeysScreen(
     modifier: Modifier = Modifier,
 ) {
     val context = LocalContext.current
+    val colors = KeyDeckColors.current
     var selectedCategory by remember { mutableStateOf(HotkeyCategory.ALL) }
     var editingHotkey by remember { mutableStateOf<CustomHotkey?>(null) }
     var showEditorDialog by remember { mutableStateOf(false) }
@@ -95,14 +88,14 @@ fun HotkeysScreen(
 
     Scaffold(
         modifier = modifier.fillMaxSize(),
-        containerColor = NeuBg,
+        containerColor = colors.bg,
         floatingActionButton = {
             FloatingActionButton(
                 onClick = {
                     editingHotkey = null
                     showEditorDialog = true
                 },
-                containerColor = NeuIndigo,
+                containerColor = colors.accentFill,
                 contentColor = Color.White,
                 modifier = Modifier.testTag("fab_add_hotkey"),
             ) {
@@ -123,12 +116,12 @@ fun HotkeysScreen(
                 Text(
                     text = "Customizable Hotkeys",
                     style = MaterialTheme.typography.headlineMedium,
-                    color = NeuTextPrimary,
+                    color = colors.textPrimary,
                 )
                 Text(
-                    text = "Pinned to the top strip of your Soft UI PC keyboard",
+                    text = "Browse, customize, and test keyboard shortcut macros",
                     style = MaterialTheme.typography.bodyMedium,
-                    color = NeuTextSecondary,
+                    color = colors.textSecondary,
                 )
             }
 
@@ -144,20 +137,22 @@ fun HotkeysScreen(
                     val selected = selectedCategory == cat
                     val mod = if (selected) {
                         Modifier.neumorphicInset(
-                            surfaceColor = NeuActiveFill,
-                            shadowLight = NeuShadowLight,
-                            shadowDark = NeuShadowDark,
+                            surfaceColor = colors.activeFill,
+                            shadowLight = colors.shadowLight,
+                            shadowDark = colors.shadowDark,
                             cornerRadius = 12.dp,
                             depth = 3.dp,
+                            borderColor = colors.keyBorder.copy(alpha = 0.45f),
                         )
                     } else {
                         Modifier.neumorphicRaised(
-                            surfaceColor = NeuBg,
-                            shadowLight = NeuShadowLight,
-                            shadowDark = NeuShadowDark,
+                            surfaceColor = colors.bg,
+                            shadowLight = colors.shadowLight,
+                            shadowDark = colors.shadowDark,
                             cornerRadius = 12.dp,
                             shadowOffset = 3.dp,
                             blurRadius = 6.dp,
+                            borderColor = colors.keyBorder.copy(alpha = 0.45f),
                         )
                     }
                     Box(
@@ -170,7 +165,7 @@ fun HotkeysScreen(
                             text = cat.label,
                             fontSize = 12.sp,
                             fontWeight = FontWeight.SemiBold,
-                            color = if (selected) NeuIndigo else NeuTextSecondary,
+                            color = if (selected) colors.indigo else colors.textSecondary,
                         )
                     }
                 }
@@ -215,18 +210,18 @@ fun HotkeysScreen(
                         Icon(
                             imageVector = Icons.Default.Bolt,
                             contentDescription = null,
-                            tint = NeuIndigo,
+                            tint = colors.indigo,
                             modifier = Modifier.size(44.dp),
                         )
                         Text(
                             text = "No hotkeys in ${selectedCategory.label}",
                             style = MaterialTheme.typography.titleMedium,
-                            color = NeuTextPrimary,
+                            color = colors.textPrimary,
                         )
                         Text(
                             text = "Tap + to create a custom keyboard shortcut macro",
                             style = MaterialTheme.typography.bodyMedium,
-                            color = NeuTextSecondary,
+                            color = colors.textSecondary,
                         )
                     }
                 }
@@ -244,12 +239,13 @@ fun HotkeysScreen(
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .neumorphicRaised(
-                                    surfaceColor = NeuBg,
-                                    shadowLight = NeuShadowLight,
-                                    shadowDark = NeuShadowDark,
+                                    surfaceColor = colors.bg,
+                                    shadowLight = colors.shadowLight,
+                                    shadowDark = colors.shadowDark,
                                     cornerRadius = 18.dp,
                                     shadowOffset = 4.dp,
                                     blurRadius = 8.dp,
+                                    borderColor = colors.keyBorder.copy(alpha = 0.45f),
                                 )
                                 .testTag("hotkey_card_${hk.id}"),
                         ) {
@@ -275,7 +271,7 @@ fun HotkeysScreen(
                                         Text(
                                             text = hk.label,
                                             style = MaterialTheme.typography.titleMedium,
-                                            color = NeuTextPrimary,
+                                            color = colors.textPrimary,
                                         )
                                         Row(
                                             horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -284,9 +280,9 @@ fun HotkeysScreen(
                                             Box(
                                                 modifier = Modifier
                                                     .neumorphicInset(
-                                                        surfaceColor = NeuActiveFill,
-                                                        shadowLight = NeuShadowLight,
-                                                        shadowDark = NeuShadowDark,
+                                                        surfaceColor = colors.activeFill,
+                                                        shadowLight = colors.shadowLight,
+                                                        shadowDark = colors.shadowDark,
                                                         cornerRadius = 8.dp,
                                                         depth = 2.dp,
                                                     )
@@ -303,7 +299,7 @@ fun HotkeysScreen(
                                             Text(
                                                 text = hk.category.label,
                                                 fontSize = 11.sp,
-                                                color = NeuTextSecondary,
+                                                color = colors.textSecondary,
                                             )
                                         }
                                     }
@@ -319,7 +315,7 @@ fun HotkeysScreen(
                                         Icon(
                                             Icons.Default.PlayArrow,
                                             contentDescription = "Test fire ${hk.label}",
-                                            tint = NeuEmerald,
+                                            tint = colors.emerald,
                                         )
                                     }
                                     IconButton(
@@ -329,7 +325,7 @@ fun HotkeysScreen(
                                         Icon(
                                             Icons.Default.ArrowUpward,
                                             contentDescription = "Move ${hk.label} up",
-                                            tint = NeuTextSecondary,
+                                            tint = colors.textSecondary,
                                         )
                                     }
                                     IconButton(
@@ -342,7 +338,7 @@ fun HotkeysScreen(
                                         Icon(
                                             Icons.Default.Edit,
                                             contentDescription = "Edit ${hk.label}",
-                                            tint = NeuIndigo,
+                                            tint = colors.indigo,
                                         )
                                     }
                                     IconButton(
@@ -352,7 +348,7 @@ fun HotkeysScreen(
                                         Icon(
                                             Icons.Default.DeleteOutline,
                                             contentDescription = "Delete ${hk.label}",
-                                            tint = NeuCoral,
+                                            tint = colors.coral,
                                         )
                                     }
                                 }
@@ -382,21 +378,23 @@ private fun PresetPackButton(
     testTag: String,
     onClick: () -> Unit,
 ) {
+    val colors = KeyDeckColors.current
     Box(
         modifier = Modifier
             .neumorphicRaised(
-                surfaceColor = NeuBg,
-                shadowLight = NeuShadowLight,
-                shadowDark = NeuShadowDark,
+                surfaceColor = colors.bg,
+                shadowLight = colors.shadowLight,
+                shadowDark = colors.shadowDark,
                 cornerRadius = 10.dp,
                 shadowOffset = 3.dp,
                 blurRadius = 6.dp,
+                borderColor = colors.keyBorder.copy(alpha = 0.45f),
             )
             .clickable(onClick = onClick)
             .padding(horizontal = 12.dp, vertical = 8.dp)
             .testTag(testTag),
     ) {
-        Text(label, fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = NeuIndigo)
+        Text(label, fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = colors.indigo)
     }
 }
 
@@ -407,6 +405,7 @@ private fun HotkeyEditorDialog(
     onDismiss: () -> Unit,
     onConfirm: (CustomHotkey) -> Unit,
 ) {
+    val colors = KeyDeckColors.current
     var label by remember { mutableStateOf(initial?.label ?: "") }
     var ctrl by remember { mutableStateOf(initial?.ctrl ?: true) }
     var alt by remember { mutableStateOf(initial?.alt ?: false) }
@@ -435,9 +434,9 @@ private fun HotkeyEditorDialog(
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        containerColor = NeuBg,
-        titleContentColor = NeuTextPrimary,
-        textContentColor = NeuTextPrimary,
+        containerColor = colors.bg,
+        titleContentColor = colors.textPrimary,
+        textContentColor = colors.textPrimary,
         title = {
             Text(
                 text = if (initial == null) "New Hotkey Shortcut" else "Edit Hotkey",
@@ -459,17 +458,19 @@ private fun HotkeyEditorDialog(
                     placeholder = { Text("e.g. Hard Reload, Play/Pause") },
                     singleLine = true,
                     colors = OutlinedTextFieldDefaults.colors(
-                        focusedBorderColor = NeuIndigo,
-                        unfocusedBorderColor = NeuShadowDark,
-                        focusedTextColor = NeuTextPrimary,
-                        unfocusedTextColor = NeuTextPrimary,
+                        focusedBorderColor = colors.indigo,
+                        unfocusedBorderColor = colors.keyBorder,
+                        focusedTextColor = colors.textPrimary,
+                        unfocusedTextColor = colors.textPrimary,
+                        focusedLabelColor = colors.indigo,
+                        unfocusedLabelColor = colors.textSecondary,
                     ),
                     modifier = Modifier
                         .fillMaxWidth()
                         .testTag("hotkey_name_input"),
                 )
 
-                Text("Modifiers", style = MaterialTheme.typography.labelLarge, color = NeuTextSecondary)
+                Text("Modifiers", style = MaterialTheme.typography.labelLarge, color = colors.textSecondary)
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -480,7 +481,7 @@ private fun HotkeyEditorDialog(
                     ModifierTogglePill("Win", meta, Modifier.weight(1f).testTag("mod_meta")) { meta = !meta }
                 }
 
-                Text("Primary Key (${selectedKey.label})", style = MaterialTheme.typography.labelLarge, color = NeuTextSecondary)
+                Text("Primary Key (${selectedKey.label})", style = MaterialTheme.typography.labelLarge, color = colors.textSecondary)
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -492,16 +493,16 @@ private fun HotkeyEditorDialog(
                         val active = selectedGroup == group
                         Box(
                             modifier = (if (active) {
-                                Modifier.neumorphicInset(NeuActiveFill, NeuShadowLight, NeuShadowDark, 8.dp, 2.dp)
+                                Modifier.neumorphicInset(colors.activeFill, colors.shadowLight, colors.shadowDark, 8.dp, 2.dp, colors.keyBorder.copy(alpha = 0.45f))
                             } else {
-                                Modifier.neumorphicRaised(NeuBg, NeuShadowLight, NeuShadowDark, 8.dp, 2.dp, 4.dp)
+                                Modifier.neumorphicRaised(colors.bg, colors.shadowLight, colors.shadowDark, 8.dp, 2.dp, 4.dp, colors.keyBorder.copy(alpha = 0.45f))
                             })
                                 .clickable { selectedGroup = group }
                                 .padding(horizontal = 10.dp, vertical = 6.dp),
                         ) {
                             Text(
                                 text = group,
-                                color = if (active) NeuIndigo else NeuTextSecondary,
+                                color = if (active) colors.indigo else colors.textSecondary,
                                 fontSize = 11.sp,
                                 fontWeight = FontWeight.Bold,
                             )
@@ -520,9 +521,9 @@ private fun HotkeyEditorDialog(
                             val active = option.keyCode == selectedKey.keyCode
                             Box(
                                 modifier = (if (active) {
-                                    Modifier.neumorphicInset(NeuActiveFill, NeuShadowLight, NeuShadowDark, 8.dp, 2.dp)
+                                    Modifier.neumorphicInset(colors.activeFill, colors.shadowLight, colors.shadowDark, 8.dp, 2.dp, colors.keyBorder.copy(alpha = 0.45f))
                                 } else {
-                                    Modifier.neumorphicRaised(NeuBg, NeuShadowLight, NeuShadowDark, 8.dp, 2.dp, 4.dp)
+                                    Modifier.neumorphicRaised(colors.bg, colors.shadowLight, colors.shadowDark, 8.dp, 2.dp, 4.dp, colors.keyBorder.copy(alpha = 0.45f))
                                 })
                                     .clickable { selectedKey = option }
                                     .padding(horizontal = 10.dp, vertical = 6.dp),
@@ -532,13 +533,13 @@ private fun HotkeyEditorDialog(
                                     fontFamily = BodyFontFamily,
                                     fontSize = 12.sp,
                                     fontWeight = FontWeight.Bold,
-                                    color = if (active) NeuIndigo else NeuTextPrimary,
+                                    color = if (active) colors.indigo else colors.textPrimary,
                                 )
                             }
                         }
                 }
 
-                Text("Accent Color", style = MaterialTheme.typography.labelLarge, color = NeuTextSecondary)
+                Text("Accent Color", style = MaterialTheme.typography.labelLarge, color = colors.textSecondary)
                 Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                     accentSwatches.forEach { hex ->
                         Box(
@@ -551,7 +552,7 @@ private fun HotkeyEditorDialog(
                     }
                 }
 
-                Text("Category", style = MaterialTheme.typography.labelLarge, color = NeuTextSecondary)
+                Text("Category", style = MaterialTheme.typography.labelLarge, color = colors.textSecondary)
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -562,9 +563,9 @@ private fun HotkeyEditorDialog(
                         val active = category == cat
                         Box(
                             modifier = (if (active) {
-                                Modifier.neumorphicInset(NeuActiveFill, NeuShadowLight, NeuShadowDark, 8.dp, 2.dp)
+                                Modifier.neumorphicInset(colors.activeFill, colors.shadowLight, colors.shadowDark, 8.dp, 2.dp, colors.keyBorder.copy(alpha = 0.45f))
                             } else {
-                                Modifier.neumorphicRaised(NeuBg, NeuShadowLight, NeuShadowDark, 8.dp, 2.dp, 4.dp)
+                                Modifier.neumorphicRaised(colors.bg, colors.shadowLight, colors.shadowDark, 8.dp, 2.dp, 4.dp, colors.keyBorder.copy(alpha = 0.45f))
                             })
                                 .clickable { category = cat }
                                 .padding(horizontal = 10.dp, vertical = 6.dp),
@@ -573,7 +574,7 @@ private fun HotkeyEditorDialog(
                                 text = cat.label,
                                 fontSize = 11.sp,
                                 fontWeight = FontWeight.SemiBold,
-                                color = if (active) NeuIndigo else NeuTextSecondary,
+                                color = if (active) colors.indigo else colors.textSecondary,
                             )
                         }
                     }
@@ -599,7 +600,7 @@ private fun HotkeyEditorDialog(
                         ),
                     )
                 },
-                colors = ButtonDefaults.buttonColors(containerColor = NeuIndigo),
+                colors = ButtonDefaults.buttonColors(containerColor = colors.accentFill),
                 modifier = Modifier.testTag("hotkey_save_button"),
             ) {
                 Text("Save Hotkey", color = Color.White)
@@ -607,7 +608,7 @@ private fun HotkeyEditorDialog(
         },
         dismissButton = {
             TextButton(onClick = onDismiss) {
-                Text("Cancel", color = NeuTextSecondary)
+                Text("Cancel", color = colors.textSecondary)
             }
         },
     )
@@ -620,10 +621,11 @@ private fun ModifierTogglePill(
     modifier: Modifier = Modifier,
     onClick: () -> Unit,
 ) {
+    val colors = KeyDeckColors.current
     val mod = if (active) {
-        Modifier.neumorphicInset(NeuActiveFill, NeuShadowLight, NeuShadowDark, 10.dp, 2.dp)
+        Modifier.neumorphicInset(colors.activeFill, colors.shadowLight, colors.shadowDark, 10.dp, 2.dp, colors.keyBorder.copy(alpha = 0.45f))
     } else {
-        Modifier.neumorphicRaised(NeuBg, NeuShadowLight, NeuShadowDark, 10.dp, 3.dp, 5.dp)
+        Modifier.neumorphicRaised(colors.bg, colors.shadowLight, colors.shadowDark, 10.dp, 3.dp, 5.dp, colors.keyBorder.copy(alpha = 0.45f))
     }
     Box(
         modifier = modifier
@@ -637,7 +639,7 @@ private fun ModifierTogglePill(
             fontFamily = BodyFontFamily,
             fontSize = 12.sp,
             fontWeight = FontWeight.Bold,
-            color = if (active) NeuIndigo else NeuTextSecondary,
+            color = if (active) colors.indigo else colors.textSecondary,
         )
     }
 }

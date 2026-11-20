@@ -10,6 +10,7 @@ import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.longPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
+import com.example.keyboard.AppThemeMode
 import com.example.keyboard.CustomHotkey
 import com.example.keyboard.DispatchedKeyRecord
 import com.example.keyboard.HotkeyCategory
@@ -90,7 +91,8 @@ class KeyDeckRepository(private val context: Context) {
         val SETTINGS_SCHEMA_VERSION = intPreferencesKey("settings_schema_version")
         val LAYOUT_MODE = stringPreferencesKey("layout_mode")
         val THEME_ID = stringPreferencesKey("theme_id")
-        val SHOW_HOTKEY_BAR = booleanPreferencesKey("show_hotkey_bar")
+        val APP_THEME_MODE = stringPreferencesKey("app_theme_mode")
+        val SYNC_KEYBOARD_DARK_MODE = booleanPreferencesKey("sync_keyboard_dark_mode")
         val SHOW_MODE_STRIP = booleanPreferencesKey("show_mode_strip")
         val SHOW_FUNCTION_ROW = booleanPreferencesKey("show_function_row")
         val NUM_LOCK_ON = booleanPreferencesKey("num_lock_on")
@@ -154,7 +156,8 @@ class KeyDeckRepository(private val context: Context) {
             prefs[Keys.SETTINGS_SCHEMA_VERSION] = CURRENT_SCHEMA_VERSION
             prefs[Keys.LAYOUT_MODE] = updated.layoutMode.name
             prefs[Keys.THEME_ID] = updated.themeId.name
-            prefs[Keys.SHOW_HOTKEY_BAR] = updated.showHotkeyBar
+            prefs[Keys.APP_THEME_MODE] = updated.appThemeMode.name
+            prefs[Keys.SYNC_KEYBOARD_DARK_MODE] = updated.syncKeyboardWithDarkMode
             prefs[Keys.SHOW_MODE_STRIP] = updated.showModeStrip
             prefs[Keys.SHOW_FUNCTION_ROW] = updated.showFunctionRow
             prefs[Keys.NUM_LOCK_ON] = updated.numLockOn
@@ -194,6 +197,7 @@ class KeyDeckRepository(private val context: Context) {
             prefs[Keys.LAYOUT_MODE] ?: KeyboardLayoutMode.PC_STANDARD.name
         }
         val themeName = prefs[Keys.THEME_ID] ?: KeyboardThemeId.SOFT_NEUMORPH.name
+        val appThemeName = prefs[Keys.APP_THEME_MODE] ?: AppThemeMode.SYSTEM.name
         val dockName = prefs[Keys.DOCK_ALIGNMENT] ?: KeyboardDockAlignment.CENTER.name
         val rgbName = if (isLegacyV1) {
             RgbBorderMode.GAMING_ONLY.name
@@ -205,7 +209,9 @@ class KeyDeckRepository(private val context: Context) {
                 .getOrDefault(KeyboardLayoutMode.PC_STANDARD),
             themeId = runCatching { KeyboardThemeId.valueOf(themeName) }
                 .getOrDefault(KeyboardThemeId.SOFT_NEUMORPH),
-            showHotkeyBar = prefs[Keys.SHOW_HOTKEY_BAR] ?: true,
+            appThemeMode = runCatching { AppThemeMode.valueOf(appThemeName) }
+                .getOrDefault(AppThemeMode.SYSTEM),
+            syncKeyboardWithDarkMode = prefs[Keys.SYNC_KEYBOARD_DARK_MODE] ?: true,
             showModeStrip = prefs[Keys.SHOW_MODE_STRIP] ?: true,
             showFunctionRow = prefs[Keys.SHOW_FUNCTION_ROW] ?: false,
             numLockOn = prefs[Keys.NUM_LOCK_ON] ?: true,

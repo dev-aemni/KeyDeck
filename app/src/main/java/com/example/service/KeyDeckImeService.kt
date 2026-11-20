@@ -22,8 +22,8 @@ import com.example.data.KeyDeckRepository
 import com.example.data.KeyDeckRuntimeState
 import com.example.keyboard.KeyDispatcher
 import com.example.keyboard.PcKeyboardDeck
-import com.example.keyboard.PcKeyboardLayoutData
 import com.example.ui.theme.KeyDeckTheme
+import com.example.ui.theme.resolveIsAppDark
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -96,11 +96,9 @@ class KeyDeckImeService : InputMethodService() {
                 val settings by repository.settingsFlow.collectAsStateWithLifecycle(
                     initialValue = com.example.keyboard.KeyDeckSettings(),
                 )
-                val hotkeys by repository.hotkeysFlow.collectAsStateWithLifecycle(
-                    initialValue = PcKeyboardLayoutData.defaultHotkeys,
-                )
-                KeyDeckTheme {
-                    val palette = settings.resolvePalette()
+                val isDark = resolveIsAppDark(settings.appThemeMode)
+                KeyDeckTheme(darkTheme = isDark) {
+                    val palette = settings.resolvePalette(isDark)
                     val dockAlign = when (settings.dockAlignment) {
                         com.example.keyboard.KeyboardDockAlignment.LEFT -> Alignment.CenterStart
                         com.example.keyboard.KeyboardDockAlignment.CENTER -> Alignment.Center
@@ -115,7 +113,6 @@ class KeyDeckImeService : InputMethodService() {
                     ) {
                         PcKeyboardDeck(
                             settings = settings,
-                            hotkeys = hotkeys,
                             routeLabel = "IME",
                             isOverlay = false,
                             onKeyDispatch = { keyCode, metaState, charToCommit, comboLabel ->
@@ -151,13 +148,6 @@ class KeyDeckImeService : InputMethodService() {
                                     context = this@KeyDeckImeService,
                                     isRightClick = isRight,
                                     mcpeLookMode = settings.gamingMcpeLookMode,
-                                    hapticEnabled = settings.hapticFeedback,
-                                )
-                            },
-                            onHotkeyDispatch = { hotkey ->
-                                KeyDispatcher.dispatchHotkey(
-                                    context = this@KeyDeckImeService,
-                                    hotkey = hotkey,
                                     hapticEnabled = settings.hapticFeedback,
                                 )
                             },

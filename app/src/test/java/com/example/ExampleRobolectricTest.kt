@@ -4,6 +4,7 @@ import android.content.Context
 import android.view.KeyEvent
 import androidx.compose.ui.graphics.Color
 import androidx.test.core.app.ApplicationProvider
+import com.example.keyboard.AppThemeMode
 import com.example.keyboard.CustomHotkey
 import com.example.keyboard.HotkeyCategory
 import com.example.keyboard.KeyDeckSettings
@@ -68,6 +69,8 @@ class ExampleRobolectricTest {
         val defaultSettings = KeyDeckSettings()
         assertTrue(defaultSettings.showKeyBorder)
         assertTrue(defaultSettings.suppressAutoImeOnInput)
+        assertEquals(AppThemeMode.SYSTEM, defaultSettings.appThemeMode)
+        assertTrue(defaultSettings.syncKeyboardWithDarkMode)
         assertEquals(RgbBorderMode.GAMING_ONLY, defaultSettings.rgbBorderMode)
         assertFalse(defaultSettings.isRgbActiveForCurrentMode())
 
@@ -102,6 +105,25 @@ class ExampleRobolectricTest {
         assertEquals(Color(0xFFDCD9ECL), custom.deckBg)
         assertEquals(Color(0xFFE3E0F1L), custom.keyBg)
         assertEquals(Color(0xFF0D9488L), custom.accentBg)
+    }
+
+    @Test
+    fun `dark mode automatically adapts default soft ui keyboard unless disabled or overridden`() {
+        val defaultSettings = KeyDeckSettings()
+        val autoDark = defaultSettings.resolvePalette(isDarkUi = true)
+        assertTrue(autoDark.isDark)
+        assertEquals(KeyboardThemeId.DARK_SLATE_NEU.deckBg, autoDark.deckBg)
+        assertEquals(KeyboardThemeId.DARK_SLATE_NEU.keyBg, autoDark.keyBg)
+
+        val syncDisabled = defaultSettings.copy(syncKeyboardWithDarkMode = false)
+            .resolvePalette(isDarkUi = true)
+        assertFalse(syncDisabled.isDark)
+        assertEquals(KeyboardThemeId.SOFT_NEUMORPH.deckBg, syncDisabled.deckBg)
+
+        val explicitTheme = defaultSettings.copy(themeId = KeyboardThemeId.MINT_MIST_NEU)
+            .resolvePalette(isDarkUi = true)
+        assertFalse(explicitTheme.isDark)
+        assertEquals(KeyboardThemeId.MINT_MIST_NEU.deckBg, explicitTheme.deckBg)
     }
 
     @Test

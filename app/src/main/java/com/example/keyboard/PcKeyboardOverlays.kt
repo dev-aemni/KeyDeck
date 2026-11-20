@@ -670,6 +670,61 @@ fun DeckQuickSettingsPopup(
             )
         }
 
+        // App Dark Mode Selector
+        Text(
+            text = "App Appearance",
+            fontFamily = BodyFontFamily,
+            fontSize = 11.sp,
+            fontWeight = FontWeight.SemiBold,
+            color = palette.secondaryText,
+        )
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(6.dp),
+        ) {
+            AppThemeMode.entries.forEach { mode ->
+                val active = settings.appThemeMode == mode
+                Box(
+                    modifier = Modifier
+                        .weight(1f)
+                        .height(30.dp)
+                        .then(
+                            if (active) {
+                                Modifier.neumorphicInset(
+                                    surfaceColor = palette.activeFill,
+                                    shadowLight = palette.shadowLight,
+                                    shadowDark = palette.shadowDark,
+                                    cornerRadius = 8.dp,
+                                    depth = 2.dp,
+                                    borderColor = borderCol,
+                                )
+                            } else {
+                                Modifier.neumorphicRaised(
+                                    surfaceColor = palette.keyBg,
+                                    shadowLight = palette.shadowLight,
+                                    shadowDark = palette.shadowDark,
+                                    cornerRadius = 8.dp,
+                                    shadowOffset = 2.dp,
+                                    blurRadius = 4.dp,
+                                    borderColor = borderCol,
+                                )
+                            },
+                        )
+                        .clickable { onUpdateSettings { it.copy(appThemeMode = mode) } }
+                        .testTag("quick_app_theme_${mode.name.lowercase()}"),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Text(
+                        text = mode.label,
+                        fontFamily = BodyFontFamily,
+                        fontSize = 10.5.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        color = if (active) palette.accentBg else palette.primaryText,
+                    )
+                }
+            }
+        }
+
         QuickPopupToggle(
             label = "Manual Trigger Only (No Input Auto-Open)",
             checked = settings.suppressAutoImeOnInput,
@@ -681,12 +736,6 @@ fun DeckQuickSettingsPopup(
             checked = settings.showKeyBorder,
             palette = palette,
             onCheckedChange = { c -> onUpdateSettings { it.copy(showKeyBorder = c) } },
-        )
-        QuickPopupToggle(
-            label = "Top Shortcut Strip",
-            checked = settings.showHotkeyBar,
-            palette = palette,
-            onCheckedChange = { c -> onUpdateSettings { it.copy(showHotkeyBar = c) } },
         )
         QuickPopupToggle(
             label = "F1–F12 Row",

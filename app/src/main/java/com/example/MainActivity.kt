@@ -36,6 +36,7 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -57,14 +58,11 @@ import com.example.ui.screens.LayoutPickerSheet
 import com.example.ui.screens.SettingsSheet
 import com.example.ui.screens.ThemePickerSheet
 import com.example.ui.screens.WebSandboxScreen
+import com.example.ui.theme.DarkNeuBg
+import com.example.ui.theme.KeyDeckColors
 import com.example.ui.theme.KeyDeckTheme
-import com.example.ui.theme.NeuActiveFill
 import com.example.ui.theme.NeuBg
-import com.example.ui.theme.NeuIndigo
-import com.example.ui.theme.NeuShadowDark
-import com.example.ui.theme.NeuShadowLight
-import com.example.ui.theme.NeuTextPrimary
-import com.example.ui.theme.NeuTextSecondary
+import com.example.ui.theme.resolveIsAppDark
 
 enum class KeyDeckTab(val label: String) {
     DECK("Deck"),
@@ -83,7 +81,16 @@ class MainActivity : ComponentActivity() {
             navigationBarStyle = SystemBarStyle.light(NeuBg.toArgb(), NeuBg.toArgb()),
         )
         setContent {
-            KeyDeckTheme(darkTheme = false) {
+            val settings by viewModel.settings.collectAsStateWithLifecycle()
+            val isDark = resolveIsAppDark(settings.appThemeMode)
+            LaunchedEffect(isDark) {
+                val barColor = (if (isDark) DarkNeuBg else NeuBg).toArgb()
+                enableEdgeToEdge(
+                    statusBarStyle = if (isDark) SystemBarStyle.dark(barColor) else SystemBarStyle.light(barColor, barColor),
+                    navigationBarStyle = if (isDark) SystemBarStyle.dark(barColor) else SystemBarStyle.light(barColor, barColor),
+                )
+            }
+            KeyDeckTheme(darkTheme = isDark) {
                 KeyDeckApp(viewModel = viewModel)
             }
         }
@@ -94,6 +101,7 @@ class MainActivity : ComponentActivity() {
 private fun KeyDeckApp(viewModel: KeyDeckViewModel) {
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
+    val colors = KeyDeckColors.current
 
     val settings by viewModel.settings.collectAsStateWithLifecycle()
     val hotkeys by viewModel.hotkeys.collectAsStateWithLifecycle()
@@ -160,7 +168,7 @@ private fun KeyDeckApp(viewModel: KeyDeckViewModel) {
 
     Scaffold(
         modifier = Modifier.fillMaxSize(),
-        containerColor = NeuBg,
+        containerColor = colors.bg,
         contentWindowInsets = WindowInsets.safeDrawing,
         bottomBar = {
             Column(modifier = Modifier.fillMaxWidth()) {
@@ -168,17 +176,17 @@ private fun KeyDeckApp(viewModel: KeyDeckViewModel) {
                     modifier = Modifier
                         .fillMaxWidth()
                         .height(1.dp)
-                        .background(NeuShadowDark.copy(alpha = 0.45f)),
+                        .background(colors.shadowDark.copy(alpha = 0.55f)),
                 )
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
                         .height(1.dp)
-                        .background(NeuShadowLight.copy(alpha = 0.75f)),
+                        .background(colors.shadowLight.copy(alpha = 0.70f)),
                 )
                 NavigationBar(
-                    containerColor = NeuBg,
-                    contentColor = NeuTextPrimary,
+                    containerColor = colors.bg,
+                    contentColor = colors.textPrimary,
                     tonalElevation = 0.dp,
                 ) {
                     KeyDeckTab.entries.forEach { tab ->
@@ -194,11 +202,11 @@ private fun KeyDeckApp(viewModel: KeyDeckViewModel) {
                             icon = { Icon(icon, contentDescription = tab.label) },
                             label = { Text(tab.label) },
                             colors = NavigationBarItemDefaults.colors(
-                                selectedIconColor = NeuIndigo,
-                                selectedTextColor = NeuIndigo,
-                                indicatorColor = NeuActiveFill,
-                                unselectedIconColor = NeuTextSecondary,
-                                unselectedTextColor = NeuTextSecondary,
+                                selectedIconColor = colors.indigo,
+                                selectedTextColor = colors.indigo,
+                                indicatorColor = colors.activeFill,
+                                unselectedIconColor = colors.textSecondary,
+                                unselectedTextColor = colors.textSecondary,
                             ),
                             modifier = Modifier.testTag("nav_tab_${tab.name.lowercase()}"),
                         )

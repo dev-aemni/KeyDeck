@@ -21,6 +21,12 @@ enum class RgbBorderMode(val label: String) {
     OFF("Off"),
 }
 
+enum class AppThemeMode(val label: String) {
+    SYSTEM("System"),
+    LIGHT("Light"),
+    DARK("Dark"),
+}
+
 enum class KeyboardSizePreset(
     val label: String,
     val keyHeightDp: Int,
@@ -283,7 +289,8 @@ enum class KeyIconType {
 data class KeyDeckSettings(
     val layoutMode: KeyboardLayoutMode = KeyboardLayoutMode.PC_STANDARD,
     val themeId: KeyboardThemeId = KeyboardThemeId.SOFT_NEUMORPH,
-    val showHotkeyBar: Boolean = true,
+    val appThemeMode: AppThemeMode = AppThemeMode.SYSTEM,
+    val syncKeyboardWithDarkMode: Boolean = true,
     val showModeStrip: Boolean = true,
     val showFunctionRow: Boolean = false,
     val numLockOn: Boolean = true,
@@ -319,8 +326,13 @@ data class KeyDeckSettings(
     fun isRgbActiveForCurrentMode(): Boolean =
         rgbBorderMode == RgbBorderMode.GAMING_ONLY && layoutMode == KeyboardLayoutMode.GAMING
 
-    fun resolvePalette(): ResolvedKeyboardPalette {
-        return if (themeId == KeyboardThemeId.CUSTOM_STUDIO) {
+    fun resolvePalette(isDarkUi: Boolean = false): ResolvedKeyboardPalette {
+        val effectiveTheme = if (isDarkUi && syncKeyboardWithDarkMode && themeId == KeyboardThemeId.SOFT_NEUMORPH) {
+            KeyboardThemeId.DARK_SLATE_NEU
+        } else {
+            themeId
+        }
+        return if (effectiveTheme == KeyboardThemeId.CUSTOM_STUDIO) {
             val deck = Color(customDeckHex)
             val key = Color(customKeyHex)
             val mod = Color(customModifierHex)
@@ -346,21 +358,21 @@ data class KeyDeckSettings(
                 isDark = !isLightDeck,
             )
         } else {
-            val accent = if (overrideAccentHex != 0L) Color(overrideAccentHex) else themeId.accentBg
-            val indicator = if (overrideAccentHex != 0L) Color(overrideAccentHex) else themeId.activeIndicator
+            val accent = if (overrideAccentHex != 0L) Color(overrideAccentHex) else effectiveTheme.accentBg
+            val indicator = if (overrideAccentHex != 0L) Color(overrideAccentHex) else effectiveTheme.activeIndicator
             ResolvedKeyboardPalette(
-                deckBg = themeId.deckBg,
-                keyBg = themeId.keyBg,
-                modifierBg = themeId.modifierBg,
-                activeFill = themeId.activeFill,
+                deckBg = effectiveTheme.deckBg,
+                keyBg = effectiveTheme.keyBg,
+                modifierBg = effectiveTheme.modifierBg,
+                activeFill = effectiveTheme.activeFill,
                 accentBg = accent,
-                shadowLight = themeId.shadowLight,
-                shadowDark = themeId.shadowDark,
-                keyBorder = themeId.keyBorder,
-                primaryText = themeId.primaryText,
-                secondaryText = themeId.secondaryText,
+                shadowLight = effectiveTheme.shadowLight,
+                shadowDark = effectiveTheme.shadowDark,
+                keyBorder = effectiveTheme.keyBorder,
+                primaryText = effectiveTheme.primaryText,
+                secondaryText = effectiveTheme.secondaryText,
                 activeIndicator = indicator,
-                isDark = themeId.isDark,
+                isDark = effectiveTheme.isDark,
             )
         }
     }
