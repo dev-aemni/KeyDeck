@@ -4,20 +4,24 @@ import android.content.Context
 import android.view.KeyEvent
 import androidx.compose.ui.graphics.Color
 import androidx.test.core.app.ApplicationProvider
+import com.example.data.KeyDeckRuntimeState
 import com.example.keyboard.AppThemeMode
 import com.example.keyboard.CustomHotkey
 import com.example.keyboard.HotkeyCategory
 import com.example.keyboard.KeyDeckSettings
+import com.example.keyboard.KeyDispatcher
 import com.example.keyboard.KeyboardLayoutMode
 import com.example.keyboard.KeyboardSizePreset
 import com.example.keyboard.KeyboardThemeId
 import com.example.keyboard.PcKeyboardLayoutData
 import com.example.keyboard.RgbBorderMode
+import com.example.service.KeyDeckImeService
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.junit.runner.RunWith
+import org.robolectric.Robolectric
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
 
@@ -132,5 +136,30 @@ class ExampleRobolectricTest {
         assertTrue(micro.keyHeightDp in 24..34)
         assertTrue(micro.widthFraction < 1.0f)
         assertTrue(micro.bubbleSizeDp in 36..44)
+    }
+
+    @Test
+    fun `ime opens when selected and only suppresses its bottom view while floating overlay is expanded`() {
+        KeyDeckRuntimeState.setOverlayServiceRunning(false)
+        KeyDeckRuntimeState.setKeyboardOverlayExpanded(false)
+        KeyDeckRuntimeState.setAppInForeground(false)
+        assertEquals("Setup", KeyDispatcher.activeRouteLabel())
+
+        val controller = Robolectric.buildService(KeyDeckImeService::class.java).create()
+        val ime = controller.get()
+
+        // Default suppressAutoImeOnInput=true must NOT block IME when floating deck is collapsed
+        assertTrue(ime.onShowInputRequested(0, false))
+
+        // Only when floating overlay is expanded should IME suppress its duplicate bottom view
+        KeyDeckRuntimeState.setOverlayServiceRunning(true)
+        KeyDeckRuntimeState.setKeyboardOverlayExpanded(true)
+        assertFalse(ime.onEvaluateInputViewShown())
+        assertFalse(ime.onShowInputRequested(0, false))
+
+        KeyDeckRuntimeState.setKeyboardOverlayExpanded(false)
+        KeyDeckRuntimeState.setOverlayServiceRunning(false)
+        assertTrue(ime.onShowInputRequested(0, false))
+        controller.destroy()
     }
 }

@@ -281,6 +281,9 @@ class FloatingKeyboardService : Service() {
             setViewTreeViewModelStoreOwner(lifecycleOwner)
             setContent {
                 val settings by repository.settingsFlow.collectAsStateWithLifecycle(initialValue = KeyDeckSettings())
+                val a11yRunning by KeyDeckRuntimeState.isAccessibilityRunning.collectAsStateWithLifecycle()
+                val imeActive by KeyDeckRuntimeState.isImeSessionActive.collectAsStateWithLifecycle()
+                val appForeground by KeyDeckRuntimeState.isAppInForeground.collectAsStateWithLifecycle()
                 val isDark = resolveIsAppDark(settings.appThemeMode)
                 val palette = settings.resolvePalette(isDark)
                 val dockAlign = when (settings.dockAlignment) {
@@ -290,6 +293,17 @@ class FloatingKeyboardService : Service() {
                 }
                 val outerCorner = (settings.keyCornerRadiusDp + 8).coerceIn(12, 24).dp
                 val borderCol = if (settings.showKeyBorder) palette.keyBorder.copy(alpha = 0.65f) else null
+                val activeRoute = if (appForeground) {
+                    "In-App"
+                } else if (imeActive && a11yRunning) {
+                    "IME+A11y"
+                } else if (imeActive) {
+                    "IME"
+                } else if (a11yRunning) {
+                    "A11y"
+                } else {
+                    KeyDispatcher.activeRouteLabel()
+                }
 
                 KeyDeckTheme(darkTheme = isDark) {
                     Box(
@@ -300,7 +314,7 @@ class FloatingKeyboardService : Service() {
                     ) {
                         PcKeyboardDeck(
                             settings = settings,
-                            routeLabel = KeyDispatcher.activeRouteLabel(),
+                            routeLabel = activeRoute,
                             isOverlay = true,
                             onKeyDispatch = { keyCode, metaState, charToCommit, comboLabel ->
                                 KeyDispatcher.dispatchKey(
@@ -387,6 +401,21 @@ class FloatingKeyboardService : Service() {
                             },
                             onCloseOverlay = {
                                 stopAllAndQuit()
+                            },
+                            onSetupAccessibility = {
+                                startActivity(
+                                    Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS).apply {
+                                        addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                                    },
+                                )
+                            },
+                            onSetupIme = {
+                                startActivity(
+                                    Intent(this@FloatingKeyboardService, MainActivity::class.java).apply {
+                                        addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                                        putExtra(MainActivity.EXTRA_OPEN_IME_PICKER, true)
+                                    },
+                                )
                             },
                             modifier = Modifier
                                 .fillMaxWidth(settings.keyboardWidthFraction.coerceIn(0.60f, 1.0f))

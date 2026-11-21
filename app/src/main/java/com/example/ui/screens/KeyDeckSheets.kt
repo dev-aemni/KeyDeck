@@ -760,8 +760,8 @@ fun SettingsSheet(
             )
 
             SettingsSwitchRow(
-                title = "Manual Bubble Only (No Input Auto-Open)",
-                subtitle = "Prevent keyboards from popping open on input taps so two keyboards never stack",
+                title = "Hide Bottom IME While Floating Is Open",
+                subtitle = "Suppress bottom keyboard only when the floating deck is expanded so two keyboards never stack",
                 checked = settings.suppressAutoImeOnInput,
                 testTag = "switch_suppress_auto_ime",
                 onCheckedChange = { checked -> onUpdateSettings { it.copy(suppressAutoImeOnInput = checked) } },

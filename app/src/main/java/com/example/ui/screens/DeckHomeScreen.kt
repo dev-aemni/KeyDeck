@@ -107,8 +107,8 @@ fun DeckHomeScreen(
     var showInlinePreview by remember { mutableStateOf(true) }
     var inlineMouseInfo by remember { mutableStateOf<String?>(null) }
 
-    DisposableEffect(showInlinePreview) {
-        if (showInlinePreview) {
+    DisposableEffect(showInlinePreview, isKeyboardExpanded) {
+        if (showInlinePreview || isKeyboardExpanded) {
             val target = object : KeyDispatcher.DirectKeyTarget {
                 override fun onDirectKeyEvent(keyCode: Int, metaState: Int, charToCommit: Char?): Boolean {
                     val isCtrl = (metaState and KeyEvent.META_CTRL_ON) != 0
@@ -608,9 +608,9 @@ fun DeckHomeScreen(
                 }
             }
 
-            // Concave Inset Text Input Well (suppresses system/IME popup when KeyDeck is active)
+            // Concave Inset Text Input Well (suppresses bottom IME popup only when inline deck or expanded floating deck is visible)
             @OptIn(ExperimentalComposeUiApi::class)
-            val suppressTestWellIme = showInlinePreview || isOverlayRunning || settings.suppressAutoImeOnInput
+            val suppressTestWellIme = showInlinePreview || (isKeyboardExpanded && settings.suppressAutoImeOnInput)
             @OptIn(ExperimentalComposeUiApi::class)
             val noSoftKeyboardInterceptor = remember {
                 PlatformTextInputInterceptor { _, _ ->

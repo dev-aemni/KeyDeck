@@ -37,11 +37,14 @@ object KeyDispatcher {
 
     fun activeRouteLabel(): String {
         val direct = if (KeyDeckRuntimeState.isAppInForeground.value) directTargetRef?.get() else null
+        val hasIme = KeyDeckImeService.hasActiveInputConnection()
+        val hasA11y = KeyDeckAccessibilityService.activeInstance != null
         return when {
             direct != null -> "In-App"
-            KeyDeckImeService.hasActiveInputConnection() -> "IME"
-            KeyDeckAccessibilityService.activeInstance != null -> "A11y"
-            else -> "Preview"
+            hasIme && hasA11y -> "IME+A11y"
+            hasIme -> "IME"
+            hasA11y -> "A11y"
+            else -> "Setup"
         }
     }
 
@@ -73,6 +76,21 @@ object KeyDispatcher {
             return
         }
 
+        val a11y = KeyDeckAccessibilityService.activeInstance
+        if (a11y != null && a11y.isGlobalSystemShortcut(keyCode, metaState)) {
+            val handledDetail = a11y.dispatchPcShortcut(keyCode, metaState, charToCommit)
+            KeyDeckRuntimeState.recordDispatchedKey(
+                DispatchedKeyRecord(
+                    timestampMs = System.currentTimeMillis(),
+                    comboLabel = comboLabel,
+                    keyCode = keyCode,
+                    route = "A11y",
+                    detail = handledDetail,
+                ),
+            )
+            return
+        }
+
         val ime = KeyDeckImeService.activeInstance
         if (ime != null && ime.dispatchPcKey(keyCode, metaState, charToCommit, now)) {
             KeyDeckRuntimeState.recordDispatchedKey(
@@ -87,7 +105,6 @@ object KeyDispatcher {
             return
         }
 
-        val a11y = KeyDeckAccessibilityService.activeInstance
         if (a11y != null) {
             val handledDetail = a11y.dispatchPcShortcut(keyCode, metaState, charToCommit)
             KeyDeckRuntimeState.recordDispatchedKey(
@@ -107,7 +124,7 @@ object KeyDispatcher {
                 timestampMs = System.currentTimeMillis(),
                 comboLabel = comboLabel,
                 keyCode = keyCode,
-                route = "Preview",
+                route = "Setup",
                 detail = "Enable Accessibility or select KeyDeck IME for external apps",
             ),
         )

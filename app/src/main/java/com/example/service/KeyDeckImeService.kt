@@ -1,6 +1,9 @@
 package com.example.service
 
 import android.inputmethodservice.InputMethodService
+import android.text.InputType
+import android.view.InputDevice
+import android.view.KeyCharacterMap
 import android.view.KeyEvent
 import android.view.View
 import android.view.WindowManager
@@ -20,7 +23,9 @@ import androidx.lifecycle.setViewTreeViewModelStoreOwner
 import androidx.savedstate.setViewTreeSavedStateRegistryOwner
 import com.example.data.KeyDeckRepository
 import com.example.data.KeyDeckRuntimeState
+import com.example.keyboard.KeyDeckSettings
 import com.example.keyboard.KeyDispatcher
+import com.example.keyboard.KeyboardDockAlignment
 import com.example.keyboard.PcKeyboardDeck
 import com.example.ui.theme.KeyDeckTheme
 import com.example.ui.theme.resolveIsAppDark
@@ -28,6 +33,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.launch
 
 class KeyDeckImeService : InputMethodService() {
@@ -37,7 +43,7 @@ class KeyDeckImeService : InputMethodService() {
     private val lifecycleOwner = OverlayLifecycleOwner()
 
     @Volatile
-    private var latestSettings = com.example.keyboard.KeyDeckSettings()
+    private var latestSettings = KeyDeckSettings()
 
     companion object {
         @Volatile
@@ -49,6 +55,10 @@ class KeyDeckImeService : InputMethodService() {
         }
     }
 
+    private fun shouldSuppressViewForFloatingDeck(): Boolean {
+        return KeyDeckRuntimeState.isKeyboardOverlayExpanded.value && latestSettings.suppressAutoImeOnInput
+    }
+
     override fun onCreate() {
         super.onCreate()
         activeInstance = this
@@ -56,33 +66,44 @@ class KeyDeckImeService : InputMethodService() {
         lifecycleOwner.onCreate()
         serviceScope.launch {
             repository.migrateSchemaIfNeeded()
-            repository.settingsFlow.collect { s ->
-                latestSettings = s
-                if (s.suppressAutoImeOnInput) {
+            combine(
+                repository.settingsFlow,
+                KeyDeckRuntimeState.isKeyboardOverlayExpanded,
+            ) { settings, overlayExpanded ->
+                settings to overlayExpanded
+            }.collect { (settings, overlayExpanded) ->
+                latestSettings = settings
+                if (overlayExpanded && settings.suppressAutoImeOnInput) {
                     requestHideSelf(0)
                 }
             }
         }
     }
 
+    override fun onEvaluateFullscreenMode(): Boolean = false
+
     override fun onEvaluateInputViewShown(): Boolean {
-        if (latestSettings.suppressAutoImeOnInput ||
-            KeyDeckRuntimeState.isOverlayServiceRunning.value ||
-            KeyDeckRuntimeState.isKeyboardOverlayExpanded.value
-        ) {
+        if (shouldSuppressViewForFloatingDeck()) {
             return false
         }
         return super.onEvaluateInputViewShown()
     }
 
     override fun onShowInputRequested(flags: Int, configChange: Boolean): Boolean {
-        if (latestSettings.suppressAutoImeOnInput ||
-            KeyDeckRuntimeState.isOverlayServiceRunning.value ||
-            KeyDeckRuntimeState.isKeyboardOverlayExpanded.value
-        ) {
+        if (shouldSuppressViewForFloatingDeck()) {
             return false
         }
         return super.onShowInputRequested(flags, configChange)
+    }
+
+    override fun onStartInput(attribute: EditorInfo?, restarting: Boolean) {
+        super.onStartInput(attribute, restarting)
+        KeyDeckRuntimeState.setImeSessionActive(currentInputConnection != null)
+    }
+
+    override fun onFinishInput() {
+        super.onFinishInput()
+        KeyDeckRuntimeState.setImeSessionActive(false)
     }
 
     override fun onCreateInputView(): View {
@@ -94,15 +115,15 @@ class KeyDeckImeService : InputMethodService() {
             setViewTreeViewModelStoreOwner(lifecycleOwner)
             setContent {
                 val settings by repository.settingsFlow.collectAsStateWithLifecycle(
-                    initialValue = com.example.keyboard.KeyDeckSettings(),
+                    initialValue = KeyDeckSettings(),
                 )
                 val isDark = resolveIsAppDark(settings.appThemeMode)
                 KeyDeckTheme(darkTheme = isDark) {
                     val palette = settings.resolvePalette(isDark)
                     val dockAlign = when (settings.dockAlignment) {
-                        com.example.keyboard.KeyboardDockAlignment.LEFT -> Alignment.CenterStart
-                        com.example.keyboard.KeyboardDockAlignment.CENTER -> Alignment.Center
-                        com.example.keyboard.KeyboardDockAlignment.RIGHT -> Alignment.CenterEnd
+                        KeyboardDockAlignment.LEFT -> Alignment.CenterStart
+                        KeyboardDockAlignment.CENTER -> Alignment.Center
+                        KeyboardDockAlignment.RIGHT -> Alignment.CenterEnd
                     }
                     Box(
                         modifier = Modifier
@@ -193,7 +214,7 @@ class KeyDeckImeService : InputMethodService() {
 
     override fun onStartInputView(info: EditorInfo?, restarting: Boolean) {
         super.onStartInputView(info, restarting)
-        if (latestSettings.suppressAutoImeOnInput || KeyDeckRuntimeState.isKeyboardOverlayExpanded.value) {
+        if (shouldSuppressViewForFloatingDeck()) {
             requestHideSelf(0)
             return
         }
@@ -203,7 +224,7 @@ class KeyDeckImeService : InputMethodService() {
 
     override fun onFinishInputView(finishingInput: Boolean) {
         super.onFinishInputView(finishingInput)
-        KeyDeckRuntimeState.setImeSessionActive(false)
+        KeyDeckRuntimeState.setImeSessionActive(currentInputConnection != null)
     }
 
     override fun onDestroy() {
@@ -224,19 +245,50 @@ class KeyDeckImeService : InputMethodService() {
     ): Boolean {
         val ic = currentInputConnection ?: return false
         val editorInfo = currentInputEditorInfo
-        val isRawNullInput = editorInfo == null || editorInfo.inputType == android.text.InputType.TYPE_NULL
+        val isRawNullInput = editorInfo == null || editorInfo.inputType == InputType.TYPE_NULL
         val hasCtrlAltMeta = (metaState and (KeyEvent.META_CTRL_ON or KeyEvent.META_ALT_ON or KeyEvent.META_META_ON)) != 0
 
-        if (!isRawNullInput && !hasCtrlAltMeta && charToCommit != null && keyCode != KeyEvent.KEYCODE_ENTER && keyCode != KeyEvent.KEYCODE_TAB) {
-            ic.commitText(charToCommit.toString(), 1)
-            return true
+        if (!isRawNullInput && !hasCtrlAltMeta && charToCommit != null &&
+            keyCode != KeyEvent.KEYCODE_ENTER &&
+            keyCode != KeyEvent.KEYCODE_NUMPAD_ENTER &&
+            keyCode != KeyEvent.KEYCODE_TAB
+        ) {
+            return ic.commitText(charToCommit.toString(), 1)
         }
 
-        val downEvent = KeyEvent(uptimeMs, uptimeMs, KeyEvent.ACTION_DOWN, keyCode, 0, metaState)
-        val upEvent = KeyEvent(uptimeMs, uptimeMs + 10, KeyEvent.ACTION_UP, keyCode, 0, metaState)
-        ic.sendKeyEvent(downEvent)
-        ic.sendKeyEvent(upEvent)
-        return true
+        val effectiveKeyCode = if (!isRawNullInput && keyCode == KeyEvent.KEYCODE_NUMPAD_ENTER) {
+            KeyEvent.KEYCODE_ENTER
+        } else {
+            keyCode
+        }
+
+        val downEvent = KeyEvent(
+            uptimeMs,
+            uptimeMs,
+            KeyEvent.ACTION_DOWN,
+            effectiveKeyCode,
+            0,
+            metaState,
+            KeyCharacterMap.VIRTUAL_KEYBOARD,
+            0,
+            KeyEvent.FLAG_KEEP_TOUCH_MODE,
+            InputDevice.SOURCE_KEYBOARD,
+        )
+        val upEvent = KeyEvent(
+            uptimeMs,
+            uptimeMs + 10,
+            KeyEvent.ACTION_UP,
+            effectiveKeyCode,
+            0,
+            metaState,
+            KeyCharacterMap.VIRTUAL_KEYBOARD,
+            0,
+            KeyEvent.FLAG_KEEP_TOUCH_MODE,
+            InputDevice.SOURCE_KEYBOARD,
+        )
+        val sentDown = ic.sendKeyEvent(downEvent)
+        val sentUp = ic.sendKeyEvent(upEvent)
+        return sentDown && sentUp
     }
 
     fun dispatchKeyHoldEvent(
@@ -247,7 +299,19 @@ class KeyDeckImeService : InputMethodService() {
     ): Boolean {
         val ic = currentInputConnection ?: return false
         val action = if (isDown) KeyEvent.ACTION_DOWN else KeyEvent.ACTION_UP
-        ic.sendKeyEvent(KeyEvent(uptimeMs, uptimeMs, action, keyCode, 0, metaState))
-        return true
+        return ic.sendKeyEvent(
+            KeyEvent(
+                uptimeMs,
+                uptimeMs,
+                action,
+                keyCode,
+                0,
+                metaState,
+                KeyCharacterMap.VIRTUAL_KEYBOARD,
+                0,
+                KeyEvent.FLAG_KEEP_TOUCH_MODE,
+                InputDevice.SOURCE_KEYBOARD,
+            ),
+        )
     }
 }

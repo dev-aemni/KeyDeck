@@ -88,6 +88,8 @@ fun PcKeyboardDeck(
     onResizeDragDelta: ((dx: Float, dy: Float) -> Unit)? = null,
     onMinimize: (() -> Unit)? = null,
     onCloseOverlay: (() -> Unit)? = null,
+    onSetupAccessibility: (() -> Unit)? = null,
+    onSetupIme: (() -> Unit)? = null,
     modifier: Modifier = Modifier,
 ) {
     val isAppDark = KeyDeckColors.current.isDark
@@ -372,6 +374,61 @@ fun PcKeyboardDeck(
                 onUpdateSettings = onUpdateSettings,
                 onDismiss = { showQuickSettingsPopup = false },
             )
+        }
+
+        // Readiness notice shown ONLY inside the floating overlay when neither Accessibility nor KeyDeck IME is active
+        if (isOverlay && routeLabel == "Setup") {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .neumorphicInset(
+                        surfaceColor = palette.activeFill.copy(alpha = 0.85f),
+                        shadowLight = palette.shadowLight,
+                        shadowDark = palette.shadowDark,
+                        cornerRadius = 8.dp,
+                        depth = 2.dp,
+                        borderColor = borderCol,
+                    )
+                    .padding(horizontal = 8.dp, vertical = 4.dp)
+                    .testTag("overlay_setup_banner"),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween,
+            ) {
+                Text(
+                    text = "Enable A11y or KeyDeck IME to type & run shortcuts",
+                    fontFamily = BodyFontFamily,
+                    fontSize = 10.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    color = palette.primaryText,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f).padding(end = 6.dp),
+                )
+                Row(horizontalArrangement = Arrangement.spacedBy(5.dp)) {
+                    if (onSetupAccessibility != null) {
+                        DeckModeChip(
+                            label = "A11y",
+                            selected = true,
+                            palette = palette,
+                            borderColor = borderCol,
+                            compact = true,
+                            testTag = "overlay_setup_a11y",
+                            onClick = onSetupAccessibility,
+                        )
+                    }
+                    if (onSetupIme != null) {
+                        DeckModeChip(
+                            label = "IME",
+                            selected = true,
+                            palette = palette,
+                            borderColor = borderCol,
+                            compact = true,
+                            testTag = "overlay_setup_ime",
+                            onClick = onSetupIme,
+                        )
+                    }
+                }
+            }
         }
 
         // Optional Top Function Row (Esc, F1..F12) for PC modes

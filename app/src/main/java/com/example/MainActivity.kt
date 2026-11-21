@@ -1,6 +1,7 @@
 package com.example
 
 import android.Manifest
+import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
@@ -72,6 +73,10 @@ enum class KeyDeckTab(val label: String) {
 
 class MainActivity : ComponentActivity() {
 
+    companion object {
+        const val EXTRA_OPEN_IME_PICKER = "extra_open_ime_picker"
+    }
+
     private val viewModel: KeyDeckViewModel by viewModels()
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -80,6 +85,7 @@ class MainActivity : ComponentActivity() {
             statusBarStyle = SystemBarStyle.light(NeuBg.toArgb(), NeuBg.toArgb()),
             navigationBarStyle = SystemBarStyle.light(NeuBg.toArgb(), NeuBg.toArgb()),
         )
+        handleIntentExtras(intent)
         setContent {
             val settings by viewModel.settings.collectAsStateWithLifecycle()
             val isDark = resolveIsAppDark(settings.appThemeMode)
@@ -92,6 +98,27 @@ class MainActivity : ComponentActivity() {
             }
             KeyDeckTheme(darkTheme = isDark) {
                 KeyDeckApp(viewModel = viewModel)
+            }
+        }
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        handleIntentExtras(intent)
+    }
+
+    private fun handleIntentExtras(intent: Intent?) {
+        if (intent?.getBooleanExtra(EXTRA_OPEN_IME_PICKER, false) == true) {
+            intent.removeExtra(EXTRA_OPEN_IME_PICKER)
+            viewModel.refreshSystemReadiness()
+            window?.decorView?.post {
+                viewModel.refreshSystemReadiness()
+                if (viewModel.readiness.value.isImeEnabled) {
+                    viewModel.showInputMethodPicker(this)
+                } else {
+                    viewModel.openImeEnableSettings(this)
+                }
             }
         }
     }
@@ -263,7 +290,7 @@ private fun KeyDeckApp(viewModel: KeyDeckViewModel) {
 
             KeyDeckTab.WEB_LAB -> WebSandboxScreen(
                 isOverlayRunning = isOverlayRunning,
-                suppressSystemKeyboard = isOverlayRunning || settings.suppressAutoImeOnInput,
+                suppressSystemKeyboard = isKeyboardExpanded && settings.suppressAutoImeOnInput,
                 onLaunchFloatingOverWeb = {
                     if (isOverlayRunning) {
                         viewModel.toggleFloatingExpansion()
