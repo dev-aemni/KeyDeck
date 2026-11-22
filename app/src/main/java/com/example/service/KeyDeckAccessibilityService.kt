@@ -2,8 +2,11 @@ package com.example.service
 
 import android.accessibilityservice.AccessibilityButtonController
 import android.accessibilityservice.AccessibilityService
+import android.accessibilityservice.AccessibilityServiceInfo
 import android.accessibilityservice.GestureDescription
+import android.accessibilityservice.InputMethod
 import android.content.ClipData
+import android.content.ClipDescription
 import android.content.ClipboardManager
 import android.content.Context
 import android.content.Intent
@@ -13,13 +16,19 @@ import android.os.Build
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
+import android.os.PersistableBundle
 import android.os.SystemClock
 import android.provider.Settings
+import android.text.InputType
+import android.view.InputDevice
+import android.view.KeyCharacterMap
 import android.view.KeyEvent
 import android.view.View
 import android.view.accessibility.AccessibilityEvent
 import android.view.accessibility.AccessibilityNodeInfo
 import android.view.accessibility.AccessibilityWindowInfo
+import android.view.inputmethod.EditorInfo
+import androidx.annotation.RequiresApi
 import com.example.data.KeyDeckRepository
 import com.example.data.KeyDeckRuntimeState
 import com.example.keyboard.KeyDeckSettings
@@ -45,8 +54,11 @@ class KeyDeckAccessibilityService : AccessibilityService() {
 
     private var lastExternalEditableNode: AccessibilityNodeInfo? = null
     private var lastEditedNodeKey: String = ""
+    private var lastContentRefreshMs: Long = 0L
     private val undoStack = ArrayDeque<String>()
     private val redoStack = ArrayDeque<String>()
+    private var pendingClipRestoreRunnable: Runnable? = null
+    private var savedOriginalClip: ClipData? = null
 
     companion object {
         @Volatile
@@ -62,6 +74,19 @@ class KeyDeckAccessibilityService : AccessibilityService() {
         val dm = resources.displayMetrics
         cursorX = dm.widthPixels * 0.5f
         cursorY = dm.heightPixels * 0.42f
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            runCatching {
+                val info = serviceInfo
+                if (info != null && (info.flags and AccessibilityServiceInfo.FLAG_INPUT_METHOD_EDITOR) == 0) {
+                    info.flags = info.flags or
+                        AccessibilityServiceInfo.FLAG_INPUT_METHOD_EDITOR or
+                        AccessibilityServiceInfo.FLAG_INCLUDE_NOT_IMPORTANT_VIEWS or
+                        AccessibilityServiceInfo.FLAG_REPORT_VIEW_IDS
+                    serviceInfo = info
+                }
+            }
+        }
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             val controller = accessibilityButtonController
@@ -129,22 +154,61 @@ class KeyDeckAccessibilityService : AccessibilityService() {
     override fun onAccessibilityEvent(event: AccessibilityEvent?) {
         if (event == null) return
         val type = event.eventType
-        if (type != AccessibilityEvent.TYPE_VIEW_FOCUSED &&
-            type != AccessibilityEvent.TYPE_VIEW_CLICKED &&
-            type != AccessibilityEvent.TYPE_VIEW_TEXT_SELECTION_CHANGED
-        ) {
+        val isDirectInputEvent = type == AccessibilityEvent.TYPE_VIEW_FOCUSED ||
+            type == AccessibilityEvent.TYPE_VIEW_CLICKED ||
+            type == AccessibilityEvent.TYPE_VIEW_TEXT_SELECTION_CHANGED ||
+            type == AccessibilityEvent.TYPE_VIEW_TEXT_CHANGED
+        val isWindowRefreshEvent = type == AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED ||
+            type == AccessibilityEvent.TYPE_WINDOWS_CHANGED ||
+            type == AccessibilityEvent.TYPE_WINDOW_CONTENT_CHANGED
+        if (!isDirectInputEvent && !isWindowRefreshEvent) {
             return
         }
-        val src = event.source ?: return
-        val srcPkg = src.packageName?.toString()
-        if (srcPkg == packageName && !KeyDeckRuntimeState.isAppInForeground.value) {
-            return
-        }
-        if (src.isEditable) {
-            lastExternalEditableNode = src
-        } else {
-            findFocusedEditableInTree(src, maxDepth = 4)?.let {
-                lastExternalEditableNode = it
+        runCatching {
+            val src = event.source
+            if (src != null) {
+                val srcPkg = src.packageName?.toString()
+                if (srcPkg == packageName && !KeyDeckRuntimeState.isAppInForeground.value) {
+                    return
+                }
+                if (isDirectInputEvent) {
+                    var cur: AccessibilityNodeInfo? = src
+                    var hops = 0
+                    while (cur != null && hops < 4) {
+                        if (isNodeEditableInput(cur) && cur.isVisibleToUser) {
+                            lastExternalEditableNode = cur
+                            return
+                        }
+                        cur = cur.parent
+                        hops++
+                    }
+                    (findFocusedEditableInTree(src, maxNodes = 180, requireFocused = true)
+                        ?: findFocusedEditableInTree(src, maxNodes = 120, requireFocused = false))?.let {
+                        lastExternalEditableNode = it
+                        return
+                    }
+                }
+            }
+            if (isWindowRefreshEvent) {
+                val existingValid = lastExternalEditableNode?.let { cached ->
+                    runCatching { cached.refresh() }.getOrDefault(false) &&
+                        cached.isVisibleToUser &&
+                        cached.isFocused &&
+                        isNodeEditableInput(cached)
+                } == true
+                if (!existingValid) {
+                    val now = SystemClock.uptimeMillis()
+                    if (type == AccessibilityEvent.TYPE_WINDOW_CONTENT_CHANGED && now - lastContentRefreshMs < 220L) {
+                        return
+                    }
+                    lastContentRefreshMs = now
+                    val (root, focused) = findTargetWindowAndFocus()
+                    val resolved = focused?.takeIf { isNodeEditableInput(it) }
+                        ?: findEditableAncestorOrCached(focused, root)
+                    if (resolved != null && isNodeEditableInput(resolved)) {
+                        lastExternalEditableNode = resolved
+                    }
+                }
             }
         }
     }
@@ -274,8 +338,20 @@ class KeyDeckAccessibilityService : AccessibilityService() {
             return if (keyCode == KeyEvent.KEYCODE_ESCAPE) "Esc → Back" else "Alt+Left → Back"
         }
 
+        // Android 13+ (API 33+) AccessibilityInputConnection: works in Chrome, WhatsApp, WebViews, Compose, & rich editors
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            A11yInputBridge.dispatchShortcutOrText(
+                service = this,
+                keyCode = keyCode,
+                metaState = metaState,
+                charToCommit = charToCommit,
+            )?.let { result ->
+                return result
+            }
+        }
+
         val (activeRoot, focusedNode) = findTargetWindowAndFocus()
-        val editableNode = focusedNode?.takeIf { it.isEditable }
+        val editableNode = focusedNode?.takeIf { isNodeEditableInput(it) && it.isVisibleToUser }
             ?: findEditableAncestorOrCached(focusedNode, activeRoot)
 
         // Ctrl editing & clipboard shortcuts
@@ -462,23 +538,34 @@ class KeyDeckAccessibilityService : AccessibilityService() {
         }
     }
 
+    private fun isNodeEditableInput(node: AccessibilityNodeInfo): Boolean {
+        if (!node.isEnabled) return false
+        if (node.isEditable) return true
+        return node.actionList.any {
+            it.id == AccessibilityNodeInfo.ACTION_SET_TEXT ||
+                it.id == AccessibilityNodeInfo.ACTION_PASTE
+        }
+    }
+
     private fun findTargetWindowAndFocus(): Pair<AccessibilityNodeInfo?, AccessibilityNodeInfo?> {
         val candidateRoots = mutableListOf<AccessibilityNodeInfo>()
         val windowList = runCatching { windows }.getOrNull().orEmpty()
         windowList
             .filter { win ->
-                win.type != AccessibilityWindowInfo.TYPE_ACCESSIBILITY_OVERLAY &&
-                    win.type != AccessibilityWindowInfo.TYPE_INPUT_METHOD
+                runCatching {
+                    win.type != AccessibilityWindowInfo.TYPE_ACCESSIBILITY_OVERLAY &&
+                        win.type != AccessibilityWindowInfo.TYPE_INPUT_METHOD
+                }.getOrDefault(false)
             }
             .sortedWith(
-                compareByDescending<AccessibilityWindowInfo> { it.isFocused }
-                    .thenByDescending { it.isActive }
-                    .thenByDescending { it.type == AccessibilityWindowInfo.TYPE_APPLICATION }
-                    .thenByDescending { it.layer },
+                compareByDescending<AccessibilityWindowInfo> { runCatching { it.isFocused }.getOrDefault(false) }
+                    .thenByDescending { runCatching { it.isActive }.getOrDefault(false) }
+                    .thenByDescending { runCatching { it.type == AccessibilityWindowInfo.TYPE_APPLICATION }.getOrDefault(false) }
+                    .thenByDescending { runCatching { it.layer }.getOrDefault(0) },
             )
             .forEach { win ->
-                val root = win.root ?: return@forEach
-                val pkg = root.packageName?.toString()
+                val root = runCatching { win.root }.getOrNull() ?: return@forEach
+                val pkg = runCatching { root.packageName?.toString() }.getOrNull()
                 if (pkg == packageName && !KeyDeckRuntimeState.isAppInForeground.value) {
                     return@forEach
                 }
@@ -486,7 +573,7 @@ class KeyDeckAccessibilityService : AccessibilityService() {
             }
 
         val activeFallback = runCatching { rootInActiveWindow }.getOrNull()?.takeIf { root ->
-            root.packageName?.toString() != packageName || KeyDeckRuntimeState.isAppInForeground.value
+            runCatching { root.packageName?.toString() }.getOrNull() != packageName || KeyDeckRuntimeState.isAppInForeground.value
         }
         if (activeFallback != null && candidateRoots.none { it.windowId == activeFallback.windowId }) {
             candidateRoots += activeFallback
@@ -494,15 +581,26 @@ class KeyDeckAccessibilityService : AccessibilityService() {
 
         val bestRoot = candidateRoots.firstOrNull()
 
+        // Global input focus lookup first (handles split-screen, PiP, WebViews, & Compose focus scopes cleanly)
+        val globalInputFocus = runCatching { findFocus(AccessibilityNodeInfo.FOCUS_INPUT) }.getOrNull()
+        if (globalInputFocus != null) {
+            val focusPkg = runCatching { globalInputFocus.packageName?.toString() }.getOrNull()
+            val allowedPkg = focusPkg != packageName || KeyDeckRuntimeState.isAppInForeground.value
+            if (allowedPkg && runCatching { globalInputFocus.isVisibleToUser }.getOrDefault(false)) {
+                val matchingRoot = candidateRoots.firstOrNull { it.windowId == globalInputFocus.windowId } ?: bestRoot
+                return matchingRoot to globalInputFocus
+            }
+        }
+
         for (root in candidateRoots) {
-            val inputFocus = root.findFocus(AccessibilityNodeInfo.FOCUS_INPUT)
-            if (inputFocus != null && inputFocus.isVisibleToUser) {
+            val inputFocus = runCatching { root.findFocus(AccessibilityNodeInfo.FOCUS_INPUT) }.getOrNull()
+            if (inputFocus != null && runCatching { inputFocus.isVisibleToUser }.getOrDefault(false)) {
                 return root to inputFocus
             }
         }
 
         for (root in candidateRoots) {
-            val focusedEditable = findFocusedEditableInTree(root, maxDepth = 18)
+            val focusedEditable = findFocusedEditableInTree(root, maxNodes = 360, requireFocused = true)
             if (focusedEditable != null) {
                 return root to focusedEditable
             }
@@ -511,16 +609,26 @@ class KeyDeckAccessibilityService : AccessibilityService() {
         lastExternalEditableNode?.let { cached ->
             if (runCatching { cached.refresh() }.getOrDefault(false) &&
                 cached.isVisibleToUser &&
-                cached.isEditable
+                isNodeEditableInput(cached)
             ) {
-                val matchingRoot = candidateRoots.firstOrNull { it.windowId == cached.windowId } ?: bestRoot
-                return matchingRoot to cached
+                val cachedPkg = runCatching { cached.packageName?.toString() }.getOrNull()
+                if (cachedPkg != packageName || KeyDeckRuntimeState.isAppInForeground.value) {
+                    val matchingRoot = candidateRoots.firstOrNull { it.windowId == cached.windowId } ?: bestRoot
+                    return matchingRoot to cached
+                }
             }
         }
 
         for (root in candidateRoots) {
-            val a11yFocus = root.findFocus(AccessibilityNodeInfo.FOCUS_ACCESSIBILITY)
-            if (a11yFocus != null && a11yFocus.isVisibleToUser) {
+            val anyEditable = findFocusedEditableInTree(root, maxNodes = 300, requireFocused = false)
+            if (anyEditable != null) {
+                return root to anyEditable
+            }
+        }
+
+        for (root in candidateRoots) {
+            val a11yFocus = runCatching { root.findFocus(AccessibilityNodeInfo.FOCUS_ACCESSIBILITY) }.getOrNull()
+            if (a11yFocus != null && runCatching { a11yFocus.isVisibleToUser }.getOrDefault(false)) {
                 return root to a11yFocus
             }
         }
@@ -535,35 +643,58 @@ class KeyDeckAccessibilityService : AccessibilityService() {
         var cur = focusedNode
         var hops = 0
         while (cur != null && hops < 6) {
-            if (cur.isEditable && cur.isVisibleToUser) return cur
-            cur = cur.parent
+            if (isNodeEditableInput(cur) && cur.isVisibleToUser) return cur
+            cur = runCatching { cur.parent }.getOrNull()
             hops++
         }
         if (focusedNode != null) {
-            findFocusedEditableInTree(focusedNode, maxDepth = 8)?.let { return it }
+            // Check inside focused WebView/Compose wrapper for a focused editable first,
+            // then any visible enabled editable descendant (WebView/Compose often marks wrapper focused instead).
+            (findFocusedEditableInTree(focusedNode, maxNodes = 260, requireFocused = true)
+                ?: findFocusedEditableInTree(focusedNode, maxNodes = 260, requireFocused = false))?.let {
+                return it
+            }
         }
         lastExternalEditableNode?.let { cached ->
             if (runCatching { cached.refresh() }.getOrDefault(false) &&
                 cached.isVisibleToUser &&
-                cached.isEditable &&
+                isNodeEditableInput(cached) &&
                 (activeRoot == null || cached.windowId == activeRoot.windowId)
             ) {
                 return cached
             }
         }
+        if (activeRoot != null) {
+            (findFocusedEditableInTree(activeRoot, maxNodes = 360, requireFocused = true)
+                ?: findFocusedEditableInTree(activeRoot, maxNodes = 300, requireFocused = false))?.let {
+                return it
+            }
+        }
         return null
     }
 
-    private fun findFocusedEditableInTree(node: AccessibilityNodeInfo, maxDepth: Int): AccessibilityNodeInfo? {
-        if (maxDepth <= 0) return null
-        if (node.isEditable && node.isFocused && node.isVisibleToUser) {
-            return node
-        }
-        val count = node.childCount
-        for (i in 0 until count) {
-            val child = node.getChild(i) ?: continue
-            val match = findFocusedEditableInTree(child, maxDepth - 1)
-            if (match != null) return match
+    private fun findFocusedEditableInTree(
+        rootNode: AccessibilityNodeInfo,
+        maxNodes: Int = 320,
+        requireFocused: Boolean = true,
+    ): AccessibilityNodeInfo? {
+        val queue = ArrayDeque<AccessibilityNodeInfo>()
+        queue.addLast(rootNode)
+        var visited = 0
+        while (queue.isNotEmpty() && visited < maxNodes) {
+            val node = queue.removeFirst()
+            visited++
+            val visible = runCatching { node.isVisibleToUser }.getOrDefault(false)
+            val editable = runCatching { isNodeEditableInput(node) }.getOrDefault(false)
+            val focused = runCatching { node.isFocused }.getOrDefault(false)
+            if (visible && editable && (!requireFocused || focused)) {
+                return node
+            }
+            val count = runCatching { node.childCount }.getOrDefault(0).coerceAtMost(120)
+            for (i in 0 until count) {
+                val child = runCatching { node.getChild(i) }.getOrNull() ?: continue
+                queue.addLast(child)
+            }
         }
         return null
     }
@@ -620,18 +751,31 @@ class KeyDeckAccessibilityService : AccessibilityService() {
     }
 
     private fun insertTextAtCursor(node: AccessibilityNodeInfo, textToInsert: String): Boolean {
+        runCatching { node.refresh() }
+        if (!node.isFocused) {
+            if (!node.performAction(AccessibilityNodeInfo.ACTION_FOCUS) && node.isClickable) {
+                node.performAction(AccessibilityNodeInfo.ACTION_CLICK)
+            }
+            runCatching { node.refresh() }
+        }
+        if (node.isPassword) {
+            return pasteViaClipboard(node, textToInsert)
+        }
+        val supportsSetText = node.actionList.any { it.id == AccessibilityNodeInfo.ACTION_SET_TEXT }
         val existing = realNodeText(node)
         val (start, end) = selectionRange(node, existing.length)
         val newText = existing.substring(0, start) + textToInsert + existing.substring(end)
         val newCursor = start + textToInsert.length
         pushUndoSnapshot(node, existing)
-        if (setNodeTextAndCursor(node, newText, newCursor)) {
+        if (supportsSetText && setNodeTextAndCursor(node, newText, newCursor)) {
+            lastExternalEditableNode = node
             return true
         }
         return pasteViaClipboard(node, textToInsert)
     }
 
     private fun deleteBackwardAtCursor(node: AccessibilityNodeInfo): Boolean {
+        runCatching { node.refresh() }
         val existing = realNodeText(node)
         if (existing.isEmpty()) {
             return pasteViaClipboardBackspaceFallback(node, existing)
@@ -646,12 +790,14 @@ class KeyDeckAccessibilityService : AccessibilityService() {
         }
         pushUndoSnapshot(node, existing)
         if (setNodeTextAndCursor(node, newText, newCursor)) {
+            lastExternalEditableNode = node
             return true
         }
         return pasteViaClipboardBackspaceFallback(node, existing)
     }
 
     private fun deleteForwardAtCursor(node: AccessibilityNodeInfo): Boolean {
+        runCatching { node.refresh() }
         val existing = realNodeText(node)
         if (existing.isEmpty()) return true
         val (start, end) = selectionRange(node, existing.length)
@@ -682,13 +828,34 @@ class KeyDeckAccessibilityService : AccessibilityService() {
 
     private fun pasteViaClipboard(node: AccessibilityNodeInfo, text: String): Boolean {
         val cm = getSystemService(Context.CLIPBOARD_SERVICE) as? ClipboardManager ?: return false
-        val previousClip = runCatching { cm.primaryClip }.getOrNull()
-        cm.setPrimaryClip(ClipData.newPlainText("KeyDeckInput", text))
-        val pasted = node.performAction(AccessibilityNodeInfo.ACTION_PASTE)
-        if (previousClip != null) {
-            mainHandler.postDelayed({
-                runCatching { cm.setPrimaryClip(previousClip) }
-            }, 260L)
+        pendingClipRestoreRunnable?.let { mainHandler.removeCallbacks(it) }
+        val currentClip = runCatching { cm.primaryClip }.getOrNull()
+        val isOwnTempClip = currentClip?.description?.label?.toString() == "KeyDeckInput"
+        if (!isOwnTempClip && currentClip != null) {
+            savedOriginalClip = currentClip
+        }
+        val clip = ClipData.newPlainText("KeyDeckInput", text).apply {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                description.extras = PersistableBundle().apply {
+                    putBoolean(ClipDescription.EXTRA_IS_SENSITIVE, true)
+                }
+            }
+        }
+        val setOk = runCatching { cm.setPrimaryClip(clip) }.isSuccess
+        if (!setOk) return false
+        val pasted = runCatching { node.performAction(AccessibilityNodeInfo.ACTION_PASTE) }.getOrDefault(false)
+        val restoreClip = savedOriginalClip
+        val runnable = Runnable {
+            if (restoreClip != null) {
+                runCatching { cm.setPrimaryClip(restoreClip) }
+            }
+            savedOriginalClip = null
+            pendingClipRestoreRunnable = null
+        }
+        pendingClipRestoreRunnable = runnable
+        mainHandler.postDelayed(runnable, 320L)
+        if (pasted) {
+            lastExternalEditableNode = node
         }
         return pasted
     }
@@ -815,5 +982,206 @@ class KeyDeckAccessibilityService : AccessibilityService() {
         val now = SystemClock.uptimeMillis()
         audioManager.dispatchMediaKeyEvent(KeyEvent(now, now, KeyEvent.ACTION_DOWN, mediaKeyCode, 0))
         audioManager.dispatchMediaKeyEvent(KeyEvent(now, now + 10, KeyEvent.ACTION_UP, mediaKeyCode, 0))
+    }
+
+    fun dispatchKeyHoldViaA11y(keyCode: Int, metaState: Int, isDown: Boolean): Boolean {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            return A11yInputBridge.dispatchHoldKeyEvent(this, keyCode, metaState, isDown)
+        }
+        return false
+    }
+
+    @RequiresApi(Build.VERSION_CODES.TIRAMISU)
+    private object A11yInputBridge {
+        fun dispatchHoldKeyEvent(
+            service: AccessibilityService,
+            keyCode: Int,
+            metaState: Int,
+            isDown: Boolean,
+        ): Boolean {
+            val im: InputMethod = runCatching { service.inputMethod }.getOrNull() ?: return false
+            val ic = im.currentInputConnection ?: return false
+            val now = SystemClock.uptimeMillis()
+            val action = if (isDown) KeyEvent.ACTION_DOWN else KeyEvent.ACTION_UP
+            ic.sendKeyEvent(
+                KeyEvent(
+                    now,
+                    now,
+                    action,
+                    keyCode,
+                    0,
+                    metaState,
+                    KeyCharacterMap.VIRTUAL_KEYBOARD,
+                    0,
+                    KeyEvent.FLAG_KEEP_TOUCH_MODE,
+                    InputDevice.SOURCE_KEYBOARD,
+                ),
+            )
+            return true
+        }
+
+        fun dispatchShortcutOrText(
+            service: AccessibilityService,
+            keyCode: Int,
+            metaState: Int,
+            charToCommit: Char?,
+        ): String? {
+            val im: InputMethod = runCatching { service.inputMethod }.getOrNull() ?: return null
+            if (!im.currentInputStarted) return null
+            val ic = im.currentInputConnection ?: return null
+            val editorInfo = im.currentInputEditorInfo
+            if (!KeyDeckRuntimeState.isAppInForeground.value && editorInfo?.packageName == service.packageName) {
+                return null
+            }
+            val isRawNull = editorInfo == null || editorInfo.inputType == InputType.TYPE_NULL
+
+            val isCtrl = (metaState and KeyEvent.META_CTRL_ON) != 0
+            val isAlt = (metaState and KeyEvent.META_ALT_ON) != 0
+            val isShift = (metaState and KeyEvent.META_SHIFT_ON) != 0
+            val isMeta = (metaState and KeyEvent.META_META_ON) != 0
+
+            if (!isRawNull && isCtrl && !isAlt && !isMeta) {
+                when (keyCode) {
+                    KeyEvent.KEYCODE_C -> {
+                        ic.performContextMenuAction(android.R.id.copy)
+                        return "Ctrl+C → Copy (A11y IME)"
+                    }
+                    KeyEvent.KEYCODE_V -> {
+                        ic.performContextMenuAction(android.R.id.paste)
+                        return "Ctrl+V → Paste (A11y IME)"
+                    }
+                    KeyEvent.KEYCODE_X -> {
+                        ic.performContextMenuAction(android.R.id.cut)
+                        return "Ctrl+X → Cut (A11y IME)"
+                    }
+                    KeyEvent.KEYCODE_A -> {
+                        ic.performContextMenuAction(android.R.id.selectAll)
+                        return "Ctrl+A → Select All (A11y IME)"
+                    }
+                    KeyEvent.KEYCODE_Z -> {
+                        if (isShift) {
+                            ic.performContextMenuAction(android.R.id.redo)
+                            return "Ctrl+Shift+Z → Redo (A11y IME)"
+                        } else {
+                            ic.performContextMenuAction(android.R.id.undo)
+                            return "Ctrl+Z → Undo (A11y IME)"
+                        }
+                    }
+                    KeyEvent.KEYCODE_Y -> {
+                        ic.performContextMenuAction(android.R.id.redo)
+                        return "Ctrl+Y → Redo (A11y IME)"
+                    }
+                    else -> {
+                        sendKeyPair(ic, keyCode, metaState)
+                        return "Shortcut sent (A11y IME)"
+                    }
+                }
+            }
+
+            if (isCtrl || isAlt || isMeta) {
+                sendKeyPair(ic, keyCode, metaState)
+                return "Combo sent (A11y IME)"
+            }
+
+            if (keyCode == KeyEvent.KEYCODE_DEL) {
+                if (!isRawNull) {
+                    val surrounding = runCatching { ic.getSurroundingText(1, 0, 0) }.getOrNull()
+                    if (surrounding != null) {
+                        if (surrounding.selectionStart != surrounding.selectionEnd) {
+                            ic.commitText("", 1, null)
+                        } else {
+                            ic.deleteSurroundingText(1, 0)
+                        }
+                        return "Bksp → Deleted (A11y IME)"
+                    }
+                }
+                sendKeyPair(ic, KeyEvent.KEYCODE_DEL, 0)
+                return "Bksp → KeyEvent (A11y IME)"
+            }
+
+            if (keyCode == KeyEvent.KEYCODE_FORWARD_DEL) {
+                if (!isRawNull) {
+                    ic.deleteSurroundingText(0, 1)
+                } else {
+                    sendKeyPair(ic, KeyEvent.KEYCODE_FORWARD_DEL, 0)
+                }
+                return "Del → Forward delete (A11y IME)"
+            }
+
+            if (keyCode == KeyEvent.KEYCODE_ENTER || keyCode == KeyEvent.KEYCODE_NUMPAD_ENTER) {
+                val inputType = editorInfo?.inputType ?: 0
+                val isMultiLine = (inputType and InputType.TYPE_TEXT_FLAG_MULTI_LINE) != 0 ||
+                    (inputType and InputType.TYPE_TEXT_FLAG_IME_MULTI_LINE) != 0
+                val imeAction = (editorInfo?.imeOptions ?: 0) and EditorInfo.IME_MASK_ACTION
+                val noEnterAction = ((editorInfo?.imeOptions ?: 0) and EditorInfo.IME_FLAG_NO_ENTER_ACTION) != 0
+                if (!isRawNull && isMultiLine) {
+                    ic.commitText("\n", 1, null)
+                    return "Enter → Newline (A11y IME)"
+                } else if (!isRawNull && !noEnterAction &&
+                    imeAction != EditorInfo.IME_ACTION_NONE &&
+                    imeAction != EditorInfo.IME_ACTION_UNSPECIFIED
+                ) {
+                    ic.performEditorAction(imeAction)
+                    return "Enter → Action (A11y IME)"
+                } else {
+                    sendKeyPair(ic, KeyEvent.KEYCODE_ENTER, 0)
+                    return "Enter → Key (A11y IME)"
+                }
+            }
+
+            if (charToCommit != null && keyCode != KeyEvent.KEYCODE_TAB) {
+                if (!isRawNull) {
+                    ic.commitText(charToCommit.toString(), 1, null)
+                    return "Typed '$charToCommit'"
+                }
+                val kcm = runCatching { KeyCharacterMap.load(KeyCharacterMap.VIRTUAL_KEYBOARD) }.getOrNull()
+                val mappedEvents = runCatching { kcm?.getEvents(charArrayOf(charToCommit)) }.getOrNull()
+                if (mappedEvents != null && mappedEvents.isNotEmpty()) {
+                    mappedEvents.forEach { ev -> ic.sendKeyEvent(ev) }
+                } else {
+                    ic.commitText(charToCommit.toString(), 1, null)
+                }
+                return "Typed '$charToCommit'"
+            }
+
+            sendKeyPair(ic, keyCode, metaState)
+            return "Key $keyCode sent (A11y IME)"
+        }
+
+        private fun sendKeyPair(
+            ic: InputMethod.AccessibilityInputConnection,
+            keyCode: Int,
+            metaState: Int,
+        ) {
+            val now = SystemClock.uptimeMillis()
+            ic.sendKeyEvent(
+                KeyEvent(
+                    now,
+                    now,
+                    KeyEvent.ACTION_DOWN,
+                    keyCode,
+                    0,
+                    metaState,
+                    KeyCharacterMap.VIRTUAL_KEYBOARD,
+                    0,
+                    KeyEvent.FLAG_KEEP_TOUCH_MODE,
+                    InputDevice.SOURCE_KEYBOARD,
+                ),
+            )
+            ic.sendKeyEvent(
+                KeyEvent(
+                    now,
+                    now + 10,
+                    KeyEvent.ACTION_UP,
+                    keyCode,
+                    0,
+                    metaState,
+                    KeyCharacterMap.VIRTUAL_KEYBOARD,
+                    0,
+                    KeyEvent.FLAG_KEEP_TOUCH_MODE,
+                    InputDevice.SOURCE_KEYBOARD,
+                ),
+            )
+        }
     }
 }

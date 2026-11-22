@@ -13,6 +13,7 @@ import androidx.datastore.preferences.preferencesDataStore
 import com.example.keyboard.AppThemeMode
 import com.example.keyboard.CustomHotkey
 import com.example.keyboard.DispatchedKeyRecord
+import com.example.keyboard.HotkeyActionType
 import com.example.keyboard.HotkeyCategory
 import com.example.keyboard.KeyDeckSettings
 import com.example.keyboard.KeyboardDockAlignment
@@ -269,6 +270,9 @@ class KeyDeckRepository(private val context: Context) {
                     put("meta", hk.meta)
                     put("category", hk.category.name)
                     put("accentHex", hk.accentHex)
+                    put("actionType", hk.actionType.name)
+                    put("targetPackageName", hk.targetPackageName)
+                    put("targetAppLabel", hk.targetAppLabel)
                 },
             )
         }
@@ -295,6 +299,11 @@ class KeyDeckRepository(private val context: Context) {
                                 HotkeyCategory.valueOf(obj.optString("category", HotkeyCategory.CUSTOM.name))
                             }.getOrDefault(HotkeyCategory.CUSTOM),
                             accentHex = obj.optLong("accentHex", 0xFF4F46E5),
+                            actionType = runCatching {
+                                HotkeyActionType.valueOf(obj.optString("actionType", HotkeyActionType.KEY_COMBO.name))
+                            }.getOrDefault(HotkeyActionType.KEY_COMBO),
+                            targetPackageName = obj.optString("targetPackageName", ""),
+                            targetAppLabel = obj.optString("targetAppLabel", ""),
                         ),
                     )
                 }

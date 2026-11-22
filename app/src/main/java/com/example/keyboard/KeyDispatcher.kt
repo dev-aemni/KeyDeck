@@ -1,6 +1,7 @@
 package com.example.keyboard
 
 import android.content.Context
+import android.content.Intent
 import android.os.Build
 import android.os.SystemClock
 import android.os.VibrationEffect
@@ -55,9 +56,28 @@ object KeyDispatcher {
         charToCommit: Char? = null,
         comboLabel: String,
         hapticEnabled: Boolean = true,
+        hotkeys: List<CustomHotkey> = emptyList(),
     ) {
         if (hapticEnabled) {
             triggerHaptic(context)
+        }
+
+        // Intercept custom App-Launch keyboard shortcuts (e.g. Ctrl+Alt+C -> launch Chrome)
+        if (hotkeys.isNotEmpty() && keyCode != KeyEvent.KEYCODE_UNKNOWN) {
+            val matchedAppShortcut = hotkeys.firstOrNull { hk ->
+                hk.actionType == HotkeyActionType.LAUNCH_APP &&
+                    hk.targetPackageName.isNotBlank() &&
+                    hk.matchesKeyEvent(keyCode, metaState)
+            }
+            if (matchedAppShortcut != null) {
+                launchAppByPackage(
+                    context = context,
+                    packageName = matchedAppShortcut.targetPackageName,
+                    appLabel = matchedAppShortcut.targetAppLabel.ifBlank { matchedAppShortcut.label },
+                    comboLabel = matchedAppShortcut.comboText(),
+                )
+                return
+            }
         }
 
         val now = SystemClock.uptimeMillis()
@@ -175,8 +195,23 @@ object KeyDispatcher {
             return
         }
 
+        val a11y = KeyDeckAccessibilityService.activeInstance
+        if (a11y != null && a11y.dispatchKeyHoldViaA11y(keyCode, metaState, isDown)) {
+            if (isDown) {
+                KeyDeckRuntimeState.recordDispatchedKey(
+                    DispatchedKeyRecord(
+                        timestampMs = System.currentTimeMillis(),
+                        comboLabel = "$comboLabel (Hold)",
+                        keyCode = keyCode,
+                        route = "A11y",
+                        detail = "Hold Active (A11y IME)",
+                    ),
+                )
+            }
+            return
+        }
+
         if (isDown) {
-            val a11y = KeyDeckAccessibilityService.activeInstance
             val detail = a11y?.dispatchPcShortcut(keyCode, metaState, null) ?: "Game key $comboLabel"
             KeyDeckRuntimeState.recordDispatchedKey(
                 DispatchedKeyRecord(
@@ -253,14 +288,61 @@ object KeyDispatcher {
         hotkey: CustomHotkey,
         hapticEnabled: Boolean = true,
     ) {
+        if (hapticEnabled) {
+            triggerHaptic(context)
+        }
+        if (hotkey.actionType == HotkeyActionType.LAUNCH_APP && hotkey.targetPackageName.isNotBlank()) {
+            launchAppByPackage(
+                context = context,
+                packageName = hotkey.targetPackageName,
+                appLabel = hotkey.targetAppLabel.ifBlank { hotkey.label },
+                comboLabel = hotkey.comboText(),
+            )
+            return
+        }
         dispatchKey(
             context = context,
             keyCode = hotkey.keyCode,
             metaState = hotkey.metaState(),
             charToCommit = null,
             comboLabel = hotkey.comboText(),
-            hapticEnabled = hapticEnabled,
+            hapticEnabled = false,
         )
+    }
+
+    fun launchAppByPackage(
+        context: Context,
+        packageName: String,
+        appLabel: String = "",
+        comboLabel: String = "Launch App",
+    ): Boolean {
+        val pkg = packageName.trim()
+        val display = appLabel.ifBlank { pkg }
+        val launchIntent = runCatching {
+            context.packageManager.getLaunchIntentForPackage(pkg)?.apply {
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            }
+        }.getOrNull()
+
+        val launched = if (launchIntent != null) {
+            runCatching {
+                context.startActivity(launchIntent)
+                true
+            }.getOrDefault(false)
+        } else {
+            false
+        }
+
+        KeyDeckRuntimeState.recordDispatchedKey(
+            DispatchedKeyRecord(
+                timestampMs = System.currentTimeMillis(),
+                comboLabel = comboLabel,
+                keyCode = 0,
+                route = "App",
+                detail = if (launched) "Opened $display ($pkg)" else "App not found: $pkg",
+            ),
+        )
+        return launched
     }
 
     private fun formatMetaDetail(keyCode: Int, metaState: Int): String {

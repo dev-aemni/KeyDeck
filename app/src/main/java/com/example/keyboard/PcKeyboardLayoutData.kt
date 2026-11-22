@@ -199,6 +199,205 @@ object PcKeyboardLayoutData {
         ),
     )
 
+    // Gboard-style 5-row Simple Mobile QWERTY with number row, corner symbol hints, and Hold-to-Write alternates
+    val simpleAlphaRows: List<List<KeySpec>> = listOf(
+        listOf(
+            KeySpec("sm_1", "1", keyCode = KeyEvent.KEYCODE_1, charPrimary = '1', longPressChars = listOf("1", "¹", "½", "⅓", "¼", "⅛", "!")),
+            KeySpec("sm_2", "2", keyCode = KeyEvent.KEYCODE_2, charPrimary = '2', longPressChars = listOf("2", "²", "⅔", "@")),
+            KeySpec("sm_3", "3", keyCode = KeyEvent.KEYCODE_3, charPrimary = '3', longPressChars = listOf("3", "³", "⅜", "#")),
+            KeySpec("sm_4", "4", keyCode = KeyEvent.KEYCODE_4, charPrimary = '4', longPressChars = listOf("4", "⁴", "¾", "$")),
+            KeySpec("sm_5", "5", keyCode = KeyEvent.KEYCODE_5, charPrimary = '5', longPressChars = listOf("5", "⅝", "%")),
+            KeySpec("sm_6", "6", keyCode = KeyEvent.KEYCODE_6, charPrimary = '6', longPressChars = listOf("6", "⅞", "^")),
+            KeySpec("sm_7", "7", keyCode = KeyEvent.KEYCODE_7, charPrimary = '7', longPressChars = listOf("7", "&")),
+            KeySpec("sm_8", "8", keyCode = KeyEvent.KEYCODE_8, charPrimary = '8', longPressChars = listOf("8", "*")),
+            KeySpec("sm_9", "9", keyCode = KeyEvent.KEYCODE_9, charPrimary = '9', longPressChars = listOf("9", "(")),
+            KeySpec("sm_0", "0", keyCode = KeyEvent.KEYCODE_0, charPrimary = '0', longPressChars = listOf("0", "ⁿ", "∅", ")")),
+        ),
+        listOf(
+            KeySpec("sm_q", "q", "Q", keyCode = KeyEvent.KEYCODE_Q, charPrimary = 'q', charShift = 'Q', cornerHint = "%", longPressChars = listOf("%")),
+            KeySpec("sm_w", "w", "W", keyCode = KeyEvent.KEYCODE_W, charPrimary = 'w', charShift = 'W', cornerHint = "\\", longPressChars = listOf("\\")),
+            KeySpec(
+                "sm_e", "e", "E", keyCode = KeyEvent.KEYCODE_E, charPrimary = 'e', charShift = 'E',
+                cornerHint = "|",
+                longPressChars = listOf("è", "é", "ê", "ë", "|", "ē", "ė", "ę"),
+                longPressShiftChars = listOf("È", "É", "Ê", "Ë", "|", "Ē", "Ė", "Ę"),
+            ),
+            KeySpec("sm_r", "r", "R", keyCode = KeyEvent.KEYCODE_R, charPrimary = 'r', charShift = 'R', cornerHint = "=", longPressChars = listOf("=")),
+            KeySpec("sm_t", "t", "T", keyCode = KeyEvent.KEYCODE_T, charPrimary = 't', charShift = 'T', cornerHint = "[", longPressChars = listOf("[", "þ")),
+            KeySpec("sm_y", "y", "Y", keyCode = KeyEvent.KEYCODE_Y, charPrimary = 'y', charShift = 'Y', cornerHint = "]", longPressChars = listOf("]", "ÿ"), longPressShiftChars = listOf("]", "Ÿ")),
+            KeySpec(
+                "sm_u", "u", "U", keyCode = KeyEvent.KEYCODE_U, charPrimary = 'u', charShift = 'U',
+                cornerHint = "<",
+                longPressChars = listOf("û", "ü", "ù", "<", "ú", "ū"),
+                longPressShiftChars = listOf("Û", "Ü", "Ù", "<", "Ú", "Ū"),
+            ),
+            KeySpec(
+                "sm_i", "i", "I", keyCode = KeyEvent.KEYCODE_I, charPrimary = 'i', charShift = 'I',
+                cornerHint = ">",
+                longPressChars = listOf("Į", "ī", "ì", "į", "î", ">", "í", "ï"),
+                longPressShiftChars = listOf("Į", "Ī", "Ì", "İ", "Î", ">", "Í", "Ï"),
+            ),
+            KeySpec(
+                "sm_o", "o", "O", keyCode = KeyEvent.KEYCODE_O, charPrimary = 'o', charShift = 'O',
+                cornerHint = "{",
+                longPressChars = listOf("ô", "ö", "ò", "ó", "{", "œ", "ø", "ō"),
+                longPressShiftChars = listOf("Ô", "Ö", "Ò", "Ó", "{", "Œ", "Ø", "Ō"),
+            ),
+            KeySpec("sm_p", "p", "P", keyCode = KeyEvent.KEYCODE_P, charPrimary = 'p', charShift = 'P', cornerHint = "}", longPressChars = listOf("}")),
+        ),
+        listOf(
+            KeySpec(
+                "sm_a", "a", "A", keyCode = KeyEvent.KEYCODE_A, charPrimary = 'a', charShift = 'A',
+                cornerHint = "@",
+                longPressChars = listOf("à", "á", "â", "ä", "@", "æ", "ã", "å"),
+                longPressShiftChars = listOf("À", "Á", "Â", "Ä", "@", "Æ", "Ã", "Å"),
+            ),
+            KeySpec(
+                "sm_s", "s", "S", keyCode = KeyEvent.KEYCODE_S, charPrimary = 's', charShift = 'S',
+                cornerHint = "#",
+                longPressChars = listOf("#", "ß", "ś", "š"),
+                longPressShiftChars = listOf("#", "Ś", "Š"),
+            ),
+            KeySpec("sm_d", "d", "D", keyCode = KeyEvent.KEYCODE_D, charPrimary = 'd', charShift = 'D', cornerHint = "$", longPressChars = listOf("$", "ð")),
+            KeySpec("sm_f", "f", "F", keyCode = KeyEvent.KEYCODE_F, charPrimary = 'f', charShift = 'F', cornerHint = "_", longPressChars = listOf("_")),
+            KeySpec("sm_g", "g", "G", keyCode = KeyEvent.KEYCODE_G, charPrimary = 'g', charShift = 'G', cornerHint = "&", longPressChars = listOf("&")),
+            KeySpec("sm_h", "h", "H", keyCode = KeyEvent.KEYCODE_H, charPrimary = 'h', charShift = 'H', cornerHint = "-", longPressChars = listOf("-")),
+            KeySpec("sm_j", "j", "J", keyCode = KeyEvent.KEYCODE_J, charPrimary = 'j', charShift = 'J', cornerHint = "+", longPressChars = listOf("+")),
+            KeySpec("sm_k", "k", "K", keyCode = KeyEvent.KEYCODE_K, charPrimary = 'k', charShift = 'K', cornerHint = "(", longPressChars = listOf("(")),
+            KeySpec(
+                "sm_l", "l", "L", keyCode = KeyEvent.KEYCODE_L, charPrimary = 'l', charShift = 'L',
+                cornerHint = ")",
+                longPressChars = listOf(")", "ł"),
+                longPressShiftChars = listOf(")", "Ł"),
+            ),
+        ),
+        listOf(
+            KeySpec("sm_shift", "⇧", keyCode = KeyEvent.KEYCODE_SHIFT_LEFT, weight = 1.45f, isModifier = true, modifierType = ModifierKey.SHIFT, iconType = KeyIconType.SHIFT),
+            KeySpec(
+                "sm_z", "z", "Z", keyCode = KeyEvent.KEYCODE_Z, charPrimary = 'z', charShift = 'Z',
+                cornerHint = "*",
+                longPressChars = listOf("*", "ž", "ź", "ż"),
+                longPressShiftChars = listOf("*", "Ž", "Ź", "Ż"),
+            ),
+            KeySpec("sm_x", "x", "X", keyCode = KeyEvent.KEYCODE_X, charPrimary = 'x', charShift = 'X', cornerHint = "\"", longPressChars = listOf("\"")),
+            KeySpec(
+                "sm_c", "c", "C", keyCode = KeyEvent.KEYCODE_C, charPrimary = 'c', charShift = 'C',
+                cornerHint = "'",
+                longPressChars = listOf("'", "ç", "ć", "č"),
+                longPressShiftChars = listOf("'", "Ç", "Ć", "Č"),
+            ),
+            KeySpec("sm_v", "v", "V", keyCode = KeyEvent.KEYCODE_V, charPrimary = 'v', charShift = 'V', cornerHint = ":", longPressChars = listOf(":")),
+            KeySpec("sm_b", "b", "B", keyCode = KeyEvent.KEYCODE_B, charPrimary = 'b', charShift = 'B', cornerHint = ";", longPressChars = listOf(";")),
+            KeySpec(
+                "sm_n", "n", "N", keyCode = KeyEvent.KEYCODE_N, charPrimary = 'n', charShift = 'N',
+                cornerHint = "!",
+                longPressChars = listOf("!", "ñ", "ń"),
+                longPressShiftChars = listOf("!", "Ñ", "Ń"),
+            ),
+            KeySpec("sm_m", "m", "M", keyCode = KeyEvent.KEYCODE_M, charPrimary = 'm', charShift = 'M', cornerHint = "?", longPressChars = listOf("?")),
+            KeySpec("sm_bksp", "⌫", keyCode = KeyEvent.KEYCODE_DEL, weight = 1.45f, isModifier = true, iconType = KeyIconType.BACKSPACE),
+        ),
+        listOf(
+            KeySpec("simple_sym_toggle", "?123", keyCode = KeyEvent.KEYCODE_SYM, weight = 1.45f, isModifier = true),
+            KeySpec("sm_comma", ",", keyCode = KeyEvent.KEYCODE_COMMA, charPrimary = ',', weight = 0.95f, longPressChars = listOf(",", ";", ":", "…")),
+            KeySpec("sm_space", "Space", keyCode = KeyEvent.KEYCODE_SPACE, charPrimary = ' ', charShift = ' ', weight = 4.3f),
+            KeySpec("sm_dot", ".", keyCode = KeyEvent.KEYCODE_PERIOD, charPrimary = '.', weight = 0.95f, longPressChars = listOf(".", "?", "!", ",", "-", ":", "/", "@", "…")),
+            KeySpec("sm_enter", "↵", keyCode = KeyEvent.KEYCODE_ENTER, weight = 1.55f, isAccent = true, iconType = KeyIconType.ENTER),
+        ),
+    )
+
+    // Simple Mobile ?123 Numbers & Symbols Layer (Page 1)
+    val simpleSymbolRows: List<List<KeySpec>> = listOf(
+        listOf(
+            KeySpec("sms_1", "1", keyCode = KeyEvent.KEYCODE_1, charPrimary = '1'),
+            KeySpec("sms_2", "2", keyCode = KeyEvent.KEYCODE_2, charPrimary = '2'),
+            KeySpec("sms_3", "3", keyCode = KeyEvent.KEYCODE_3, charPrimary = '3'),
+            KeySpec("sms_4", "4", keyCode = KeyEvent.KEYCODE_4, charPrimary = '4'),
+            KeySpec("sms_5", "5", keyCode = KeyEvent.KEYCODE_5, charPrimary = '5'),
+            KeySpec("sms_6", "6", keyCode = KeyEvent.KEYCODE_6, charPrimary = '6'),
+            KeySpec("sms_7", "7", keyCode = KeyEvent.KEYCODE_7, charPrimary = '7'),
+            KeySpec("sms_8", "8", keyCode = KeyEvent.KEYCODE_8, charPrimary = '8'),
+            KeySpec("sms_9", "9", keyCode = KeyEvent.KEYCODE_9, charPrimary = '9'),
+            KeySpec("sms_0", "0", keyCode = KeyEvent.KEYCODE_0, charPrimary = '0'),
+        ),
+        listOf(
+            KeySpec("sms_at", "@", keyCode = KeyEvent.KEYCODE_AT, charPrimary = '@'),
+            KeySpec("sms_hash", "#", keyCode = KeyEvent.KEYCODE_POUND, charPrimary = '#'),
+            KeySpec("sms_dollar", "$", keyCode = KeyEvent.KEYCODE_4, charPrimary = '$', longPressChars = listOf("$", "€", "£", "¥", "₹")),
+            KeySpec("sms_under", "_", keyCode = KeyEvent.KEYCODE_MINUS, charPrimary = '_'),
+            KeySpec("sms_amp", "&", keyCode = KeyEvent.KEYCODE_7, charPrimary = '&'),
+            KeySpec("sms_minus", "-", keyCode = KeyEvent.KEYCODE_MINUS, charPrimary = '-', longPressChars = listOf("-", "–", "—", "•")),
+            KeySpec("sms_plus", "+", keyCode = KeyEvent.KEYCODE_PLUS, charPrimary = '+', longPressChars = listOf("+", "±")),
+            KeySpec("sms_lparen", "(", keyCode = KeyEvent.KEYCODE_NUMPAD_LEFT_PAREN, charPrimary = '(', longPressChars = listOf("(", "[", "{", "<")),
+            KeySpec("sms_rparen", ")", keyCode = KeyEvent.KEYCODE_NUMPAD_RIGHT_PAREN, charPrimary = ')', longPressChars = listOf(")", "]", "}", ">")),
+            KeySpec("sms_slash", "/", keyCode = KeyEvent.KEYCODE_SLASH, charPrimary = '/', longPressChars = listOf("/", "\\")),
+        ),
+        listOf(
+            KeySpec("simple_sym_alt_toggle", "=\\<", keyCode = KeyEvent.KEYCODE_SYM, weight = 1.45f, isModifier = true),
+            KeySpec("sms_star", "*", keyCode = KeyEvent.KEYCODE_STAR, charPrimary = '*'),
+            KeySpec("sms_dquote", "\"", keyCode = KeyEvent.KEYCODE_APOSTROPHE, charPrimary = '"'),
+            KeySpec("sms_squote", "'", keyCode = KeyEvent.KEYCODE_APOSTROPHE, charPrimary = '\''),
+            KeySpec("sms_colon", ":", keyCode = KeyEvent.KEYCODE_SEMICOLON, charPrimary = ':'),
+            KeySpec("sms_semi", ";", keyCode = KeyEvent.KEYCODE_SEMICOLON, charPrimary = ';'),
+            KeySpec("sms_excl", "!", keyCode = KeyEvent.KEYCODE_1, charPrimary = '!', longPressChars = listOf("!", "¡")),
+            KeySpec("sms_ques", "?", keyCode = KeyEvent.KEYCODE_SLASH, charPrimary = '?', longPressChars = listOf("?", "¿")),
+            KeySpec("sms_bksp", "⌫", keyCode = KeyEvent.KEYCODE_DEL, weight = 1.45f, isModifier = true, iconType = KeyIconType.BACKSPACE),
+        ),
+        listOf(
+            KeySpec("simple_sym_toggle", "ABC", keyCode = KeyEvent.KEYCODE_SYM, weight = 1.45f, isModifier = true),
+            KeySpec("sms_comma", ",", keyCode = KeyEvent.KEYCODE_COMMA, charPrimary = ',', weight = 0.95f),
+            KeySpec("sms_space", "Space", keyCode = KeyEvent.KEYCODE_SPACE, charPrimary = ' ', charShift = ' ', weight = 4.3f),
+            KeySpec("sms_dot", ".", keyCode = KeyEvent.KEYCODE_PERIOD, charPrimary = '.', weight = 0.95f),
+            KeySpec("sms_enter", "↵", keyCode = KeyEvent.KEYCODE_ENTER, weight = 1.55f, isAccent = true, iconType = KeyIconType.ENTER),
+        ),
+    )
+
+    // Simple Mobile =\< Secondary Symbols Layer (Page 2)
+    val simpleSymbolAltRows: List<List<KeySpec>> = listOf(
+        listOf(
+            KeySpec("sms2_tilde", "~", keyCode = KeyEvent.KEYCODE_GRAVE, charPrimary = '~'),
+            KeySpec("sms2_grave", "`", keyCode = KeyEvent.KEYCODE_GRAVE, charPrimary = '`'),
+            KeySpec("sms2_pipe", "|", keyCode = KeyEvent.KEYCODE_BACKSLASH, charPrimary = '|'),
+            KeySpec("sms2_bullet", "•", keyCode = KeyEvent.KEYCODE_UNKNOWN, charPrimary = '•'),
+            KeySpec("sms2_sqrt", "√", keyCode = KeyEvent.KEYCODE_UNKNOWN, charPrimary = '√'),
+            KeySpec("sms2_pi", "π", keyCode = KeyEvent.KEYCODE_UNKNOWN, charPrimary = 'π'),
+            KeySpec("sms2_div", "÷", keyCode = KeyEvent.KEYCODE_UNKNOWN, charPrimary = '÷'),
+            KeySpec("sms2_mul", "×", keyCode = KeyEvent.KEYCODE_UNKNOWN, charPrimary = '×'),
+            KeySpec("sms2_pct", "%", keyCode = KeyEvent.KEYCODE_5, charPrimary = '%'),
+            KeySpec("sms2_caret", "^", keyCode = KeyEvent.KEYCODE_6, charPrimary = '^'),
+        ),
+        listOf(
+            KeySpec("sms2_pound", "£", keyCode = KeyEvent.KEYCODE_UNKNOWN, charPrimary = '£'),
+            KeySpec("sms2_euro", "€", keyCode = KeyEvent.KEYCODE_UNKNOWN, charPrimary = '€'),
+            KeySpec("sms2_yen", "¥", keyCode = KeyEvent.KEYCODE_UNKNOWN, charPrimary = '¥'),
+            KeySpec("sms2_rupee", "₹", keyCode = KeyEvent.KEYCODE_UNKNOWN, charPrimary = '₹'),
+            KeySpec("sms2_deg", "°", keyCode = KeyEvent.KEYCODE_UNKNOWN, charPrimary = '°'),
+            KeySpec("sms2_eq", "=", keyCode = KeyEvent.KEYCODE_EQUALS, charPrimary = '='),
+            KeySpec("sms2_lcurly", "{", keyCode = KeyEvent.KEYCODE_LEFT_BRACKET, charPrimary = '{'),
+            KeySpec("sms2_rcurly", "}", keyCode = KeyEvent.KEYCODE_RIGHT_BRACKET, charPrimary = '}'),
+            KeySpec("sms2_lbrack", "[", keyCode = KeyEvent.KEYCODE_LEFT_BRACKET, charPrimary = '['),
+            KeySpec("sms2_rbrack", "]", keyCode = KeyEvent.KEYCODE_RIGHT_BRACKET, charPrimary = ']'),
+        ),
+        listOf(
+            KeySpec("simple_sym_alt_toggle", "?123", keyCode = KeyEvent.KEYCODE_SYM, weight = 1.45f, isModifier = true),
+            KeySpec("sms2_copy", "©", keyCode = KeyEvent.KEYCODE_UNKNOWN, charPrimary = '©'),
+            KeySpec("sms2_reg", "®", keyCode = KeyEvent.KEYCODE_UNKNOWN, charPrimary = '®'),
+            KeySpec("sms2_tm", "™", keyCode = KeyEvent.KEYCODE_UNKNOWN, charPrimary = '™'),
+            KeySpec("sms2_check", "✓", keyCode = KeyEvent.KEYCODE_UNKNOWN, charPrimary = '✓'),
+            KeySpec("sms2_lt", "<", keyCode = KeyEvent.KEYCODE_COMMA, charPrimary = '<'),
+            KeySpec("sms2_gt", ">", keyCode = KeyEvent.KEYCODE_PERIOD, charPrimary = '>'),
+            KeySpec("sms2_bslash", "\\", keyCode = KeyEvent.KEYCODE_BACKSLASH, charPrimary = '\\'),
+            KeySpec("sms2_bksp", "⌫", keyCode = KeyEvent.KEYCODE_DEL, weight = 1.45f, isModifier = true, iconType = KeyIconType.BACKSPACE),
+        ),
+        listOf(
+            KeySpec("simple_sym_toggle", "ABC", keyCode = KeyEvent.KEYCODE_SYM, weight = 1.45f, isModifier = true),
+            KeySpec("sms2_comma", ",", keyCode = KeyEvent.KEYCODE_COMMA, charPrimary = ',', weight = 0.95f),
+            KeySpec("sms2_space", "Space", keyCode = KeyEvent.KEYCODE_SPACE, charPrimary = ' ', charShift = ' ', weight = 4.3f),
+            KeySpec("sms2_dot", ".", keyCode = KeyEvent.KEYCODE_PERIOD, charPrimary = '.', weight = 0.95f),
+            KeySpec("sms2_enter", "↵", keyCode = KeyEvent.KEYCODE_ENTER, weight = 1.55f, isAccent = true, iconType = KeyIconType.ENTER),
+        ),
+    )
+
     // Dedicated 4x5 PC Numeric Pad
     val numpadRows: List<List<KeySpec>> = listOf(
         listOf(

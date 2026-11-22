@@ -25,6 +25,7 @@ import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Dialpad
 import androidx.compose.material.icons.filled.Keyboard
 import androidx.compose.material.icons.filled.RestartAlt
+import androidx.compose.material.icons.filled.Smartphone
 import androidx.compose.material.icons.filled.SportsEsports
 import androidx.compose.material.icons.filled.ViewColumn
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -369,7 +370,7 @@ fun ThemePickerSheet(
 
             SettingsSwitchRow(
                 title = "Black Key Borders",
-                subtitle = "Define key edges cleanly with a crisp black border (Gaming uses RGB)",
+                subtitle = "Define key edges cleanly with a crisp black border (unless RGB is active)",
                 checked = settings.showKeyBorder,
                 testTag = "switch_key_border",
                 onCheckedChange = { enabled -> onUpdateSettings { it.copy(showKeyBorder = enabled) } },
@@ -630,6 +631,7 @@ fun LayoutPickerSheet(
                 val icon = when (mode) {
                     KeyboardLayoutMode.PC_STANDARD -> Icons.Default.Keyboard
                     KeyboardLayoutMode.PC_WITH_NUMPAD -> Icons.Default.ViewColumn
+                    KeyboardLayoutMode.SIMPLE -> Icons.Default.Smartphone
                     KeyboardLayoutMode.NUMPAD_ONLY -> Icons.Default.Dialpad
                     KeyboardLayoutMode.GAMING -> Icons.Default.SportsEsports
                 }

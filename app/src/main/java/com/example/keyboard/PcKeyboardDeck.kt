@@ -16,27 +16,32 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.gestures.detectDragGestures
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowLeft
+import androidx.compose.material.icons.automirrored.filled.ArrowRight
 import androidx.compose.material.icons.automirrored.filled.Backspace
 import androidx.compose.material.icons.automirrored.filled.KeyboardReturn
 import androidx.compose.material.icons.automirrored.filled.KeyboardTab
+import androidx.compose.material.icons.filled.Apps
 import androidx.compose.material.icons.filled.ArrowDropDown
 import androidx.compose.material.icons.filled.ArrowDropUp
-import androidx.compose.material.icons.filled.ArrowLeft
-import androidx.compose.material.icons.filled.ArrowRight
+import androidx.compose.material.icons.filled.Bolt
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Dialpad
 import androidx.compose.material.icons.filled.DragHandle
@@ -47,29 +52,51 @@ import androidx.compose.material.icons.filled.Upload
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.LayoutCoordinates
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.zIndex
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.example.data.KeyDeckRuntimeState
 import com.example.ui.theme.BodyFontFamily
 import com.example.ui.theme.KeyDeckColors
 import com.example.ui.theme.neumorphicInset
 import com.example.ui.theme.neumorphicRaised
 import com.example.ui.theme.rgbAnimatedBorder
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.withTimeoutOrNull
+import kotlin.math.ceil
+import kotlin.math.roundToInt
+
+private data class ActiveHoldPopup(
+    val keyRectInRoot: Rect,
+    val options: List<String>,
+    val selectedIndex: Int,
+)
 
 @Composable
 fun PcKeyboardDeck(
@@ -80,6 +107,8 @@ fun PcKeyboardDeck(
     onChangeLayoutMode: (KeyboardLayoutMode) -> Unit,
     onToggleNumLock: () -> Unit,
     onToggleFunctionRow: () -> Unit,
+    hotkeys: List<CustomHotkey> = emptyList(),
+    onHotkeyDispatch: ((CustomHotkey) -> Unit)? = null,
     onUpdateSettings: ((KeyDeckSettings) -> KeyDeckSettings) -> Unit = {},
     onKeyHoldDispatch: ((keyCode: Int, metaState: Int, isDown: Boolean, comboLabel: String) -> Unit)? = null,
     onMouseMove: ((dx: Float, dy: Float) -> Unit)? = null,
@@ -101,8 +130,44 @@ fun PcKeyboardDeck(
     var metaActive by remember { mutableStateOf(false) }
     var fnActive by remember { mutableStateOf(false) }
 
+    var showShortcutsStrip by remember { mutableStateOf(false) }
     var showResizeStrip by remember { mutableStateOf(false) }
     var showQuickSettingsPopup by remember { mutableStateOf(false) }
+    var simpleSymbolLayer by remember { mutableStateOf(false) }
+    var simpleSymbolAltLayer by remember { mutableStateOf(false) }
+
+    var rootCoords by remember { mutableStateOf<LayoutCoordinates?>(null) }
+    var activeHoldPopup by remember { mutableStateOf<ActiveHoldPopup?>(null) }
+    val density = LocalDensity.current
+    val haptic = LocalHapticFeedback.current
+
+    LaunchedEffect(settings.layoutMode) {
+        if (settings.layoutMode != KeyboardLayoutMode.SIMPLE) {
+            simpleSymbolLayer = false
+            simpleSymbolAltLayer = false
+        }
+    }
+
+    val lastDispatched by KeyDeckRuntimeState.lastDispatchedKey.collectAsStateWithLifecycle()
+    var overlayFeedbackText by remember { mutableStateOf<String?>(null) }
+    LaunchedEffect(isOverlay, lastDispatched?.timestampMs) {
+        if (!isOverlay) {
+            overlayFeedbackText = null
+            return@LaunchedEffect
+        }
+        val rec = lastDispatched ?: return@LaunchedEffect
+        val shouldShow = rec.route == "Setup" ||
+            rec.detail.startsWith("Tap an input") ||
+            rec.detail.startsWith("Enable ") ||
+            rec.detail.startsWith("Select KeyDeck")
+        if (shouldShow) {
+            overlayFeedbackText = rec.detail
+            delay(2600L)
+            overlayFeedbackText = null
+        } else if (overlayFeedbackText != null) {
+            overlayFeedbackText = null
+        }
+    }
 
     val rgbActive = settings.isRgbActiveForCurrentMode()
     val rgbPhaseDeg by if (rgbActive) {
@@ -189,6 +254,17 @@ fun PcKeyboardDeck(
             null -> Unit
         }
 
+        if (spec.id == "simple_sym_toggle") {
+            simpleSymbolLayer = !simpleSymbolLayer
+            simpleSymbolAltLayer = false
+            return
+        }
+
+        if (spec.id == "simple_sym_alt_toggle") {
+            simpleSymbolAltLayer = !simpleSymbolAltLayer
+            return
+        }
+
         if (spec.id == "num_toggle_top" || spec.id == "num_toggle") {
             val nextMode = when (settings.layoutMode) {
                 KeyboardLayoutMode.PC_WITH_NUMPAD -> KeyboardLayoutMode.NUMPAD_ONLY
@@ -235,16 +311,32 @@ fun PcKeyboardDeck(
         clearStickyModifiersIfNeeded()
     }
 
+    fun handleHoldCharCommit(chosen: String) {
+        val ch = chosen.firstOrNull()
+        onKeyDispatch(
+            KeyEvent.KEYCODE_UNKNOWN,
+            0,
+            ch,
+            chosen,
+        )
+        clearStickyModifiersIfNeeded()
+    }
+
     val isTightDeck = settings.keyHeightDp <= 32
     val borderCol = if (settings.showKeyBorder) palette.keyBorder.copy(alpha = 0.85f) else null
 
-    Column(
+    Box(
         modifier = modifier
             .fillMaxWidth()
             .background(palette.deckBg.copy(alpha = if (isOverlay) settings.overlayOpacity else 1f))
-            .padding(horizontal = deckPadding, vertical = deckPadding),
-        verticalArrangement = Arrangement.spacedBy(vGap),
+            .onGloballyPositioned { rootCoords = it },
     ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = deckPadding, vertical = deckPadding),
+            verticalArrangement = Arrangement.spacedBy(vGap),
+        ) {
         // Uncluttered Top Bar: Drag Handle + Essential Mode Pills + Resize + Quick Settings Gear (+ Minimize/Close in overlay)
         Row(
             modifier = Modifier
@@ -266,6 +358,9 @@ fun PcKeyboardDeck(
             horizontalArrangement = Arrangement.SpaceBetween,
         ) {
             Row(
+                modifier = Modifier
+                    .weight(1f)
+                    .padding(end = 6.dp),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(5.dp),
             ) {
@@ -278,16 +373,22 @@ fun PcKeyboardDeck(
                     )
                 }
                 if (settings.showModeStrip) {
-                    KeyboardLayoutMode.entries.forEach { mode ->
-                        DeckModeChip(
-                            label = mode.shortLabel,
-                            selected = settings.layoutMode == mode,
-                            palette = palette,
-                            borderColor = borderCol,
-                            compact = isTightDeck,
-                            testTag = "deck_mode_${mode.name.lowercase()}",
-                            onClick = { onChangeLayoutMode(mode) },
-                        )
+                    Row(
+                        modifier = Modifier.horizontalScroll(rememberScrollState()),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(5.dp),
+                    ) {
+                        KeyboardLayoutMode.entries.forEach { mode ->
+                            DeckModeChip(
+                                label = mode.shortLabel,
+                                selected = settings.layoutMode == mode,
+                                palette = palette,
+                                borderColor = borderCol,
+                                compact = isTightDeck,
+                                testTag = "deck_mode_${mode.name.lowercase()}",
+                                onClick = { onChangeLayoutMode(mode) },
+                            )
+                        }
                     }
                 } else {
                     Text(
@@ -304,6 +405,24 @@ fun PcKeyboardDeck(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(5.dp),
             ) {
+                if (hotkeys.isNotEmpty()) {
+                    // Custom App-Launch & Macro Shortcuts Drawer Toggle
+                    TopActionIconChip(
+                        icon = Icons.Default.Bolt,
+                        contentDescription = "Custom shortcuts & app launchers",
+                        active = showShortcutsStrip,
+                        palette = palette,
+                        borderColor = borderCol,
+                        testTag = "deck_top_shortcuts_toggle",
+                        onClick = {
+                            showShortcutsStrip = !showShortcutsStrip
+                            if (showShortcutsStrip) {
+                                showResizeStrip = false
+                                showQuickSettingsPopup = false
+                            }
+                        },
+                    )
+                }
                 // Resize Toggle in Top Area
                 TopActionIconChip(
                     icon = Icons.Default.OpenInFull,
@@ -314,7 +433,10 @@ fun PcKeyboardDeck(
                     testTag = "deck_top_resize_toggle",
                     onClick = {
                         showResizeStrip = !showResizeStrip
-                        if (showResizeStrip) showQuickSettingsPopup = false
+                        if (showResizeStrip) {
+                            showQuickSettingsPopup = false
+                            showShortcutsStrip = false
+                        }
                     },
                 )
                 // Quick Settings Popup Toggle
@@ -327,7 +449,10 @@ fun PcKeyboardDeck(
                     testTag = "deck_top_settings_toggle",
                     onClick = {
                         showQuickSettingsPopup = !showQuickSettingsPopup
-                        if (showQuickSettingsPopup) showResizeStrip = false
+                        if (showQuickSettingsPopup) {
+                            showResizeStrip = false
+                            showShortcutsStrip = false
+                        }
                     },
                 )
                 if (onMinimize != null) {
@@ -351,6 +476,76 @@ fun PcKeyboardDeck(
                         testTag = "overlay_close_button",
                         onClick = onCloseOverlay,
                     )
+                }
+            }
+        }
+
+        // Expandable Custom App & Hotkey Strip
+        AnimatedVisibility(visible = showShortcutsStrip && hotkeys.isNotEmpty()) {
+            val orderedHotkeys = remember(hotkeys) {
+                hotkeys.sortedByDescending { it.actionType == HotkeyActionType.LAUNCH_APP }
+            }
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .horizontalScroll(rememberScrollState())
+                    .padding(vertical = 2.dp)
+                    .testTag("deck_shortcuts_strip"),
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                orderedHotkeys.forEach { hk ->
+                    val isAppLaunch = hk.actionType == HotkeyActionType.LAUNCH_APP && hk.targetPackageName.isNotBlank()
+                    val accent = Color(hk.accentHex)
+                    Row(
+                        modifier = Modifier
+                            .neumorphicRaised(
+                                surfaceColor = if (isAppLaunch) palette.activeFill else palette.keyBg,
+                                shadowLight = palette.shadowLight,
+                                shadowDark = palette.shadowDark,
+                                cornerRadius = 8.dp,
+                                shadowOffset = 2.dp,
+                                blurRadius = 4.dp,
+                                borderColor = borderCol,
+                            )
+                            .clickable {
+                                onHotkeyDispatch?.invoke(hk) ?: onKeyDispatch(
+                                    hk.keyCode,
+                                    hk.metaState(),
+                                    null,
+                                    hk.comboText(),
+                                )
+                            }
+                            .padding(horizontal = 8.dp, vertical = 5.dp)
+                            .testTag("deck_shortcut_chip_${hk.id}"),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(4.dp),
+                    ) {
+                        if (isAppLaunch) {
+                            Icon(
+                                imageVector = Icons.Default.Apps,
+                                contentDescription = null,
+                                tint = accent,
+                                modifier = Modifier.size(12.dp),
+                            )
+                        }
+                        Text(
+                            text = hk.label,
+                            fontFamily = BodyFontFamily,
+                            fontSize = 10.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = if (isAppLaunch) accent else palette.primaryText,
+                            maxLines = 1,
+                        )
+                        Text(
+                            text = hk.comboText(),
+                            fontFamily = BodyFontFamily,
+                            fontSize = 8.5.sp,
+                            fontWeight = FontWeight.Medium,
+                            color = palette.secondaryText,
+                            maxLines = 1,
+                        )
+                    }
                 }
             }
         }
@@ -395,7 +590,7 @@ fun PcKeyboardDeck(
                 horizontalArrangement = Arrangement.SpaceBetween,
             ) {
                 Text(
-                    text = "Enable A11y or KeyDeck IME to type & run shortcuts",
+                    text = "A11y off: Enable Accessibility or IME to type in other apps",
                     fontFamily = BodyFontFamily,
                     fontSize = 10.sp,
                     fontWeight = FontWeight.SemiBold,
@@ -407,7 +602,7 @@ fun PcKeyboardDeck(
                 Row(horizontalArrangement = Arrangement.spacedBy(5.dp)) {
                     if (onSetupAccessibility != null) {
                         DeckModeChip(
-                            label = "A11y",
+                            label = "Enable A11y",
                             selected = true,
                             palette = palette,
                             borderColor = borderCol,
@@ -431,8 +626,31 @@ fun PcKeyboardDeck(
             }
         }
 
+        // Transient focus/setup hint when tapping an uneditable external target or unconfigured route in floating overlay
+        AnimatedVisibility(visible = isOverlay && overlayFeedbackText != null) {
+            overlayFeedbackText?.let { feedback ->
+                Text(
+                    text = feedback,
+                    fontFamily = BodyFontFamily,
+                    fontSize = 10.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    color = palette.accentBg,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 4.dp)
+                        .testTag("overlay_feedback_hint"),
+                )
+            }
+        }
+
         // Optional Top Function Row (Esc, F1..F12) for PC modes
-        if ((settings.showFunctionRow || fnActive) && settings.layoutMode != KeyboardLayoutMode.GAMING && settings.layoutMode != KeyboardLayoutMode.NUMPAD_ONLY) {
+        if ((settings.showFunctionRow || fnActive) &&
+            settings.layoutMode != KeyboardLayoutMode.GAMING &&
+            settings.layoutMode != KeyboardLayoutMode.NUMPAD_ONLY &&
+            settings.layoutMode != KeyboardLayoutMode.SIMPLE
+        ) {
             val fnHeight = (keyHeight * 0.78f).coerceAtLeast(24.dp)
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -451,6 +669,8 @@ fun PcKeyboardDeck(
                         isModifierLit = spec.id == "num_toggle_top" && settings.layoutMode != KeyboardLayoutMode.PC_STANDARD,
                         compact = true,
                         showKeyBorder = settings.showKeyBorder,
+                        rgbActive = rgbActive,
+                        rgbPhaseDeg = rgbPhaseDeg,
                         modifier = Modifier.weight(spec.weight),
                         onClick = { handleKeyTap(spec) },
                     )
@@ -482,6 +702,8 @@ fun PcKeyboardDeck(
                         fnActive = fnActive,
                         compact = true,
                         showKeyBorder = settings.showKeyBorder,
+                        rgbActive = rgbActive,
+                        rgbPhaseDeg = rgbPhaseDeg,
                         modifier = Modifier.weight(0.68f),
                         onKeyTap = { handleKeyTap(it, isFromNumpad = false) },
                     )
@@ -495,6 +717,8 @@ fun PcKeyboardDeck(
                         numLockOn = settings.numLockOn,
                         compact = true,
                         showKeyBorder = settings.showKeyBorder,
+                        rgbActive = rgbActive,
+                        rgbPhaseDeg = rgbPhaseDeg,
                         modifier = Modifier.weight(0.32f),
                         onKeyTap = { handleKeyTap(it, isFromNumpad = true) },
                     )
@@ -519,6 +743,51 @@ fun PcKeyboardDeck(
                     fnActive = fnActive,
                     compact = isTightDeck,
                     showKeyBorder = settings.showKeyBorder,
+                    rgbActive = rgbActive,
+                    rgbPhaseDeg = rgbPhaseDeg,
+                    onKeyTap = { handleKeyTap(it, isFromNumpad = false) },
+                )
+            }
+
+            KeyboardLayoutMode.SIMPLE -> {
+                val simpleKeyHeight = (keyHeight + 4.dp).coerceIn(34.dp, 50.dp)
+                val simpleRows = when {
+                    simpleSymbolLayer && simpleSymbolAltLayer -> PcKeyboardLayoutData.simpleSymbolAltRows
+                    simpleSymbolLayer -> PcKeyboardLayoutData.simpleSymbolRows
+                    else -> PcKeyboardLayoutData.simpleAlphaRows
+                }
+                KeyGridBlock(
+                    rows = simpleRows,
+                    palette = palette,
+                    keyHeight = simpleKeyHeight,
+                    hGap = (hGap + 1.dp).coerceAtMost(7.dp),
+                    vGap = (vGap + 2.dp).coerceAtMost(8.dp),
+                    keyCorner = (keyCorner + 2.dp).coerceAtMost(16.dp),
+                    fontScale = (fontScale * 1.08f).coerceAtMost(1.26f),
+                    upperCaseLetters = effectiveUpperCase,
+                    ctrlActive = ctrlActive,
+                    altActive = altActive,
+                    shiftActive = shiftActive,
+                    capsActive = capsActive,
+                    metaActive = metaActive,
+                    fnActive = fnActive,
+                    compact = false,
+                    centerShortRows = !simpleSymbolLayer,
+                    showKeyBorder = settings.showKeyBorder,
+                    rgbActive = rgbActive,
+                    rgbPhaseDeg = rgbPhaseDeg,
+                    rootCoordsProvider = { rootCoords },
+                    onPopupChanged = { popup ->
+                        if (popup != null && activeHoldPopup == null && settings.hapticFeedback) {
+                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                        }
+                        activeHoldPopup = popup
+                    },
+                    onPopupCommit = { chosen ->
+                        activeHoldPopup = null
+                        handleHoldCharCommit(chosen)
+                    },
+                    modifier = Modifier.testTag("simple_mode_deck"),
                     onKeyTap = { handleKeyTap(it, isFromNumpad = false) },
                 )
             }
@@ -534,6 +803,8 @@ fun PcKeyboardDeck(
                     numLockOn = settings.numLockOn,
                     compact = false,
                     showKeyBorder = settings.showKeyBorder,
+                    rgbActive = rgbActive,
+                    rgbPhaseDeg = rgbPhaseDeg,
                     modifier = Modifier.fillMaxWidth(),
                     onKeyTap = { handleKeyTap(it, isFromNumpad = true) },
                 )
@@ -584,6 +855,75 @@ fun PcKeyboardDeck(
                 }
             }
         }
+        }
+
+        // In-Compose Floating Hold-to-Write Accent & Symbol Picker Overlay
+        val holdPopup = activeHoldPopup
+        if (holdPopup != null) {
+            val cellWidthDp = 38.dp
+            val cellHeightDp = 40.dp
+            val cols = if (holdPopup.options.size <= 5) holdPopup.options.size else 4
+            val rowsCount = ceil(holdPopup.options.size / cols.toFloat()).roundToInt().coerceAtLeast(1)
+            val popupW = cellWidthDp * cols + 10.dp
+            val popupH = cellHeightDp * rowsCount + 10.dp
+
+            val popupWPx = with(density) { popupW.toPx() }
+            val popupHPx = with(density) { popupH.toPx() }
+            val rootWidthPx = (rootCoords?.size?.width ?: 1080).toFloat()
+
+            val targetX = (holdPopup.keyRectInRoot.center.x - popupWPx / 2f)
+                .coerceIn(6f, (rootWidthPx - popupWPx - 6f).coerceAtLeast(6f))
+            val targetY = (holdPopup.keyRectInRoot.top - popupHPx - 10f).coerceAtLeast(4f)
+
+            Box(
+                modifier = Modifier
+                    .zIndex(50f)
+                    .offset { IntOffset(targetX.roundToInt(), targetY.roundToInt()) }
+                    .width(popupW)
+                    .neumorphicRaised(
+                        surfaceColor = palette.deckBg,
+                        shadowLight = palette.shadowLight,
+                        shadowDark = palette.shadowDark,
+                        cornerRadius = 12.dp,
+                        shadowOffset = 5.dp,
+                        blurRadius = 10.dp,
+                        borderColor = borderCol ?: palette.keyBorder.copy(alpha = 0.75f),
+                    )
+                    .padding(5.dp)
+                    .testTag("hold_char_popup"),
+            ) {
+                Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                    for (r in 0 until rowsCount) {
+                        Row(horizontalArrangement = Arrangement.spacedBy(2.dp)) {
+                            for (c in 0 until cols) {
+                                val idx = r * cols + c
+                                if (idx < holdPopup.options.size) {
+                                    val ch = holdPopup.options[idx]
+                                    val isSel = idx == holdPopup.selectedIndex
+                                    Box(
+                                        modifier = Modifier
+                                            .size(width = cellWidthDp - 2.dp, height = cellHeightDp - 2.dp)
+                                            .clip(androidx.compose.foundation.shape.RoundedCornerShape(8.dp))
+                                            .background(if (isSel) palette.accentBg else Color.Transparent),
+                                        contentAlignment = Alignment.Center,
+                                    ) {
+                                        Text(
+                                            text = ch,
+                                            color = if (isSel) Color.White else palette.primaryText,
+                                            fontFamily = BodyFontFamily,
+                                            fontSize = 18.sp,
+                                            fontWeight = FontWeight.SemiBold,
+                                        )
+                                    }
+                                } else {
+                                    Spacer(modifier = Modifier.size(width = cellWidthDp - 2.dp, height = cellHeightDp - 2.dp))
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
     }
 }
 
@@ -604,7 +944,13 @@ private fun KeyGridBlock(
     metaActive: Boolean,
     fnActive: Boolean,
     compact: Boolean,
+    centerShortRows: Boolean = false,
     showKeyBorder: Boolean,
+    rgbActive: Boolean,
+    rgbPhaseDeg: Float,
+    rootCoordsProvider: () -> LayoutCoordinates? = { null },
+    onPopupChanged: ((ActiveHoldPopup?) -> Unit)? = null,
+    onPopupCommit: ((String) -> Unit)? = null,
     modifier: Modifier = Modifier,
     onKeyTap: (KeySpec) -> Unit,
 ) {
@@ -613,10 +959,15 @@ private fun KeyGridBlock(
         verticalArrangement = Arrangement.spacedBy(vGap),
     ) {
         rows.forEach { row ->
+            val totalWeight = row.sumOf { it.weight.toDouble() }.toFloat()
+            val needsSidePad = centerShortRows && totalWeight in 8.5f..9.5f
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(hGap),
             ) {
+                if (needsSidePad) {
+                    Spacer(modifier = Modifier.weight(0.5f))
+                }
                 row.forEach { spec ->
                     val isLit = when (spec.modifierType) {
                         ModifierKey.CTRL -> ctrlActive
@@ -639,9 +990,17 @@ private fun KeyGridBlock(
                         isModifierLit = isLit,
                         compact = compact,
                         showKeyBorder = showKeyBorder,
+                        rgbActive = rgbActive,
+                        rgbPhaseDeg = rgbPhaseDeg,
+                        rootCoordsProvider = rootCoordsProvider,
+                        onPopupChanged = onPopupChanged,
+                        onPopupCommit = onPopupCommit,
                         modifier = Modifier.weight(spec.weight),
                         onClick = { onKeyTap(spec) },
                     )
+                }
+                if (needsSidePad) {
+                    Spacer(modifier = Modifier.weight(0.5f))
                 }
             }
         }
@@ -804,10 +1163,12 @@ private fun NumpadBlock(
     numLockOn: Boolean,
     compact: Boolean,
     showKeyBorder: Boolean,
+    rgbActive: Boolean,
+    rgbPhaseDeg: Float,
     modifier: Modifier = Modifier,
     onKeyTap: (KeySpec) -> Unit,
 ) {
-    val borderCol = if (showKeyBorder) palette.keyBorder.copy(alpha = 0.78f) else null
+    val borderCol = if (showKeyBorder && !rgbActive) palette.keyBorder.copy(alpha = 0.78f) else null
     Column(
         modifier = modifier
             .neumorphicInset(
@@ -830,7 +1191,7 @@ private fun NumpadBlock(
                     val isNumLockKey = spec.id == "num_lock"
                     val showNav = !numLockOn && spec.fnLabel != null
                     val displaySpec = if (showNav) {
-                        spec.copy(label = spec.fnLabel ?: spec.label, shiftLabel = spec.label)
+                        spec.copy(label = spec.fnLabel.orEmpty(), shiftLabel = spec.label)
                     } else {
                         spec
                     }
@@ -846,6 +1207,8 @@ private fun NumpadBlock(
                         isModifierLit = isNumLockKey && numLockOn,
                         compact = compact,
                         showKeyBorder = showKeyBorder,
+                        rgbActive = rgbActive,
+                        rgbPhaseDeg = rgbPhaseDeg,
                         modifier = Modifier.weight(spec.weight),
                         onClick = { onKeyTap(spec) },
                     )
@@ -868,11 +1231,18 @@ private fun PcKeyCap(
     isModifierLit: Boolean,
     compact: Boolean,
     showKeyBorder: Boolean,
+    rgbActive: Boolean,
+    rgbPhaseDeg: Float,
+    rootCoordsProvider: () -> LayoutCoordinates? = { null },
+    onPopupChanged: ((ActiveHoldPopup?) -> Unit)? = null,
+    onPopupCommit: ((String) -> Unit)? = null,
     modifier: Modifier = Modifier,
     onClick: () -> Unit,
 ) {
     val interactionSource = remember { MutableInteractionSource() }
-    val isPressed by interactionSource.collectIsPressedAsState()
+    val interactionPressed by interactionSource.collectIsPressedAsState()
+    var gesturePressed by remember { mutableStateOf(false) }
+    val isPressed = interactionPressed || gesturePressed
     val isEngaged = isPressed || isModifierLit
 
     val pressOffsetY by animateDpAsState(
@@ -892,9 +1262,25 @@ private fun PcKeyCap(
     val cornerText = when {
         keyHeight < 29.dp -> null
         fnActive && spec.fnLabel != null -> spec.label
+        spec.cornerHint != null -> spec.cornerHint
         !shiftActive && spec.shiftLabel != null && !isLetter -> spec.shiftLabel
         else -> null
     }
+
+    val holdOptions = remember(spec, upperCaseLetters, fnActive) {
+        when {
+            fnActive || spec.isModifier -> emptyList()
+            upperCaseLetters && spec.longPressShiftChars.isNotEmpty() -> spec.longPressShiftChars
+            else -> spec.longPressChars
+        }
+    }
+    var keyRectInRoot by remember { mutableStateOf<Rect?>(null) }
+    val latestOnClick by rememberUpdatedState(onClick)
+    val latestHoldOptions by rememberUpdatedState(holdOptions)
+    val latestCornerHint by rememberUpdatedState(spec.cornerHint)
+    val latestOnPopupChanged by rememberUpdatedState(onPopupChanged)
+    val latestOnPopupCommit by rememberUpdatedState(onPopupCommit)
+    val density = LocalDensity.current
 
     val keyBg = when {
         isEngaged -> palette.activeFill
@@ -909,7 +1295,7 @@ private fun PcKeyCap(
         else -> palette.primaryText
     }
 
-    val borderCol = if (showKeyBorder) palette.keyBorder.copy(alpha = 0.90f) else null
+    val borderCol = if (showKeyBorder && !rgbActive) palette.keyBorder.copy(alpha = 0.90f) else null
     val shadowDepth = if (compact) 2.dp else 3.dp
     val blurRadius = if (compact) 4.dp else 6.dp
     val iconSize = (keyHeight * 0.38f).coerceIn(11.dp, 17.dp)
@@ -937,16 +1323,152 @@ private fun PcKeyCap(
         )
     }
 
+    val inputModifier = if (holdOptions.isNotEmpty() && onPopupChanged != null && onPopupCommit != null) {
+        Modifier.pointerInput(spec.id) {
+            awaitEachGesture {
+                val down = awaitFirstDown(requireUnconsumed = false)
+                gesturePressed = true
+                var releasedEarly = false
+                try {
+                    val waitResult = withTimeoutOrNull(250L) {
+                        while (true) {
+                            val ev = awaitPointerEvent()
+                            val ch = ev.changes.firstOrNull { it.id == down.id }
+                            if (ch == null || !ch.pressed) {
+                                releasedEarly = true
+                                break
+                            }
+                        }
+                    }
+                    if (waitResult != null && releasedEarly) {
+                        latestOnClick()
+                    } else {
+                        val opts = latestHoldOptions
+                        val rect = keyRectInRoot
+                        if (opts.isNotEmpty() && rect != null) {
+                            val defaultIdx = opts.indexOfFirst { it == latestCornerHint }.takeIf { it >= 0 } ?: 0
+                            var selIdx = defaultIdx
+                            latestOnPopupChanged?.invoke(ActiveHoldPopup(rect, opts, selIdx))
+
+                            val cols = if (opts.size <= 5) opts.size else 4
+                            val rowsCount = ceil(opts.size / cols.toFloat()).roundToInt().coerceAtLeast(1)
+                            val cellWPx = with(density) { 38.dp.toPx() }
+                            val cellHPx = with(density) { 40.dp.toPx() }
+                            val padPx = with(density) { 5.dp.toPx() }
+                            val popupWPx = cellWPx * cols + padPx * 2
+                            val popupHPx = cellHPx * rowsCount + padPx * 2
+                            val rootW = (rootCoordsProvider()?.size?.width ?: 1080).toFloat()
+                            val popupLeft = (rect.center.x - popupWPx / 2f)
+                                .coerceIn(6f, (rootW - popupWPx - 6f).coerceAtLeast(6f))
+                            val popupTop = (rect.top - popupHPx - 10f).coerceAtLeast(4f)
+
+                            while (true) {
+                                val ev = awaitPointerEvent()
+                                val ch = ev.changes.firstOrNull { it.id == down.id }
+                                if (ch == null || !ch.pressed) {
+                                    break
+                                }
+                                ch.consume()
+                                val ptrX = rect.left + ch.position.x
+                                val ptrY = rect.top + ch.position.y
+                                val relX = ptrX - (popupLeft + padPx)
+                                val relY = ptrY - (popupTop + padPx)
+                                // Only switch hovered slot once finger moves near popup area or sideways
+                                if (ptrY < rect.top + 8f) {
+                                    val c = (relX / cellWPx).toInt().coerceIn(0, cols - 1)
+                                    val r = (relY / cellHPx).toInt().coerceIn(0, rowsCount - 1)
+                                    val candidate = r * cols + c
+                                    if (candidate in opts.indices && candidate != selIdx) {
+                                        selIdx = candidate
+                                        latestOnPopupChanged?.invoke(ActiveHoldPopup(rect, opts, selIdx))
+                                    }
+                                }
+                            }
+                            latestOnPopupCommit?.invoke(opts[selIdx])
+                        } else {
+                            // Released without popup
+                            while (true) {
+                                val ev = awaitPointerEvent()
+                                val ch = ev.changes.firstOrNull { it.id == down.id }
+                                if (ch == null || !ch.pressed) break
+                            }
+                            latestOnClick()
+                        }
+                    }
+                } finally {
+                    gesturePressed = false
+                    latestOnPopupChanged?.invoke(null)
+                }
+            }
+        }
+    } else if (spec.keyCode == KeyEvent.KEYCODE_DEL) {
+        Modifier.pointerInput(spec.id) {
+            awaitEachGesture {
+                val down = awaitFirstDown(requireUnconsumed = false)
+                gesturePressed = true
+                var releasedEarly = false
+                try {
+                    val waitResult = withTimeoutOrNull(320L) {
+                        while (true) {
+                            val ev = awaitPointerEvent()
+                            val ch = ev.changes.firstOrNull { it.id == down.id }
+                            if (ch == null || !ch.pressed) {
+                                releasedEarly = true
+                                break
+                            }
+                        }
+                    }
+                    latestOnClick()
+                    if (waitResult == null && !releasedEarly) {
+                        while (true) {
+                            val nextWait = withTimeoutOrNull(65L) {
+                                while (true) {
+                                    val ev = awaitPointerEvent()
+                                    val ch = ev.changes.firstOrNull { it.id == down.id }
+                                    if (ch == null || !ch.pressed) break
+                                }
+                            }
+                            if (nextWait != null) break
+                            latestOnClick()
+                        }
+                    }
+                } finally {
+                    gesturePressed = false
+                }
+            }
+        }
+    } else {
+        Modifier.clickable(
+            interactionSource = interactionSource,
+            indication = null,
+            onClick = onClick,
+        )
+    }
+
     Box(
         modifier = modifier
             .height(keyHeight)
             .offset(y = pressOffsetY)
+            .onGloballyPositioned { coords ->
+                val rc = rootCoordsProvider()
+                if (rc != null && rc.isAttached && coords.isAttached) {
+                    keyRectInRoot = rc.localBoundingBoxOf(coords, clipBounds = false)
+                }
+            }
             .then(neumorphicModifier)
-            .clickable(
-                interactionSource = interactionSource,
-                indication = null,
-                onClick = onClick,
+            .then(
+                if (rgbActive) {
+                    Modifier.rgbAnimatedBorder(
+                        phaseDegrees = rgbPhaseDeg,
+                        cornerRadius = keyCorner,
+                        strokeWidth = if (isEngaged || spec.isAccent) 1.7.dp else 1.25.dp,
+                        alpha = if (isEngaged) 0.96f else 0.78f,
+                    )
+                } else {
+                    Modifier
+                },
             )
+            .then(inputModifier)
             .padding(horizontal = if (compact) 1.dp else 2.dp, vertical = 1.dp)
             .testTag("key_${spec.id}"),
     ) {
@@ -1017,13 +1539,13 @@ private fun PcKeyCap(
                     modifier = Modifier.size((iconSize + 3.dp).coerceAtMost(20.dp)),
                 )
                 KeyIconType.ARROW_LEFT -> Icon(
-                    imageVector = Icons.Default.ArrowLeft,
+                    imageVector = Icons.AutoMirrored.Filled.ArrowLeft,
                     contentDescription = "Arrow Left",
                     tint = textColor,
                     modifier = Modifier.size((iconSize + 3.dp).coerceAtMost(20.dp)),
                 )
                 KeyIconType.ARROW_RIGHT -> Icon(
-                    imageVector = Icons.Default.ArrowRight,
+                    imageVector = Icons.AutoMirrored.Filled.ArrowRight,
                     contentDescription = "Arrow Right",
                     tint = textColor,
                     modifier = Modifier.size((iconSize + 3.dp).coerceAtMost(20.dp)),

@@ -83,10 +83,12 @@ class FloatingKeyboardService : Service() {
     private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
     private lateinit var windowManager: WindowManager
     private lateinit var repository: KeyDeckRepository
-    private val lifecycleOwner = OverlayLifecycleOwner()
 
+    private var bubbleLifecycleOwner: OverlayLifecycleOwner? = null
     private var bubbleView: View? = null
     private var bubbleParams: WindowManager.LayoutParams? = null
+
+    private var keyboardLifecycleOwner: OverlayLifecycleOwner? = null
     private var keyboardView: View? = null
     private var keyboardParams: WindowManager.LayoutParams? = null
     private var dragResizeAccumX = 0f
@@ -98,8 +100,6 @@ class FloatingKeyboardService : Service() {
         super.onCreate()
         windowManager = getSystemService(Context.WINDOW_SERVICE) as WindowManager
         repository = KeyDeckRepository(applicationContext)
-        lifecycleOwner.onCreate()
-        lifecycleOwner.onResume()
 
         createNotificationChannel()
         val startedFg = runCatching {
@@ -152,8 +152,6 @@ class FloatingKeyboardService : Service() {
         removeBubbleOverlay()
         KeyDeckRuntimeState.setOverlayServiceRunning(false)
         KeyDeckAccessibilityService.activeInstance?.syncSoftKeyboardPolicy(false)
-        lifecycleOwner.onPause()
-        lifecycleOwner.onDestroy()
         serviceScope.cancel()
         super.onDestroy()
     }
@@ -190,7 +188,7 @@ class FloatingKeyboardService : Service() {
     }
 
     private fun attachBubbleOverlay() {
-        if (bubbleView != null) return
+        if (bubbleView != null || !Settings.canDrawOverlays(this)) return
 
         val metrics = resources.displayMetrics
         val maxW = metrics.widthPixels
@@ -211,11 +209,16 @@ class FloatingKeyboardService : Service() {
         }
         bubbleParams = params
 
+        val owner = OverlayLifecycleOwner().apply {
+            onCreate()
+            onResume()
+        }
+
         val view = ComposeView(this).apply {
             setViewCompositionStrategy(ViewCompositionStrategy.DisposeOnViewTreeLifecycleDestroyed)
-            setViewTreeLifecycleOwner(lifecycleOwner)
-            setViewTreeSavedStateRegistryOwner(lifecycleOwner)
-            setViewTreeViewModelStoreOwner(lifecycleOwner)
+            setViewTreeLifecycleOwner(owner)
+            setViewTreeSavedStateRegistryOwner(owner)
+            setViewTreeViewModelStoreOwner(owner)
             setContent {
                 val settings by repository.settingsFlow.collectAsStateWithLifecycle(initialValue = KeyDeckSettings())
                 val expanded by KeyDeckRuntimeState.isKeyboardOverlayExpanded.collectAsStateWithLifecycle()
@@ -240,15 +243,27 @@ class FloatingKeyboardService : Service() {
                 }
             }
         }
-        bubbleView = view
-        runCatching { windowManager.addView(view, params) }
+        val added = runCatching { windowManager.addView(view, params) }.isSuccess
+        if (added) {
+            bubbleLifecycleOwner = owner
+            bubbleView = view
+        } else {
+            runCatching { view.disposeComposition() }
+            owner.onDestroy()
+        }
     }
 
     private fun removeBubbleOverlay() {
-        bubbleView?.let { v ->
-            runCatching { windowManager.removeView(v) }
-        }
+        val owner = bubbleLifecycleOwner
+        bubbleLifecycleOwner = null
+        val view = bubbleView
         bubbleView = null
+        owner?.onPause()
+        owner?.onDestroy()
+        view?.let { v ->
+            runCatching { (v as? ComposeView)?.disposeComposition() }
+            runCatching { windowManager.removeViewImmediate(v) }
+        }
     }
 
     private fun attachKeyboardOverlay() {
@@ -274,13 +289,19 @@ class FloatingKeyboardService : Service() {
         }
         keyboardParams = params
 
+        val owner = OverlayLifecycleOwner().apply {
+            onCreate()
+            onResume()
+        }
+
         val view = ComposeView(this).apply {
             setViewCompositionStrategy(ViewCompositionStrategy.DisposeOnViewTreeLifecycleDestroyed)
-            setViewTreeLifecycleOwner(lifecycleOwner)
-            setViewTreeSavedStateRegistryOwner(lifecycleOwner)
-            setViewTreeViewModelStoreOwner(lifecycleOwner)
+            setViewTreeLifecycleOwner(owner)
+            setViewTreeSavedStateRegistryOwner(owner)
+            setViewTreeViewModelStoreOwner(owner)
             setContent {
                 val settings by repository.settingsFlow.collectAsStateWithLifecycle(initialValue = KeyDeckSettings())
+                val hotkeys by repository.hotkeysFlow.collectAsStateWithLifecycle(initialValue = com.example.keyboard.PcKeyboardLayoutData.defaultHotkeys)
                 val a11yRunning by KeyDeckRuntimeState.isAccessibilityRunning.collectAsStateWithLifecycle()
                 val imeActive by KeyDeckRuntimeState.isImeSessionActive.collectAsStateWithLifecycle()
                 val appForeground by KeyDeckRuntimeState.isAppInForeground.collectAsStateWithLifecycle()
@@ -316,6 +337,14 @@ class FloatingKeyboardService : Service() {
                             settings = settings,
                             routeLabel = activeRoute,
                             isOverlay = true,
+                            hotkeys = hotkeys,
+                            onHotkeyDispatch = { hk ->
+                                KeyDispatcher.dispatchHotkey(
+                                    context = this@FloatingKeyboardService,
+                                    hotkey = hk,
+                                    hapticEnabled = settings.hapticFeedback,
+                                )
+                            },
                             onKeyDispatch = { keyCode, metaState, charToCommit, comboLabel ->
                                 KeyDispatcher.dispatchKey(
                                     context = this@FloatingKeyboardService,
@@ -324,6 +353,7 @@ class FloatingKeyboardService : Service() {
                                     charToCommit = charToCommit,
                                     comboLabel = comboLabel,
                                     hapticEnabled = settings.hapticFeedback,
+                                    hotkeys = hotkeys,
                                 )
                             },
                             onKeyHoldDispatch = { keyCode, metaState, isDown, comboLabel ->
@@ -403,19 +433,23 @@ class FloatingKeyboardService : Service() {
                                 stopAllAndQuit()
                             },
                             onSetupAccessibility = {
-                                startActivity(
-                                    Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS).apply {
-                                        addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                                    },
-                                )
+                                runCatching {
+                                    startActivity(
+                                        Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS).apply {
+                                            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                                        },
+                                    )
+                                }
                             },
                             onSetupIme = {
-                                startActivity(
-                                    Intent(this@FloatingKeyboardService, MainActivity::class.java).apply {
-                                        addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                                        putExtra(MainActivity.EXTRA_OPEN_IME_PICKER, true)
-                                    },
-                                )
+                                runCatching {
+                                    startActivity(
+                                        Intent(this@FloatingKeyboardService, MainActivity::class.java).apply {
+                                            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                                            putExtra(MainActivity.EXTRA_OPEN_IME_PICKER, true)
+                                        },
+                                    )
+                                }
                             },
                             modifier = Modifier
                                 .fillMaxWidth(settings.keyboardWidthFraction.coerceIn(0.60f, 1.0f))
@@ -433,15 +467,27 @@ class FloatingKeyboardService : Service() {
                 }
             }
         }
-        keyboardView = view
-        runCatching { windowManager.addView(view, params) }
+        val added = runCatching { windowManager.addView(view, params) }.isSuccess
+        if (added) {
+            keyboardLifecycleOwner = owner
+            keyboardView = view
+        } else {
+            runCatching { view.disposeComposition() }
+            owner.onDestroy()
+        }
     }
 
     private fun removeKeyboardOverlay() {
-        keyboardView?.let { v ->
-            runCatching { windowManager.removeView(v) }
-        }
+        val owner = keyboardLifecycleOwner
+        keyboardLifecycleOwner = null
+        val view = keyboardView
         keyboardView = null
+        owner?.onPause()
+        owner?.onDestroy()
+        view?.let { v ->
+            runCatching { (v as? ComposeView)?.disposeComposition() }
+            runCatching { windowManager.removeViewImmediate(v) }
+        }
     }
 
     private fun createNotificationChannel() {
@@ -473,7 +519,7 @@ class FloatingKeyboardService : Service() {
             PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
         )
         return NotificationCompat.Builder(this, CHANNEL_ID)
-            .setSmallIcon(R.mipmap.ic_launcher)
+            .setSmallIcon(R.drawable.ic_stat_keyboard)
             .setContentTitle(getString(R.string.fgs_notification_title))
             .setContentText(getString(R.string.fgs_notification_text))
             .setContentIntent(openAppIntent)

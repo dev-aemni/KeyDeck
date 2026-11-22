@@ -91,7 +91,15 @@ class ExampleRobolectricTest {
         assertTrue(gamingActive.isRgbActiveForCurrentMode())
         assertFalse(defaultSettings.copy(layoutMode = KeyboardLayoutMode.PC_WITH_NUMPAD).isRgbActiveForCurrentMode())
         assertFalse(defaultSettings.copy(layoutMode = KeyboardLayoutMode.NUMPAD_ONLY).isRgbActiveForCurrentMode())
+        assertFalse(defaultSettings.copy(layoutMode = KeyboardLayoutMode.SIMPLE).isRgbActiveForCurrentMode())
         assertFalse(gamingActive.copy(rgbBorderMode = RgbBorderMode.OFF).isRgbActiveForCurrentMode())
+
+        val rgbAll = defaultSettings.copy(rgbBorderMode = RgbBorderMode.ALL)
+        assertTrue(rgbAll.isRgbActiveForCurrentMode())
+        assertTrue(rgbAll.copy(layoutMode = KeyboardLayoutMode.SIMPLE).isRgbActiveForCurrentMode())
+        assertTrue(rgbAll.copy(layoutMode = KeyboardLayoutMode.PC_WITH_NUMPAD).isRgbActiveForCurrentMode())
+        assertTrue(rgbAll.copy(layoutMode = KeyboardLayoutMode.NUMPAD_ONLY).isRgbActiveForCurrentMode())
+        assertTrue(rgbAll.copy(layoutMode = KeyboardLayoutMode.GAMING).isRgbActiveForCurrentMode())
 
         val overridden = KeyDeckSettings(
             themeId = KeyboardThemeId.MINT_MIST_NEU,
@@ -109,6 +117,35 @@ class ExampleRobolectricTest {
         assertEquals(Color(0xFFDCD9ECL), custom.deckBg)
         assertEquals(Color(0xFFE3E0F1L), custom.keyBg)
         assertEquals(Color(0xFF0D9488L), custom.accentBg)
+    }
+
+    @Test
+    fun `simple mobile mode has 4-row qwerty and 123 symbol layer`() {
+        assertEquals(4, PcKeyboardLayoutData.simpleAlphaRows.size)
+        assertEquals(4, PcKeyboardLayoutData.simpleSymbolRows.size)
+
+        val alphaBottom = PcKeyboardLayoutData.simpleAlphaRows.last()
+        assertTrue(alphaBottom.any { it.id == "simple_sym_toggle" && it.label == "?123" })
+        assertTrue(alphaBottom.any { it.keyCode == KeyEvent.KEYCODE_SPACE })
+        assertTrue(alphaBottom.any { it.keyCode == KeyEvent.KEYCODE_ENTER })
+
+        val symBottom = PcKeyboardLayoutData.simpleSymbolRows.last()
+        assertTrue(symBottom.any { it.id == "simple_sym_toggle" && it.label == "ABC" })
+        assertTrue(PcKeyboardLayoutData.simpleSymbolRows.first().map { it.label }.containsAll(listOf("1", "5", "0")))
+    }
+
+    @Test
+    fun `overlay lifecycle owner handles repeated attach and detach transitions safely`() {
+        val owner = com.example.service.OverlayLifecycleOwner()
+        owner.onCreate()
+        owner.onCreate()
+        owner.onResume()
+        owner.onResume()
+        owner.onPause()
+        owner.onPause()
+        owner.onResume()
+        owner.onDestroy()
+        owner.onDestroy()
     }
 
     @Test

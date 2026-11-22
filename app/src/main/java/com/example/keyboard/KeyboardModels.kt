@@ -6,6 +6,7 @@ import androidx.compose.ui.graphics.Color
 enum class KeyboardLayoutMode(val label: String, val shortLabel: String, val subtitle: String) {
     PC_WITH_NUMPAD("PC + Numpad", "PC+Num", "10-col QWERTY + dedicated 4x5 numeric pad"),
     PC_STANDARD("PC Full", "PC", "Full 6-row PC QWERTY + F1–F12"),
+    SIMPLE("Simple Mobile", "Simple", "Gboard-style 5-row QWERTY with hold-to-write symbols & accents"),
     NUMPAD_ONLY("Numeric Pad", "Num", "Large 4x5 dedicated numeric keypad"),
     GAMING("Gaming + Mouse", "Game", "Left WASD/QREFGC keys + right mouse touchpad"),
 }
@@ -18,6 +19,7 @@ enum class KeyboardDockAlignment(val label: String) {
 
 enum class RgbBorderMode(val label: String) {
     GAMING_ONLY("Gaming Only"),
+    ALL("All"),
     OFF("Off"),
 }
 
@@ -223,6 +225,11 @@ enum class HotkeyCategory(val label: String) {
     CUSTOM("Custom"),
 }
 
+enum class HotkeyActionType(val label: String) {
+    KEY_COMBO("Key Combo"),
+    LAUNCH_APP("Launch App"),
+}
+
 data class CustomHotkey(
     val id: String,
     val label: String,
@@ -234,6 +241,9 @@ data class CustomHotkey(
     val meta: Boolean = false,
     val category: HotkeyCategory = HotkeyCategory.CUSTOM,
     val accentHex: Long = 0xFF4F46E5,
+    val actionType: HotkeyActionType = HotkeyActionType.KEY_COMBO,
+    val targetPackageName: String = "",
+    val targetAppLabel: String = "",
 ) {
     fun comboText(): String {
         val parts = mutableListOf<String>()
@@ -243,6 +253,24 @@ data class CustomHotkey(
         if (meta) parts += "Win"
         parts += keyDisplay
         return parts.joinToString("+")
+    }
+
+    fun actionSummary(): String {
+        return if (actionType == HotkeyActionType.LAUNCH_APP && targetPackageName.isNotBlank()) {
+            val appName = targetAppLabel.ifBlank { targetPackageName }
+            "${comboText()} → $appName"
+        } else {
+            comboText()
+        }
+    }
+
+    fun matchesKeyEvent(eventKeyCode: Int, eventMetaState: Int): Boolean {
+        if (eventKeyCode != keyCode) return false
+        val hasCtrl = (eventMetaState and KeyEvent.META_CTRL_ON) != 0
+        val hasAlt = (eventMetaState and KeyEvent.META_ALT_ON) != 0
+        val hasShift = (eventMetaState and KeyEvent.META_SHIFT_ON) != 0
+        val hasMeta = (eventMetaState and KeyEvent.META_META_ON) != 0
+        return hasCtrl == ctrl && hasAlt == alt && hasShift == shift && hasMeta == meta
     }
 
     fun metaState(): Int {
@@ -269,6 +297,9 @@ data class KeySpec(
     val modifierType: ModifierKey? = null,
     val isAccent: Boolean = false,
     val iconType: KeyIconType? = null,
+    val cornerHint: String? = null,
+    val longPressChars: List<String> = emptyList(),
+    val longPressShiftChars: List<String> = emptyList(),
 )
 
 enum class KeyIconType {
@@ -323,8 +354,11 @@ data class KeyDeckSettings(
     val customTextHex: Long = 0xFF1F2937,
     val customAccentHex: Long = 0xFF4F46E5,
 ) {
-    fun isRgbActiveForCurrentMode(): Boolean =
-        rgbBorderMode == RgbBorderMode.GAMING_ONLY && layoutMode == KeyboardLayoutMode.GAMING
+    fun isRgbActiveForCurrentMode(): Boolean = when (rgbBorderMode) {
+        RgbBorderMode.GAMING_ONLY -> layoutMode == KeyboardLayoutMode.GAMING
+        RgbBorderMode.ALL -> true
+        RgbBorderMode.OFF -> false
+    }
 
     fun resolvePalette(isDarkUi: Boolean = false): ResolvedKeyboardPalette {
         val effectiveTheme = if (isDarkUi && syncKeyboardWithDarkMode && themeId == KeyboardThemeId.SOFT_NEUMORPH) {

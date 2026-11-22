@@ -26,6 +26,7 @@ import androidx.compose.material.icons.filled.AccessibilityNew
 import androidx.compose.material.icons.filled.Bolt
 import androidx.compose.material.icons.filled.BrightnessAuto
 import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.DarkMode
 import androidx.compose.material.icons.filled.DashboardCustomize
 import androidx.compose.material.icons.filled.EditNote
@@ -50,20 +51,22 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.ExperimentalComposeUiApi
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.platform.InterceptPlatformTextInput
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.PlatformTextInputInterceptor
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import kotlinx.coroutines.awaitCancellation
 import com.example.keyboard.AppThemeMode
 import com.example.keyboard.CustomHotkey
 import com.example.keyboard.DispatchedKeyRecord
@@ -103,9 +106,22 @@ fun DeckHomeScreen(
 ) {
     val context = LocalContext.current
     val colors = KeyDeckColors.current
-    var testText by remember { mutableStateOf("") }
+    val keyboardController = LocalSoftwareKeyboardController.current
+    val testInputFocusRequester = remember { FocusRequester() }
+    var testFieldValue by remember { mutableStateOf(TextFieldValue("")) }
+    var isTestInputFocused by remember { mutableStateOf(false) }
     var showInlinePreview by remember { mutableStateOf(true) }
     var inlineMouseInfo by remember { mutableStateOf<String?>(null) }
+
+    fun replaceSelectionWith(insertion: String) {
+        val cur = testFieldValue
+        val text = cur.text
+        val start = cur.selection.min.coerceIn(0, text.length)
+        val end = cur.selection.max.coerceIn(0, text.length)
+        val newText = text.substring(0, start) + insertion + text.substring(end)
+        val newCursor = start + insertion.length
+        testFieldValue = TextFieldValue(newText, TextRange(newCursor))
+    }
 
     DisposableEffect(showInlinePreview, isKeyboardExpanded) {
         if (showInlinePreview || isKeyboardExpanded) {
@@ -115,34 +131,89 @@ fun DeckHomeScreen(
                     val isAlt = (metaState and KeyEvent.META_ALT_ON) != 0
                     val isMeta = (metaState and KeyEvent.META_META_ON) != 0
 
-                    if (isCtrl && keyCode == KeyEvent.KEYCODE_A) {
-                        return true
+                    if (!isTestInputFocused && showInlinePreview) {
+                        runCatching { testInputFocusRequester.requestFocus() }
                     }
-                    if (isCtrl && keyCode == KeyEvent.KEYCODE_Z) {
-                        if (testText.isNotEmpty()) testText = testText.dropLast(1)
-                        return true
-                    }
-                    if (!isCtrl && !isAlt && !isMeta) {
+
+                    if (isCtrl && !isAlt && !isMeta) {
                         when (keyCode) {
-                            KeyEvent.KEYCODE_DEL -> {
-                                if (testText.isNotEmpty()) testText = testText.dropLast(1)
+                            KeyEvent.KEYCODE_A -> {
+                                testFieldValue = testFieldValue.copy(selection = TextRange(0, testFieldValue.text.length))
                                 return true
                             }
-                            KeyEvent.KEYCODE_ENTER, KeyEvent.KEYCODE_NUMPAD_ENTER -> {
-                                testText += "\n"
-                                return true
-                            }
-                            KeyEvent.KEYCODE_TAB -> {
-                                testText += "    "
-                                return true
-                            }
-                            else -> if (charToCommit != null) {
-                                testText += charToCommit
+                            KeyEvent.KEYCODE_Z -> {
+                                val text = testFieldValue.text
+                                if (text.isNotEmpty()) {
+                                    val trimmed = text.dropLast(1)
+                                    testFieldValue = TextFieldValue(trimmed, TextRange(trimmed.length))
+                                }
                                 return true
                             }
                         }
                     }
-                    return true
+                    if (!isCtrl && !isAlt && !isMeta) {
+                        when (keyCode) {
+                            KeyEvent.KEYCODE_DEL -> {
+                                val cur = testFieldValue
+                                val text = cur.text
+                                val start = cur.selection.min.coerceIn(0, text.length)
+                                val end = cur.selection.max.coerceIn(0, text.length)
+                                if (start != end) {
+                                    val newText = text.substring(0, start) + text.substring(end)
+                                    testFieldValue = TextFieldValue(newText, TextRange(start))
+                                } else if (start > 0) {
+                                    val newText = text.substring(0, start - 1) + text.substring(start)
+                                    testFieldValue = TextFieldValue(newText, TextRange(start - 1))
+                                }
+                                return true
+                            }
+                            KeyEvent.KEYCODE_FORWARD_DEL -> {
+                                val cur = testFieldValue
+                                val text = cur.text
+                                val start = cur.selection.min.coerceIn(0, text.length)
+                                val end = cur.selection.max.coerceIn(0, text.length)
+                                if (start != end) {
+                                    val newText = text.substring(0, start) + text.substring(end)
+                                    testFieldValue = TextFieldValue(newText, TextRange(start))
+                                } else if (end < text.length) {
+                                    val newText = text.substring(0, end) + text.substring(end + 1)
+                                    testFieldValue = TextFieldValue(newText, TextRange(start))
+                                }
+                                return true
+                            }
+                            KeyEvent.KEYCODE_ENTER, KeyEvent.KEYCODE_NUMPAD_ENTER -> {
+                                replaceSelectionWith("\n")
+                                return true
+                            }
+                            KeyEvent.KEYCODE_TAB -> {
+                                replaceSelectionWith("    ")
+                                return true
+                            }
+                            KeyEvent.KEYCODE_DPAD_LEFT -> {
+                                val pos = (testFieldValue.selection.end - 1).coerceAtLeast(0)
+                                testFieldValue = testFieldValue.copy(selection = TextRange(pos))
+                                return true
+                            }
+                            KeyEvent.KEYCODE_DPAD_RIGHT -> {
+                                val pos = (testFieldValue.selection.end + 1).coerceAtMost(testFieldValue.text.length)
+                                testFieldValue = testFieldValue.copy(selection = TextRange(pos))
+                                return true
+                            }
+                            KeyEvent.KEYCODE_MOVE_HOME -> {
+                                testFieldValue = testFieldValue.copy(selection = TextRange(0))
+                                return true
+                            }
+                            KeyEvent.KEYCODE_MOVE_END -> {
+                                testFieldValue = testFieldValue.copy(selection = TextRange(testFieldValue.text.length))
+                                return true
+                            }
+                            else -> if (charToCommit != null) {
+                                replaceSelectionWith(charToCommit.toString())
+                                return true
+                            }
+                        }
+                    }
+                    return false
                 }
 
                 override fun onDirectKeyHold(keyCode: Int, metaState: Int, isDown: Boolean): Boolean {
@@ -471,6 +542,47 @@ fun DeckHomeScreen(
                             )
                         }
                     }
+
+                    if (!readiness.isAccessibilityEnabled && !readiness.isImeSelected) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .neumorphicInset(
+                                    surfaceColor = colors.activeFill.copy(alpha = 0.7f),
+                                    shadowLight = colors.shadowLight,
+                                    shadowDark = colors.shadowDark,
+                                    cornerRadius = 14.dp,
+                                    depth = 2.dp,
+                                    borderColor = colors.keyBorder.copy(alpha = 0.35f),
+                                )
+                                .clickable(onClick = onOpenAccessibilitySettings)
+                                .padding(horizontal = 12.dp, vertical = 10.dp)
+                                .testTag("hero_a11y_required_banner"),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(10.dp),
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.AccessibilityNew,
+                                contentDescription = null,
+                                tint = colors.amber,
+                                modifier = Modifier.size(18.dp),
+                            )
+                            Text(
+                                text = "Enable Accessibility Service (or select KeyDeck IME) so the floating keyboard can type in other apps.",
+                                fontFamily = BodyFontFamily,
+                                fontSize = 11.5.sp,
+                                color = colors.textPrimary,
+                                modifier = Modifier.weight(1f),
+                            )
+                            Text(
+                                text = "Enable",
+                                fontFamily = BodyFontFamily,
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = colors.indigo,
+                            )
+                        }
+                    }
                 }
             }
 
@@ -608,15 +720,7 @@ fun DeckHomeScreen(
                 }
             }
 
-            // Concave Inset Text Input Well (suppresses bottom IME popup only when inline deck or expanded floating deck is visible)
-            @OptIn(ExperimentalComposeUiApi::class)
-            val suppressTestWellIme = showInlinePreview || (isKeyboardExpanded && settings.suppressAutoImeOnInput)
-            @OptIn(ExperimentalComposeUiApi::class)
-            val noSoftKeyboardInterceptor = remember {
-                PlatformTextInputInterceptor { _, _ ->
-                    awaitCancellation()
-                }
-            }
+            // Concave Inset Text Input Well — always sends real Android IME / keyboard focus signal on tap
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -626,53 +730,76 @@ fun DeckHomeScreen(
                         shadowDark = colors.shadowDark,
                         cornerRadius = 16.dp,
                         depth = 4.dp,
-                        borderColor = colors.keyBorder.copy(alpha = 0.45f),
+                        borderColor = if (isTestInputFocused) colors.indigo.copy(alpha = 0.75f) else colors.keyBorder.copy(alpha = 0.45f),
                     )
-                    .padding(horizontal = 14.dp, vertical = 14.dp),
-            ) {
-                val inputContent: @Composable () -> Unit = {
-                    BasicTextField(
-                        value = testText,
-                        onValueChange = { testText = it },
-                        textStyle = TextStyle(
-                            fontFamily = BodyFontFamily,
-                            fontSize = 15.sp,
-                            color = colors.textPrimary,
-                        ),
-                        cursorBrush = SolidColor(colors.indigo),
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .testTag("try_keyboard_input"),
-                        decorationBox = { innerTextField ->
-                            if (testText.isEmpty()) {
-                                Row(
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                                ) {
-                                    Icon(
-                                        imageVector = Icons.Default.EditNote,
-                                        contentDescription = null,
-                                        tint = colors.indigo,
-                                        modifier = Modifier.size(18.dp),
-                                    )
-                                    Text(
-                                        text = "Tap here to test typing...",
-                                        color = colors.textSecondary,
-                                        fontSize = 14.sp,
-                                    )
-                                }
-                            }
-                            innerTextField()
-                        },
-                    )
-                }
-                if (suppressTestWellIme) {
-                    @OptIn(ExperimentalComposeUiApi::class)
-                    InterceptPlatformTextInput(interceptor = noSoftKeyboardInterceptor) {
-                        inputContent()
+                    .clickable {
+                        testInputFocusRequester.requestFocus()
+                        keyboardController?.show()
                     }
-                } else {
-                    inputContent()
+                    .padding(horizontal = 14.dp, vertical = 12.dp),
+            ) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    Box(modifier = Modifier.weight(1f)) {
+                        BasicTextField(
+                            value = testFieldValue,
+                            onValueChange = { testFieldValue = it },
+                            textStyle = TextStyle(
+                                fontFamily = BodyFontFamily,
+                                fontSize = 15.sp,
+                                color = colors.textPrimary,
+                            ),
+                            cursorBrush = SolidColor(colors.indigo),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .focusRequester(testInputFocusRequester)
+                                .onFocusChanged { isTestInputFocused = it.isFocused }
+                                .testTag("try_keyboard_input"),
+                            decorationBox = { innerTextField ->
+                                if (testFieldValue.text.isEmpty()) {
+                                    Row(
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Default.EditNote,
+                                            contentDescription = null,
+                                            tint = colors.indigo,
+                                            modifier = Modifier.size(18.dp),
+                                        )
+                                        Text(
+                                            text = "Tap here to open keyboard & test typing...",
+                                            color = colors.textSecondary,
+                                            fontSize = 14.sp,
+                                        )
+                                    }
+                                }
+                                innerTextField()
+                            },
+                        )
+                    }
+                    if (testFieldValue.text.isNotEmpty()) {
+                        Box(
+                            modifier = Modifier
+                                .size(28.dp)
+                                .clip(CircleShape)
+                                .clickable {
+                                    testFieldValue = TextFieldValue("")
+                                }
+                                .testTag("try_keyboard_clear"),
+                            contentAlignment = Alignment.Center,
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Close,
+                                contentDescription = "Clear test text",
+                                tint = colors.textSecondary,
+                                modifier = Modifier.size(16.dp),
+                            )
+                        }
+                    }
                 }
             }
 
@@ -732,6 +859,14 @@ fun DeckHomeScreen(
                     settings = settings,
                     routeLabel = "In-App",
                     isOverlay = false,
+                    hotkeys = hotkeys,
+                    onHotkeyDispatch = { hk ->
+                        KeyDispatcher.dispatchHotkey(
+                            context = context,
+                            hotkey = hk,
+                            hapticEnabled = settings.hapticFeedback,
+                        )
+                    },
                     onKeyDispatch = { keyCode, metaState, charToCommit, comboLabel ->
                         KeyDispatcher.dispatchKey(
                             context = context,
@@ -740,6 +875,7 @@ fun DeckHomeScreen(
                             charToCommit = charToCommit,
                             comboLabel = comboLabel,
                             hapticEnabled = settings.hapticFeedback,
+                            hotkeys = hotkeys,
                         )
                     },
                     onKeyHoldDispatch = { keyCode, metaState, isDown, comboLabel ->

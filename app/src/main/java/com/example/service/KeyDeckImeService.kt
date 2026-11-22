@@ -117,6 +117,9 @@ class KeyDeckImeService : InputMethodService() {
                 val settings by repository.settingsFlow.collectAsStateWithLifecycle(
                     initialValue = KeyDeckSettings(),
                 )
+                val hotkeys by repository.hotkeysFlow.collectAsStateWithLifecycle(
+                    initialValue = com.example.keyboard.PcKeyboardLayoutData.defaultHotkeys,
+                )
                 val isDark = resolveIsAppDark(settings.appThemeMode)
                 KeyDeckTheme(darkTheme = isDark) {
                     val palette = settings.resolvePalette(isDark)
@@ -136,6 +139,14 @@ class KeyDeckImeService : InputMethodService() {
                             settings = settings,
                             routeLabel = "IME",
                             isOverlay = false,
+                            hotkeys = hotkeys,
+                            onHotkeyDispatch = { hk ->
+                                KeyDispatcher.dispatchHotkey(
+                                    context = this@KeyDeckImeService,
+                                    hotkey = hk,
+                                    hapticEnabled = settings.hapticFeedback,
+                                )
+                            },
                             onKeyDispatch = { keyCode, metaState, charToCommit, comboLabel ->
                                 KeyDispatcher.dispatchKey(
                                     context = this@KeyDeckImeService,
@@ -144,6 +155,7 @@ class KeyDeckImeService : InputMethodService() {
                                     charToCommit = charToCommit,
                                     comboLabel = comboLabel,
                                     hapticEnabled = settings.hapticFeedback,
+                                    hotkeys = hotkeys,
                                 )
                             },
                             onKeyHoldDispatch = { keyCode, metaState, isDown, comboLabel ->
