@@ -37,6 +37,7 @@ import androidx.compose.material.icons.filled.Palette
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material.icons.filled.VisibilityOff
+import androidx.compose.material.icons.filled.Wallpaper
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Switch
@@ -74,7 +75,10 @@ import com.example.keyboard.KeyDeckSettings
 import com.example.keyboard.KeyDispatcher
 import com.example.keyboard.KeyboardDockAlignment
 import com.example.keyboard.KeyboardLayoutMode
+import com.example.keyboard.KeyboardWallpaper
+import com.example.keyboard.KeyboardWallpaperBackdrop
 import com.example.keyboard.PcKeyboardDeck
+import com.example.keyboard.WallpaperSourceType
 import com.example.ui.SystemReadinessState
 import com.example.ui.theme.BodyFontFamily
 import com.example.ui.theme.KeyDeckColors
@@ -85,6 +89,7 @@ import com.example.ui.theme.neumorphicRaised
 fun DeckHomeScreen(
     settings: KeyDeckSettings,
     hotkeys: List<CustomHotkey>,
+    activeWallpaper: KeyboardWallpaper? = null,
     readiness: SystemReadinessState,
     isOverlayRunning: Boolean,
     isKeyboardExpanded: Boolean,
@@ -96,6 +101,7 @@ fun DeckHomeScreen(
     onOpenImeSettingsOrPicker: () -> Unit,
     onOpenHotkeysTab: () -> Unit,
     onOpenThemesSheet: () -> Unit,
+    onOpenWallpapersSheet: () -> Unit = onOpenThemesSheet,
     onOpenLayoutSheet: () -> Unit,
     onOpenSettingsSheet: () -> Unit,
     onChangeLayoutMode: (KeyboardLayoutMode) -> Unit,
@@ -151,6 +157,7 @@ fun DeckHomeScreen(
                             }
                         }
                     }
+                    val isShift = (metaState and KeyEvent.META_SHIFT_ON) != 0
                     if (!isCtrl && !isAlt && !isMeta) {
                         when (keyCode) {
                             KeyEvent.KEYCODE_DEL -> {
@@ -191,20 +198,25 @@ fun DeckHomeScreen(
                             }
                             KeyEvent.KEYCODE_DPAD_LEFT -> {
                                 val pos = (testFieldValue.selection.end - 1).coerceAtLeast(0)
-                                testFieldValue = testFieldValue.copy(selection = TextRange(pos))
+                                val newSel = if (isShift) TextRange(testFieldValue.selection.start, pos) else TextRange(pos)
+                                testFieldValue = testFieldValue.copy(selection = newSel)
                                 return true
                             }
                             KeyEvent.KEYCODE_DPAD_RIGHT -> {
                                 val pos = (testFieldValue.selection.end + 1).coerceAtMost(testFieldValue.text.length)
-                                testFieldValue = testFieldValue.copy(selection = TextRange(pos))
+                                val newSel = if (isShift) TextRange(testFieldValue.selection.start, pos) else TextRange(pos)
+                                testFieldValue = testFieldValue.copy(selection = newSel)
                                 return true
                             }
                             KeyEvent.KEYCODE_MOVE_HOME -> {
-                                testFieldValue = testFieldValue.copy(selection = TextRange(0))
+                                val newSel = if (isShift) TextRange(testFieldValue.selection.start, 0) else TextRange(0)
+                                testFieldValue = testFieldValue.copy(selection = newSel)
                                 return true
                             }
                             KeyEvent.KEYCODE_MOVE_END -> {
-                                testFieldValue = testFieldValue.copy(selection = TextRange(testFieldValue.text.length))
+                                val endPos = testFieldValue.text.length
+                                val newSel = if (isShift) TextRange(testFieldValue.selection.start, endPos) else TextRange(endPos)
+                                testFieldValue = testFieldValue.copy(selection = newSel)
                                 return true
                             }
                             else -> if (charToCommit != null) {
@@ -431,7 +443,7 @@ fun DeckHomeScreen(
                             Spacer(modifier = Modifier.height(4.dp))
                             Text(
                                 text = if (isOverlayRunning) {
-                                    "Tap the floating icon anywhere — even on pages without text inputs. Stops if KeyDeck tab is closed."
+                                    "Tap the floating icon anywhere — stays active even if KeyDeck app tab is closed."
                                 } else {
                                     "Pops up a floating icon on any screen to open the PC deck at any time."
                                 },
@@ -516,77 +528,115 @@ fun DeckHomeScreen(
                             }
                         }
 
-                        // Select IME pill
+                        // Primary IME Enable / Select pill
+                        val imePillMod = if (readiness.isImeSelected) {
+                            Modifier.neumorphicInset(
+                                surfaceColor = colors.activeFill,
+                                shadowLight = colors.shadowLight,
+                                shadowDark = colors.shadowDark,
+                                cornerRadius = 16.dp,
+                                depth = 3.dp,
+                                borderColor = colors.keyBorder.copy(alpha = 0.45f),
+                            )
+                        } else {
+                            Modifier.neumorphicRaised(
+                                surfaceColor = colors.bg,
+                                shadowLight = colors.shadowLight,
+                                shadowDark = colors.shadowDark,
+                                cornerRadius = 16.dp,
+                                shadowOffset = 4.dp,
+                                blurRadius = 8.dp,
+                                borderColor = colors.keyBorder.copy(alpha = 0.45f),
+                            )
+                        }
                         Box(
                             modifier = Modifier
                                 .height(48.dp)
-                                .neumorphicRaised(
-                                    surfaceColor = colors.bg,
-                                    shadowLight = colors.shadowLight,
-                                    shadowDark = colors.shadowDark,
-                                    cornerRadius = 16.dp,
-                                    shadowOffset = 4.dp,
-                                    blurRadius = 8.dp,
-                                    borderColor = colors.keyBorder.copy(alpha = 0.45f),
-                                )
+                                .then(imePillMod)
                                 .clickable(onClick = onOpenImeSettingsOrPicker)
                                 .padding(horizontal = 16.dp)
                                 .testTag("hero_select_ime_button"),
                             contentAlignment = Alignment.Center,
                         ) {
                             Text(
-                                text = if (readiness.isImeSelected) "IME Active" else "Select IME",
-                                color = if (readiness.isImeSelected) colors.emerald else colors.textPrimary,
+                                text = when {
+                                    !readiness.isImeEnabled -> "Enable IME"
+                                    !readiness.isImeSelected -> "Select IME"
+                                    else -> "KeyDeck IME ✓"
+                                },
+                                color = when {
+                                    readiness.isImeSelected -> colors.emerald
+                                    readiness.isImeEnabled -> colors.indigo
+                                    else -> colors.textPrimary
+                                },
                                 fontWeight = FontWeight.SemiBold,
                                 fontSize = 13.sp,
                             )
                         }
                     }
 
-                    if (!readiness.isAccessibilityEnabled && !readiness.isImeSelected) {
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .neumorphicInset(
-                                    surfaceColor = colors.activeFill.copy(alpha = 0.7f),
-                                    shadowLight = colors.shadowLight,
-                                    shadowDark = colors.shadowDark,
-                                    cornerRadius = 14.dp,
-                                    depth = 2.dp,
-                                    borderColor = colors.keyBorder.copy(alpha = 0.35f),
-                                )
-                                .clickable(onClick = onOpenAccessibilitySettings)
-                                .padding(horizontal = 12.dp, vertical = 10.dp)
-                                .testTag("hero_a11y_required_banner"),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(10.dp),
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.AccessibilityNew,
-                                contentDescription = null,
-                                tint = colors.amber,
-                                modifier = Modifier.size(18.dp),
+                    val floatComboText = remember(hotkeys) {
+                        hotkeys.firstOrNull {
+                            it.actionType == com.example.keyboard.HotkeyActionType.TOGGLE_FLOATING
+                        }?.comboText() ?: "Ctrl+Alt+F"
+                    }
+                    // IME-First Status & Quick Shortcut Banner (Accessibility strictly optional)
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .neumorphicInset(
+                                surfaceColor = colors.activeFill.copy(alpha = 0.72f),
+                                shadowLight = colors.shadowLight,
+                                shadowDark = colors.shadowDark,
+                                cornerRadius = 14.dp,
+                                depth = 2.dp,
+                                borderColor = colors.keyBorder.copy(alpha = 0.35f),
                             )
-                            Text(
-                                text = "Enable Accessibility Service (or select KeyDeck IME) so the floating keyboard can type in other apps.",
-                                fontFamily = BodyFontFamily,
-                                fontSize = 11.5.sp,
-                                color = colors.textPrimary,
-                                modifier = Modifier.weight(1f),
+                            .clickable(
+                                onClick = if (readiness.isImeSelected) onOpenHotkeysTab else onOpenImeSettingsOrPicker,
                             )
-                            Text(
-                                text = "Enable",
-                                fontFamily = BodyFontFamily,
-                                fontSize = 12.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = colors.indigo,
-                            )
-                        }
+                            .padding(horizontal = 12.dp, vertical = 10.dp)
+                            .testTag("hero_ime_setup_banner"),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(10.dp),
+                    ) {
+                        Icon(
+                            imageVector = if (readiness.isImeSelected) Icons.Default.CheckCircle else Icons.Default.Keyboard,
+                            contentDescription = null,
+                            tint = when {
+                                readiness.isImeSelected -> colors.emerald
+                                readiness.isImeEnabled -> colors.indigo
+                                else -> colors.amber
+                            },
+                            modifier = Modifier.size(18.dp),
+                        )
+                        Text(
+                            text = when {
+                                !readiness.isImeEnabled -> "Step 1: Enable KeyDeck IME to type anywhere (Accessibility optional)."
+                                !readiness.isImeSelected -> "KeyDeck IME enabled! Step 2: Select KeyDeck as your active keyboard."
+                                else -> "KeyDeck IME active. Press $floatComboText on IME anytime to pop open Floating Keyboard."
+                            },
+                            fontFamily = BodyFontFamily,
+                            fontSize = 11.5.sp,
+                            color = colors.textPrimary,
+                            modifier = Modifier.weight(1f),
+                        )
+                        Text(
+                            text = when {
+                                !readiness.isImeEnabled -> "Enable"
+                                !readiness.isImeSelected -> "Select"
+                                else -> "Edit"
+                            },
+                            fontFamily = BodyFontFamily,
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = colors.indigo,
+                        )
                     }
                 }
             }
 
-            // Permission & Accessibility Readiness Pills
+            // Permission & IME Readiness Pills (IME First, Accessibility Optional)
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(10.dp),
@@ -594,26 +644,34 @@ fun DeckHomeScreen(
                 NeuReadinessChip(
                     title = "Overlay",
                     ready = readiness.canDrawOverlays,
+                    statusText = if (readiness.canDrawOverlays) "Ready" else "Grant",
                     icon = Icons.Default.Layers,
                     testTag = "readiness_overlay",
                     modifier = Modifier.weight(1f),
                     onClick = onRequestOverlayPermission,
                 )
                 NeuReadinessChip(
-                    title = "Accessibility",
-                    ready = readiness.isAccessibilityEnabled,
-                    icon = Icons.Default.AccessibilityNew,
-                    testTag = "readiness_accessibility",
-                    modifier = Modifier.weight(1f),
-                    onClick = onOpenAccessibilitySettings,
-                )
-                NeuReadinessChip(
-                    title = "System IME",
-                    ready = readiness.isImeEnabled,
+                    title = "KeyDeck IME",
+                    ready = readiness.isImeSelected,
+                    statusText = when {
+                        readiness.isImeSelected -> "Selected ✓"
+                        readiness.isImeEnabled -> "Enabled (Select)"
+                        else -> "Enable"
+                    },
                     icon = Icons.Default.Keyboard,
                     testTag = "readiness_ime",
                     modifier = Modifier.weight(1f),
                     onClick = onOpenImeSettingsOrPicker,
+                )
+                NeuReadinessChip(
+                    title = "Accessibility",
+                    ready = readiness.isAccessibilityEnabled,
+                    statusText = if (readiness.isAccessibilityEnabled) "On" else "Optional",
+                    isOptional = true,
+                    icon = Icons.Default.AccessibilityNew,
+                    testTag = "readiness_accessibility",
+                    modifier = Modifier.weight(1f),
+                    onClick = onOpenAccessibilitySettings,
                 )
             }
 
@@ -670,6 +728,81 @@ fun DeckHomeScreen(
                         testTag = "quick_action_settings",
                         modifier = Modifier.weight(1f),
                         onClick = onOpenSettingsSheet,
+                    )
+                }
+
+                // Keyboard Wallpaper Studio Quick Access Card
+                val homePalette = settings.resolvePalette(colors.isDark)
+                val hasActiveWp = activeWallpaper != null && activeWallpaper.sourceType != WallpaperSourceType.NONE
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .neumorphicRaised(
+                            surfaceColor = colors.bg,
+                            shadowLight = colors.shadowLight,
+                            shadowDark = colors.shadowDark,
+                            cornerRadius = 18.dp,
+                            shadowOffset = 5.dp,
+                            blurRadius = 10.dp,
+                            borderColor = colors.keyBorder.copy(alpha = 0.45f),
+                        )
+                        .clickable(onClick = onOpenWallpapersSheet)
+                        .padding(horizontal = 14.dp, vertical = 12.dp)
+                        .testTag("quick_action_wallpapers"),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(12.dp),
+                        modifier = Modifier.weight(1f),
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .size(width = 52.dp, height = 38.dp)
+                                .clip(RoundedCornerShape(10.dp))
+                                .background(homePalette.deckBg),
+                            contentAlignment = Alignment.Center,
+                        ) {
+                            if (hasActiveWp) {
+                                KeyboardWallpaperBackdrop(
+                                    wallpaper = activeWallpaper,
+                                    palette = homePalette,
+                                    modifier = Modifier.matchParentSize(),
+                                )
+                            } else {
+                                Icon(
+                                    imageVector = Icons.Default.Wallpaper,
+                                    contentDescription = "Keyboard Wallpaper Studio",
+                                    tint = colors.indigo,
+                                    modifier = Modifier.size(20.dp),
+                                )
+                            }
+                        }
+                        Column {
+                            Text(
+                                text = "Keyboard Wallpaper Studio",
+                                style = MaterialTheme.typography.titleMedium,
+                                color = colors.textPrimary,
+                            )
+                            Text(
+                                text = if (hasActiveWp) {
+                                    "${activeWallpaper!!.name} • ${(activeWallpaper.lightness * 100).toInt()}% Light • Tap to edit"
+                                } else {
+                                    "Pick gallery image, 90% dark stealth, patterns & filters"
+                                },
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = colors.textSecondary,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                            )
+                        }
+                    }
+                    Icon(
+                        imageVector = Icons.AutoMirrored.Filled.ArrowForward,
+                        contentDescription = null,
+                        tint = colors.indigo,
+                        modifier = Modifier.size(18.dp),
                     )
                 }
             }
@@ -848,7 +981,7 @@ fun DeckHomeScreen(
                 KeyboardDockAlignment.RIGHT -> Alignment.CenterEnd
             }
             val outerCorner = (settings.keyCornerRadiusDp + 8).coerceIn(12, 24).dp
-            val borderCol = if (settings.showKeyBorder) palette.keyBorder.copy(alpha = 0.85f) else null
+            val borderCol = if (settings.isKeyBorderVisible()) palette.keyBorder.copy(alpha = 0.85f) else null
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -860,6 +993,7 @@ fun DeckHomeScreen(
                     routeLabel = "In-App",
                     isOverlay = false,
                     hotkeys = hotkeys,
+                    activeWallpaper = activeWallpaper,
                     onHotkeyDispatch = { hk ->
                         KeyDispatcher.dispatchHotkey(
                             context = context,
@@ -1002,6 +1136,8 @@ private fun NeuReadinessChip(
     icon: ImageVector,
     testTag: String,
     modifier: Modifier = Modifier,
+    statusText: String? = null,
+    isOptional: Boolean = false,
     onClick: () -> Unit,
 ) {
     val colors = KeyDeckColors.current
@@ -1025,6 +1161,11 @@ private fun NeuReadinessChip(
             borderColor = colors.keyBorder.copy(alpha = 0.45f),
         )
     }
+    val statusColor = when {
+        ready -> colors.indigo
+        isOptional -> colors.textSecondary
+        else -> colors.amber
+    }
     Box(
         modifier = modifier
             .height(54.dp)
@@ -1041,7 +1182,7 @@ private fun NeuReadinessChip(
             Icon(
                 imageVector = if (ready) Icons.Default.CheckCircle else icon,
                 contentDescription = title,
-                tint = if (ready) colors.indigo else colors.amber,
+                tint = statusColor,
                 modifier = Modifier.size(16.dp),
             )
             Column {
@@ -1051,13 +1192,15 @@ private fun NeuReadinessChip(
                     fontWeight = FontWeight.SemiBold,
                     color = colors.textPrimary,
                     maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
                 )
                 Text(
-                    text = if (ready) "Ready" else "Setup",
+                    text = statusText ?: if (ready) "Ready" else "Setup",
                     fontSize = 10.sp,
-                    color = if (ready) colors.indigo else colors.amber,
+                    color = statusColor,
                     fontWeight = FontWeight.Medium,
                     maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
                 )
             }
         }

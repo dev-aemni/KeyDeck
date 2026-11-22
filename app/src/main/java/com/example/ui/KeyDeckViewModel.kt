@@ -2,6 +2,7 @@ package com.example.ui
 
 import android.accessibilityservice.AccessibilityServiceInfo
 import android.app.Application
+import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
@@ -13,12 +14,17 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.data.KeyDeckRepository
 import com.example.data.KeyDeckRuntimeState
+import com.example.keyboard.BuiltInWallpapers
 import com.example.keyboard.CustomHotkey
 import com.example.keyboard.HotkeyCategory
 import com.example.keyboard.KeyDeckSettings
 import com.example.keyboard.KeyboardLayoutMode
 import com.example.keyboard.KeyboardThemeId
+import com.example.keyboard.KeyboardWallpaper
 import com.example.keyboard.PcKeyboardLayoutData
+import com.example.keyboard.WallpaperSourceType
+import com.example.keyboard.deleteWallpaperFileIfUnused
+import com.example.keyboard.importWallpaperFromUri
 import com.example.service.FloatingKeyboardService
 import com.example.service.KeyDeckAccessibilityService
 import com.example.service.KeyDeckImeService
@@ -26,6 +32,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import java.util.UUID
@@ -51,6 +58,23 @@ class KeyDeckViewModel(application: Application) : AndroidViewModel(application)
         scope = viewModelScope,
         started = SharingStarted.WhileSubscribed(5000),
         initialValue = PcKeyboardLayoutData.defaultHotkeys,
+    )
+
+    val savedWallpapers: StateFlow<List<KeyboardWallpaper>> = repository.wallpapersFlow.stateIn(
+        scope = viewModelScope,
+        started = SharingStarted.WhileSubscribed(5000),
+        initialValue = emptyList(),
+    )
+
+    val activeWallpaper: StateFlow<KeyboardWallpaper?> = combine(
+        settings,
+        savedWallpapers,
+    ) { currentSettings, saved ->
+        BuiltInWallpapers.resolve(currentSettings.activeWallpaperId, saved)
+    }.stateIn(
+        scope = viewModelScope,
+        started = SharingStarted.WhileSubscribed(5000),
+        initialValue = null,
     )
 
     val isOverlayRunning: StateFlow<Boolean> = KeyDeckRuntimeState.isOverlayServiceRunning
@@ -79,13 +103,22 @@ class KeyDeckViewModel(application: Application) : AndroidViewModel(application)
                     it.resolveInfo?.serviceInfo?.name == KeyDeckAccessibilityService::class.java.name
             } == true || KeyDeckAccessibilityService.activeInstance != null
 
+        val imeComponent = ComponentName(ctx, KeyDeckImeService::class.java)
+        val shortImeId = imeComponent.flattenToShortString()
+        val fullImeId = imeComponent.flattenToString()
+
         val imm = ctx.getSystemService(Context.INPUT_METHOD_SERVICE) as? InputMethodManager
         val imeEnabled = imm?.enabledInputMethodList?.any {
-            it.packageName == ctx.packageName && it.serviceName == KeyDeckImeService::class.java.name
+            (it.packageName == ctx.packageName &&
+                (it.serviceName == KeyDeckImeService::class.java.name || it.id.contains("KeyDeckImeService"))) ||
+                it.id == shortImeId ||
+                it.id == fullImeId
         } == true
 
         val defaultIme = Settings.Secure.getString(ctx.contentResolver, Settings.Secure.DEFAULT_INPUT_METHOD) ?: ""
-        val imeSelected = defaultIme.contains(ctx.packageName) && defaultIme.contains("KeyDeckImeService")
+        val imeSelected = defaultIme == shortImeId ||
+            defaultIme == fullImeId ||
+            (defaultIme.contains(ctx.packageName) && defaultIme.contains("KeyDeckImeService"))
 
         _readiness.value = SystemReadinessState(
             canDrawOverlays = canOverlay,
@@ -178,6 +211,82 @@ class KeyDeckViewModel(application: Application) : AndroidViewModel(application)
     fun updateSettings(transform: (KeyDeckSettings) -> KeyDeckSettings) {
         viewModelScope.launch {
             repository.updateSettings(transform)
+        }
+    }
+
+    fun selectWallpaper(wallpaperId: String) {
+        viewModelScope.launch {
+            repository.updateSettings { it.copy(activeWallpaperId = wallpaperId) }
+        }
+    }
+
+    fun saveCustomWallpaper(wallpaper: KeyboardWallpaper, activateImmediately: Boolean = true) {
+        viewModelScope.launch {
+            val current = savedWallpapers.value.toMutableList()
+            val cleanName = wallpaper.name.trim().ifBlank { "Custom Wallpaper" }
+            val existingIdx = current.indexOfFirst { it.id == wallpaper.id && !wallpaper.isBuiltIn }
+            val persisted = if (existingIdx >= 0) {
+                val updated = wallpaper.copy(name = cleanName, isBuiltIn = false)
+                current[existingIdx] = updated
+                updated
+            } else {
+                val created = wallpaper.copy(
+                    id = "wp_${UUID.randomUUID().toString().take(8)}",
+                    name = cleanName,
+                    isBuiltIn = false,
+                    createdAtMs = System.currentTimeMillis(),
+                )
+                current.add(0, created)
+                created
+            }
+            repository.saveWallpapers(current)
+            if (activateImmediately) {
+                repository.updateSettings { it.copy(activeWallpaperId = persisted.id) }
+            }
+        }
+    }
+
+    fun deleteCustomWallpaper(wallpaperId: String) {
+        viewModelScope.launch {
+            val current = savedWallpapers.value
+            val removed = current.firstOrNull { it.id == wallpaperId } ?: return@launch
+            val remaining = current.filterNot { it.id == wallpaperId }
+            repository.saveWallpapers(remaining)
+            if (settings.value.activeWallpaperId == wallpaperId) {
+                repository.updateSettings { it.copy(activeWallpaperId = "") }
+            }
+            deleteWallpaperFileIfUnused(removed, remaining)
+        }
+    }
+
+    fun importWallpaperFromGallery(uri: Uri, onReady: (KeyboardWallpaper?) -> Unit) {
+        viewModelScope.launch {
+            val ctx = getApplication<Application>()
+            val path = importWallpaperFromUri(ctx, uri)
+            if (path == null) {
+                onReady(null)
+                return@launch
+            }
+            val nextNum = savedWallpapers.value.size + 1
+            onReady(
+                KeyboardWallpaper(
+                    id = "draft_${UUID.randomUUID().toString().take(6)}",
+                    name = "Photo Theme #$nextNum",
+                    sourceType = WallpaperSourceType.CUSTOM_IMAGE,
+                    imagePath = path,
+                    lightness = 0.16f,
+                    saturation = 0.90f,
+                    contrast = 1.08f,
+                    brightness = 0.0f,
+                    tintHex = 0L,
+                    tintIntensity = 0.22f,
+                    keyOpacity = 0.62f,
+                    darkBackdrop = true,
+                    fitCenter = false,
+                    isBuiltIn = false,
+                    createdAtMs = System.currentTimeMillis(),
+                ),
+            )
         }
     }
 

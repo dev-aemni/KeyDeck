@@ -34,6 +34,7 @@ import androidx.compose.material.icons.filled.Bolt
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.DeleteOutline
 import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.Layers
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.AlertDialog
@@ -316,10 +317,10 @@ fun HotkeysScreen(
                                                 )
                                             }
                                             Text(
-                                                text = if (hk.actionType == HotkeyActionType.LAUNCH_APP) {
-                                                    hk.targetPackageName.ifBlank { hk.category.label }
-                                                } else {
-                                                    hk.category.label
+                                                text = when (hk.actionType) {
+                                                    HotkeyActionType.LAUNCH_APP -> hk.targetPackageName.ifBlank { hk.category.label }
+                                                    HotkeyActionType.TOGGLE_FLOATING -> "Opens Floating Keyboard"
+                                                    HotkeyActionType.KEY_COMBO -> hk.category.label
                                                 },
                                                 fontSize = 11.sp,
                                                 color = colors.textSecondary,
@@ -533,30 +534,40 @@ private fun HotkeyEditorDialog(
                                 .height(38.dp)
                                 .clickable {
                                     actionType = type
-                                    if (type == HotkeyActionType.LAUNCH_APP && initial == null && !alt) {
+                                    if (type != HotkeyActionType.KEY_COMBO && initial == null && !alt) {
                                         ctrl = true
                                         alt = true
                                     }
+                                    if (type == HotkeyActionType.TOGGLE_FLOATING && label.isBlank()) {
+                                        label = "Float Keyboard"
+                                    }
                                 }
+                                .padding(horizontal = 4.dp)
                                 .testTag("hotkey_action_${type.name.lowercase()}"),
                             contentAlignment = Alignment.Center,
                         ) {
                             Row(
                                 verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(5.dp),
+                                horizontalArrangement = Arrangement.spacedBy(3.dp),
                             ) {
                                 Icon(
-                                    imageVector = if (type == HotkeyActionType.LAUNCH_APP) Icons.Default.Apps else Icons.Default.Bolt,
+                                    imageVector = when (type) {
+                                        HotkeyActionType.LAUNCH_APP -> Icons.Default.Apps
+                                        HotkeyActionType.TOGGLE_FLOATING -> Icons.Default.Layers
+                                        HotkeyActionType.KEY_COMBO -> Icons.Default.Bolt
+                                    },
                                     contentDescription = null,
                                     tint = if (active) colors.indigo else colors.textSecondary,
-                                    modifier = Modifier.size(14.dp),
+                                    modifier = Modifier.size(13.dp),
                                 )
                                 Text(
                                     text = type.label,
                                     fontFamily = BodyFontFamily,
-                                    fontSize = 12.sp,
+                                    fontSize = 10.5.sp,
                                     fontWeight = FontWeight.Bold,
                                     color = if (active) colors.indigo else colors.textSecondary,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
                                 )
                             }
                         }
@@ -569,10 +580,10 @@ private fun HotkeyEditorDialog(
                     label = { Text("Shortcut Name") },
                     placeholder = {
                         Text(
-                            if (actionType == HotkeyActionType.LAUNCH_APP) {
-                                "e.g. Open Chrome, Open WhatsApp"
-                            } else {
-                                "e.g. Hard Reload, Play/Pause"
+                            when (actionType) {
+                                HotkeyActionType.LAUNCH_APP -> "e.g. Open Chrome, Open WhatsApp"
+                                HotkeyActionType.TOGGLE_FLOATING -> "e.g. Float Keyboard"
+                                HotkeyActionType.KEY_COMBO -> "e.g. Hard Reload, Play/Pause"
                             },
                         )
                     },
@@ -589,6 +600,28 @@ private fun HotkeyEditorDialog(
                         .fillMaxWidth()
                         .testTag("hotkey_name_input"),
                 )
+
+                if (actionType == HotkeyActionType.TOGGLE_FLOATING) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .neumorphicInset(
+                                surfaceColor = colors.activeFill.copy(alpha = 0.7f),
+                                shadowLight = colors.shadowLight,
+                                shadowDark = colors.shadowDark,
+                                cornerRadius = 10.dp,
+                                depth = 2.dp,
+                                borderColor = colors.keyBorder.copy(alpha = 0.35f),
+                            )
+                            .padding(horizontal = 10.dp, vertical = 8.dp),
+                    ) {
+                        Text(
+                            text = "Pressing this combo on KeyDeck IME (or tapping it in Shortcuts) turns on and pops open the Floating Keyboard.",
+                            fontSize = 11.5.sp,
+                            color = colors.textPrimary,
+                        )
+                    }
+                }
 
                 if (actionType == HotkeyActionType.LAUNCH_APP) {
                     Text(
@@ -829,16 +862,16 @@ private fun HotkeyEditorDialog(
             }
         },
         confirmButton = {
-            val canSave = actionType == HotkeyActionType.KEY_COMBO || targetPackageName.isNotBlank()
+            val canSave = actionType != HotkeyActionType.LAUNCH_APP || targetPackageName.isNotBlank()
             Button(
                 enabled = canSave,
                 onClick = {
                     val cleanPkg = targetPackageName.trim()
                     val effectiveLabel = label.trim().ifEmpty {
-                        if (actionType == HotkeyActionType.LAUNCH_APP) {
-                            targetAppLabel.ifBlank { cleanPkg }
-                        } else {
-                            selectedKey.label
+                        when (actionType) {
+                            HotkeyActionType.LAUNCH_APP -> targetAppLabel.ifBlank { cleanPkg }
+                            HotkeyActionType.TOGGLE_FLOATING -> "Float Keyboard"
+                            HotkeyActionType.KEY_COMBO -> selectedKey.label
                         }
                     }
                     onConfirm(

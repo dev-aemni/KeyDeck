@@ -49,6 +49,7 @@ import com.example.MainActivity
 import com.example.R
 import com.example.data.KeyDeckRepository
 import com.example.data.KeyDeckRuntimeState
+import com.example.keyboard.BuiltInWallpapers
 import com.example.keyboard.KeyDeckSettings
 import com.example.keyboard.KeyDispatcher
 import com.example.keyboard.KeyboardDockAlignment
@@ -139,11 +140,10 @@ class FloatingKeyboardService : Service() {
                 KeyDeckRuntimeState.setKeyboardOverlayExpanded(true)
             }
         }
-        return START_NOT_STICKY
+        return START_STICKY
     }
 
     override fun onTaskRemoved(rootIntent: Intent?) {
-        stopAllAndQuit()
         super.onTaskRemoved(rootIntent)
     }
 
@@ -228,7 +228,7 @@ class FloatingKeyboardService : Service() {
                     FloatingTriggerBubble(
                         sizeDp = settings.bubbleSizeDp,
                         palette = palette,
-                        showBorder = settings.showKeyBorder,
+                        showBorder = settings.isKeyBorderVisible(),
                         expanded = expanded,
                         onDragDelta = { dx, dy ->
                             val p = bubbleParams ?: return@FloatingTriggerBubble
@@ -302,6 +302,8 @@ class FloatingKeyboardService : Service() {
             setContent {
                 val settings by repository.settingsFlow.collectAsStateWithLifecycle(initialValue = KeyDeckSettings())
                 val hotkeys by repository.hotkeysFlow.collectAsStateWithLifecycle(initialValue = com.example.keyboard.PcKeyboardLayoutData.defaultHotkeys)
+                val savedWallpapers by repository.wallpapersFlow.collectAsStateWithLifecycle(initialValue = emptyList())
+                val activeWallpaper = BuiltInWallpapers.resolve(settings.activeWallpaperId, savedWallpapers)
                 val a11yRunning by KeyDeckRuntimeState.isAccessibilityRunning.collectAsStateWithLifecycle()
                 val imeActive by KeyDeckRuntimeState.isImeSessionActive.collectAsStateWithLifecycle()
                 val appForeground by KeyDeckRuntimeState.isAppInForeground.collectAsStateWithLifecycle()
@@ -313,7 +315,7 @@ class FloatingKeyboardService : Service() {
                     KeyboardDockAlignment.RIGHT -> Alignment.CenterEnd
                 }
                 val outerCorner = (settings.keyCornerRadiusDp + 8).coerceIn(12, 24).dp
-                val borderCol = if (settings.showKeyBorder) palette.keyBorder.copy(alpha = 0.65f) else null
+                val borderCol = if (settings.isKeyBorderVisible()) palette.keyBorder.copy(alpha = 0.65f) else null
                 val activeRoute = if (appForeground) {
                     "In-App"
                 } else if (imeActive && a11yRunning) {
@@ -338,6 +340,7 @@ class FloatingKeyboardService : Service() {
                             routeLabel = activeRoute,
                             isOverlay = true,
                             hotkeys = hotkeys,
+                            activeWallpaper = activeWallpaper,
                             onHotkeyDispatch = { hk ->
                                 KeyDispatcher.dispatchHotkey(
                                     context = this@FloatingKeyboardService,
@@ -497,7 +500,7 @@ class FloatingKeyboardService : Service() {
                 "KeyDeck Floating Keyboard",
                 NotificationManager.IMPORTANCE_LOW,
             ).apply {
-                description = "Keeps the floating PC keyboard trigger active while KeyDeck is open"
+                description = "Keeps the floating PC keyboard trigger active across apps"
                 setShowBadge(false)
             }
             val nm = getSystemService(NotificationManager::class.java)

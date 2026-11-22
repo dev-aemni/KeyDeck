@@ -1,5 +1,6 @@
 package com.example.ui.screens
 
+import android.net.Uri
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -38,6 +39,10 @@ import androidx.compose.material3.Switch
 import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -55,13 +60,18 @@ import com.example.keyboard.KeyboardDockAlignment
 import com.example.keyboard.KeyboardLayoutMode
 import com.example.keyboard.KeyboardSizePreset
 import com.example.keyboard.KeyboardThemeId
-import com.example.keyboard.ResolvedKeyboardPalette
+import com.example.keyboard.KeyboardWallpaper
 import com.example.keyboard.RgbBorderMode
 import com.example.ui.theme.BodyFontFamily
 import com.example.ui.theme.KeyDeckColors
 import com.example.ui.theme.neumorphicInset
 import com.example.ui.theme.neumorphicRaised
 import kotlin.math.roundToInt
+
+enum class ThemeSheetSection(val label: String) {
+    COLORS("Color Themes"),
+    WALLPAPERS("Wallpapers"),
+}
 
 private val ACCENT_SWATCHES = listOf(
     0xFF4F46E5L, // Indigo (Soft UI default)
@@ -77,46 +87,64 @@ private val ACCENT_SWATCHES = listOf(
 )
 
 private val DECK_BG_SWATCHES = listOf(
+    0xFF000000L, // Pure Black #000
+    0xFF1B1C1EL, // Classic Dark
+    0xFF0F172AL, // Classic Navy
     0xFFD5DCE5L, // Soft UI Slate
+    0xFFF3F4F6L, // Clean White
+    0xFFE5E7EBL, // Neutral Gray
     0xFFDCD9ECL, // Soft Lavender
     0xFFE2DCD4L, // Warm Stone
     0xFFD1DFDAL, // Sage Mist
-    0xFFE7D9DDL, // Dusty Rose
     0xFF222630L, // Dark Neumorph
-    0xFF171D2BL, // Midnight Gaming
-    0xFF16191DL, // Carbon Stealth
 )
 
 private val KEY_BG_SWATCHES = listOf(
+    0xFF0A0A0AL,
+    0xFF2E3033L,
+    0xFF1E293BL,
+    0xFFFFFFFFL,
     0xFFDCE1EAL,
     0xFFE3E0F1L,
     0xFFE9E4DCL,
     0xFFD9E6E1L,
-    0xFFEEE1E5L,
-    0xFFCFD6E2L,
     0xFF282D39L,
     0xFF1D2436L,
 )
 
 private val TEXT_SWATCHES = listOf(
+    0xFFFFFFFFL,
+    0xFFF1F5F9L,
+    0xFF111827L,
     0xFF4B5563L,
-    0xFF374151L,
     0xFF433863L,
     0xFF28423BL,
-    0xFFF1F5F9L,
-    0xFFE2FDF8L,
 )
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ThemePickerSheet(
     settings: KeyDeckSettings,
+    savedWallpapers: List<KeyboardWallpaper>,
+    activeWallpaper: KeyboardWallpaper?,
+    initialSection: ThemeSheetSection = ThemeSheetSection.COLORS,
     onSelectTheme: (KeyboardThemeId) -> Unit,
+    onSelectWallpaper: (String) -> Unit,
+    onSaveWallpaper: (KeyboardWallpaper) -> Unit,
+    onDeleteWallpaper: (String) -> Unit,
+    onImportWallpaperImage: (Uri, (KeyboardWallpaper?) -> Unit) -> Unit,
     onUpdateSettings: ((KeyDeckSettings) -> KeyDeckSettings) -> Unit,
     onDismiss: () -> Unit,
 ) {
     val colors = KeyDeckColors.current
     val resolvedPalette = settings.resolvePalette(colors.isDark)
+    var activeSection by remember(initialSection) { mutableStateOf(initialSection) }
+    var editingDraft by remember { mutableStateOf<KeyboardWallpaper?>(null) }
+    val previewWallpaper = if (activeSection == ThemeSheetSection.WALLPAPERS) {
+        editingDraft ?: activeWallpaper
+    } else {
+        activeWallpaper
+    }
 
     ModalBottomSheet(
         onDismissRequest = onDismiss,
@@ -126,42 +154,111 @@ fun ThemePickerSheet(
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .verticalScroll(rememberScrollState())
                 .navigationBarsPadding()
-                .padding(horizontal = 20.dp, vertical = 8.dp),
-            verticalArrangement = Arrangement.spacedBy(14.dp),
+                .padding(horizontal = 20.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp),
         ) {
             Text(
-                text = "Themes & Color Studio",
+                text = "Themes & Wallpaper Studio",
                 style = MaterialTheme.typography.headlineMedium,
                 color = colors.textPrimary,
             )
 
-            AppThemeModeSelector(
-                selectedMode = settings.appThemeMode,
-                onSelectMode = { mode -> onUpdateSettings { it.copy(appThemeMode = mode) } },
-            )
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                ThemeSheetSection.entries.forEach { section ->
+                    val selected = activeSection == section
+                    Box(
+                        modifier = Modifier
+                            .weight(1f)
+                            .height(44.dp)
+                            .then(
+                                if (selected) {
+                                    Modifier.neumorphicInset(
+                                        surfaceColor = colors.activeFill,
+                                        shadowLight = colors.shadowLight,
+                                        shadowDark = colors.shadowDark,
+                                        cornerRadius = 12.dp,
+                                        depth = 4.dp,
+                                        borderColor = colors.keyBorder.copy(alpha = 0.45f),
+                                    )
+                                } else {
+                                    Modifier.neumorphicRaised(
+                                        surfaceColor = colors.bg,
+                                        shadowLight = colors.shadowLight,
+                                        shadowDark = colors.shadowDark,
+                                        cornerRadius = 12.dp,
+                                        shadowOffset = 3.dp,
+                                        blurRadius = 6.dp,
+                                        borderColor = colors.keyBorder.copy(alpha = 0.45f),
+                                    )
+                                },
+                            )
+                            .clickable { activeSection = section }
+                            .testTag("theme_section_${section.name.lowercase()}"),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        Text(
+                            text = section.label,
+                            fontSize = 12.5.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = if (selected) colors.indigo else colors.textPrimary,
+                        )
+                    }
+                }
+            }
 
-            SettingsSwitchRow(
-                title = "Auto Dark Keyboard",
-                subtitle = "Switch default Soft UI keyboard to Dark Neumorph in Dark Mode",
-                checked = settings.syncKeyboardWithDarkMode,
-                testTag = "switch_sync_keyboard_dark",
-                onCheckedChange = { enabled -> onUpdateSettings { it.copy(syncKeyboardWithDarkMode = enabled) } },
-            )
-
+            // Sticky Live Preview — stays visible while adjusting colors or wallpaper filters
             MiniKeyboardPreviewCard(
                 palette = resolvedPalette,
                 cornerDp = settings.keyCornerRadiusDp,
                 opacity = settings.overlayOpacity,
-                showKeyBorder = settings.showKeyBorder,
+                showKeyBorder = settings.isKeyBorderVisible(),
+                wallpaper = previewWallpaper,
             )
 
-            Text(
-                text = "Soft Neumorphic Presets",
-                style = MaterialTheme.typography.labelLarge,
-                color = colors.textSecondary,
-            )
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .weight(1f, fill = false)
+                    .verticalScroll(rememberScrollState())
+                    .padding(top = 4.dp, bottom = 12.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp),
+            ) {
+                if (activeSection == ThemeSheetSection.WALLPAPERS) {
+                    WallpaperStudioSection(
+                        settings = settings,
+                        palette = resolvedPalette,
+                        savedWallpapers = savedWallpapers,
+                        activeWallpaper = activeWallpaper,
+                        onSelectWallpaper = onSelectWallpaper,
+                        onSaveWallpaper = onSaveWallpaper,
+                        onDeleteWallpaper = onDeleteWallpaper,
+                        onImportWallpaperImage = onImportWallpaperImage,
+                        editingDraft = editingDraft,
+                        onEditingDraftChanged = { editingDraft = it },
+                    )
+                } else {
+                    AppThemeModeSelector(
+                        selectedMode = settings.appThemeMode,
+                        onSelectMode = { mode -> onUpdateSettings { it.copy(appThemeMode = mode) } },
+                    )
+
+                    SettingsSwitchRow(
+                        title = "Auto Dark Keyboard",
+                        subtitle = "Switch default Soft UI keyboard to Dark Neumorph in Dark Mode",
+                        checked = settings.syncKeyboardWithDarkMode,
+                        testTag = "switch_sync_keyboard_dark",
+                        onCheckedChange = { enabled -> onUpdateSettings { it.copy(syncKeyboardWithDarkMode = enabled) } },
+                    )
+
+                    Text(
+                        text = "Color Themes",
+                        style = MaterialTheme.typography.labelLarge,
+                        color = colors.textSecondary,
+                    )
             Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 KeyboardThemeId.entries.chunked(2).forEach { pair ->
                     Row(
@@ -370,10 +467,18 @@ fun ThemePickerSheet(
 
             SettingsSwitchRow(
                 title = "Black Key Borders",
-                subtitle = "Define key edges cleanly with a crisp black border (unless RGB is active)",
+                subtitle = "Define key edges with a crisp black border (off by default)",
                 checked = settings.showKeyBorder,
                 testTag = "switch_key_border",
                 onCheckedChange = { enabled -> onUpdateSettings { it.copy(showKeyBorder = enabled) } },
+            )
+
+            SettingsSwitchRow(
+                title = "Theme-Colored Key Borders",
+                subtitle = "Color key borders dynamically using the active theme (green, gray, blue, etc.)",
+                checked = settings.themeAdaptiveBorder,
+                testTag = "switch_theme_adaptive_border",
+                onCheckedChange = { enabled -> onUpdateSettings { it.copy(themeAdaptiveBorder = enabled) } },
             )
 
             LabeledSlider(
@@ -393,13 +498,15 @@ fun ThemePickerSheet(
                 accentColor = colors.indigo,
                 onValueChange = { v -> onUpdateSettings { it.copy(overlayOpacity = v) } },
             )
+                }
 
-            NeuSheetPrimaryButton(
-                label = "Done",
-                testTag = "theme_sheet_done",
-                onClick = onDismiss,
-            )
-            Spacer(modifier = Modifier.height(8.dp))
+                NeuSheetPrimaryButton(
+                    label = "Done",
+                    testTag = "theme_sheet_done",
+                    onClick = onDismiss,
+                )
+                Spacer(modifier = Modifier.height(8.dp))
+            }
         }
     }
 }
@@ -408,6 +515,7 @@ fun ThemePickerSheet(
 @Composable
 fun LayoutPickerSheet(
     settings: KeyDeckSettings,
+    activeWallpaper: KeyboardWallpaper? = null,
     onSelectLayout: (KeyboardLayoutMode) -> Unit,
     onUpdateSettings: ((KeyDeckSettings) -> KeyDeckSettings) -> Unit,
     onDismiss: () -> Unit,
@@ -517,7 +625,8 @@ fun LayoutPickerSheet(
                     palette = palette,
                     cornerDp = settings.keyCornerRadiusDp,
                     opacity = settings.overlayOpacity,
-                    showKeyBorder = settings.showKeyBorder,
+                    showKeyBorder = settings.isKeyBorderVisible(),
+                    wallpaper = activeWallpaper,
                     modifier = Modifier.fillMaxWidth(settings.keyboardWidthFraction),
                 )
             }
@@ -986,105 +1095,6 @@ private fun NeuSheetPrimaryButton(
     }
 }
 
-@Composable
-private fun MiniKeyboardPreviewCard(
-    palette: ResolvedKeyboardPalette,
-    cornerDp: Int,
-    opacity: Float,
-    showKeyBorder: Boolean,
-    modifier: Modifier = Modifier,
-) {
-    val corner = (cornerDp - 2).coerceIn(4, 14).dp
-    val borderMod = if (showKeyBorder) {
-        Modifier.border(1.dp, palette.keyBorder.copy(alpha = 0.85f), RoundedCornerShape(corner))
-    } else {
-        Modifier
-    }
-    Column(
-        modifier = modifier
-            .neumorphicRaised(
-                surfaceColor = palette.deckBg.copy(alpha = opacity),
-                shadowLight = palette.shadowLight,
-                shadowDark = palette.shadowDark,
-                cornerRadius = 16.dp,
-                shadowOffset = 4.dp,
-                blurRadius = 8.dp,
-            )
-            .padding(10.dp),
-        verticalArrangement = Arrangement.spacedBy(6.dp),
-    ) {
-        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(5.dp)) {
-            listOf("ctrl", "q", "w", "e", "r", "t", "enter").forEachIndexed { idx, label ->
-                val isMod = idx == 0
-                val isAcc = label == "enter"
-                Box(
-                    modifier = Modifier
-                        .weight(if (isMod || isAcc) 1.5f else 1f)
-                        .height(26.dp)
-                        .then(
-                            if (isAcc) {
-                                Modifier.neumorphicInset(
-                                    surfaceColor = palette.activeFill,
-                                    shadowLight = palette.shadowLight,
-                                    shadowDark = palette.shadowDark,
-                                    cornerRadius = corner,
-                                    depth = 2.5.dp,
-                                )
-                            } else {
-                                Modifier.neumorphicRaised(
-                                    surfaceColor = if (isMod) palette.modifierBg else palette.keyBg,
-                                    shadowLight = palette.shadowLight,
-                                    shadowDark = palette.shadowDark,
-                                    cornerRadius = corner,
-                                    shadowOffset = 2.dp,
-                                    blurRadius = 4.dp,
-                                )
-                            },
-                        )
-                        .then(borderMod),
-                    contentAlignment = Alignment.Center,
-                ) {
-                    Text(
-                        text = label,
-                        fontFamily = BodyFontFamily,
-                        fontSize = 9.sp,
-                        fontWeight = FontWeight.SemiBold,
-                        color = if (isAcc) palette.accentBg else palette.primaryText,
-                    )
-                }
-            }
-        }
-        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(5.dp)) {
-            listOf("shift", "a", "s", "space", "fn", "◁", "▷").forEachIndexed { idx, label ->
-                val isMod = idx == 0 || idx >= 4
-                val isSpace = label == "space"
-                Box(
-                    modifier = Modifier
-                        .weight(if (isSpace) 2.5f else 1f)
-                        .height(24.dp)
-                        .neumorphicRaised(
-                            surfaceColor = if (isMod) palette.modifierBg else palette.keyBg,
-                            shadowLight = palette.shadowLight,
-                            shadowDark = palette.shadowDark,
-                            cornerRadius = corner,
-                            shadowOffset = 2.dp,
-                            blurRadius = 4.dp,
-                        )
-                        .then(borderMod),
-                    contentAlignment = Alignment.Center,
-                ) {
-                    Text(
-                        text = label,
-                        fontFamily = BodyFontFamily,
-                        fontSize = 8.5.sp,
-                        fontWeight = FontWeight.SemiBold,
-                        color = if (label == "fn") palette.activeIndicator else palette.primaryText,
-                    )
-                }
-            }
-        }
-    }
-}
 
 @Composable
 private fun ColorSwatchRow(

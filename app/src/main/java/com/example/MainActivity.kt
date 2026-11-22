@@ -58,6 +58,7 @@ import com.example.ui.screens.HotkeysScreen
 import com.example.ui.screens.LayoutPickerSheet
 import com.example.ui.screens.SettingsSheet
 import com.example.ui.screens.ThemePickerSheet
+import com.example.ui.screens.ThemeSheetSection
 import com.example.ui.screens.WebSandboxScreen
 import com.example.ui.theme.DarkNeuBg
 import com.example.ui.theme.KeyDeckColors
@@ -108,6 +109,16 @@ class MainActivity : ComponentActivity() {
         handleIntentExtras(intent)
     }
 
+    override fun onWindowFocusChanged(hasFocus: Boolean) {
+        super.onWindowFocusChanged(hasFocus)
+        if (hasFocus) {
+            viewModel.refreshSystemReadiness()
+            window?.decorView?.postDelayed({
+                viewModel.refreshSystemReadiness()
+            }, 350L)
+        }
+    }
+
     private fun handleIntentExtras(intent: Intent?) {
         if (intent?.getBooleanExtra(EXTRA_OPEN_IME_PICKER, false) == true) {
             intent.removeExtra(EXTRA_OPEN_IME_PICKER)
@@ -132,6 +143,8 @@ private fun KeyDeckApp(viewModel: KeyDeckViewModel) {
 
     val settings by viewModel.settings.collectAsStateWithLifecycle()
     val hotkeys by viewModel.hotkeys.collectAsStateWithLifecycle()
+    val savedWallpapers by viewModel.savedWallpapers.collectAsStateWithLifecycle()
+    val activeWallpaper by viewModel.activeWallpaper.collectAsStateWithLifecycle()
     val readiness by viewModel.readiness.collectAsStateWithLifecycle()
     val isOverlayRunning by viewModel.isOverlayRunning.collectAsStateWithLifecycle()
     val isKeyboardExpanded by viewModel.isKeyboardExpanded.collectAsStateWithLifecycle()
@@ -139,6 +152,7 @@ private fun KeyDeckApp(viewModel: KeyDeckViewModel) {
 
     var currentTab by remember { mutableStateOf(KeyDeckTab.DECK) }
     var showThemesSheet by remember { mutableStateOf(false) }
+    var themeSheetSection by remember { mutableStateOf(ThemeSheetSection.COLORS) }
     var showLayoutSheet by remember { mutableStateOf(false) }
     var showSettingsSheet by remember { mutableStateOf(false) }
 
@@ -246,6 +260,7 @@ private fun KeyDeckApp(viewModel: KeyDeckViewModel) {
             KeyDeckTab.DECK -> DeckHomeScreen(
                 settings = settings,
                 hotkeys = hotkeys,
+                activeWallpaper = activeWallpaper,
                 readiness = readiness,
                 isOverlayRunning = isOverlayRunning,
                 isKeyboardExpanded = isKeyboardExpanded,
@@ -268,7 +283,14 @@ private fun KeyDeckApp(viewModel: KeyDeckViewModel) {
                     }
                 },
                 onOpenHotkeysTab = { currentTab = KeyDeckTab.HOTKEYS },
-                onOpenThemesSheet = { showThemesSheet = true },
+                onOpenThemesSheet = {
+                    themeSheetSection = ThemeSheetSection.COLORS
+                    showThemesSheet = true
+                },
+                onOpenWallpapersSheet = {
+                    themeSheetSection = ThemeSheetSection.WALLPAPERS
+                    showThemesSheet = true
+                },
                 onOpenLayoutSheet = { showLayoutSheet = true },
                 onOpenSettingsSheet = { showSettingsSheet = true },
                 onChangeLayoutMode = { viewModel.setLayoutMode(it) },
@@ -306,7 +328,14 @@ private fun KeyDeckApp(viewModel: KeyDeckViewModel) {
     if (showThemesSheet) {
         ThemePickerSheet(
             settings = settings,
+            savedWallpapers = savedWallpapers,
+            activeWallpaper = activeWallpaper,
+            initialSection = themeSheetSection,
             onSelectTheme = { viewModel.setTheme(it) },
+            onSelectWallpaper = { viewModel.selectWallpaper(it) },
+            onSaveWallpaper = { viewModel.saveCustomWallpaper(it) },
+            onDeleteWallpaper = { viewModel.deleteCustomWallpaper(it) },
+            onImportWallpaperImage = { uri, cb -> viewModel.importWallpaperFromGallery(uri, cb) },
             onUpdateSettings = { viewModel.updateSettings(it) },
             onDismiss = { showThemesSheet = false },
         )
@@ -315,6 +344,7 @@ private fun KeyDeckApp(viewModel: KeyDeckViewModel) {
     if (showLayoutSheet) {
         LayoutPickerSheet(
             settings = settings,
+            activeWallpaper = activeWallpaper,
             onSelectLayout = { viewModel.setLayoutMode(it) },
             onUpdateSettings = { viewModel.updateSettings(it) },
             onDismiss = { showLayoutSheet = false },

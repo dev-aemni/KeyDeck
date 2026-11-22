@@ -2,13 +2,16 @@ package com.example.keyboard
 
 import android.content.Context
 import android.content.Intent
+import android.net.Uri
 import android.os.Build
 import android.os.SystemClock
 import android.os.VibrationEffect
 import android.os.Vibrator
 import android.os.VibratorManager
+import android.provider.Settings
 import android.view.KeyEvent
 import com.example.data.KeyDeckRuntimeState
+import com.example.service.FloatingKeyboardService
 import com.example.service.KeyDeckAccessibilityService
 import com.example.service.KeyDeckImeService
 import java.lang.ref.WeakReference
@@ -62,8 +65,27 @@ object KeyDispatcher {
             triggerHaptic(context)
         }
 
-        // Intercept custom App-Launch keyboard shortcuts (e.g. Ctrl+Alt+C -> launch Chrome)
-        if (hotkeys.isNotEmpty() && keyCode != KeyEvent.KEYCODE_UNKNOWN) {
+        // Intercept secret/quick Floating Keyboard shortcut (e.g. Ctrl+Alt+F -> open Floating Keyboard from IME)
+        if (keyCode != KeyEvent.KEYCODE_UNKNOWN) {
+            val matchedFloatShortcut = hotkeys.firstOrNull { hk ->
+                hk.actionType == HotkeyActionType.TOGGLE_FLOATING &&
+                    hk.matchesKeyEvent(keyCode, metaState)
+            }
+            val isDefaultFloatCombo = hotkeys.isEmpty() &&
+                keyCode == KeyEvent.KEYCODE_F &&
+                (metaState and KeyEvent.META_CTRL_ON) != 0 &&
+                (metaState and KeyEvent.META_ALT_ON) != 0 &&
+                (metaState and KeyEvent.META_SHIFT_ON) == 0 &&
+                (metaState and KeyEvent.META_META_ON) == 0
+            if (matchedFloatShortcut != null || isDefaultFloatCombo) {
+                launchOrToggleFloatingKeyboard(
+                    context = context,
+                    comboLabel = matchedFloatShortcut?.comboText() ?: "Ctrl+Alt+F",
+                )
+                return
+            }
+
+            // Intercept custom App-Launch keyboard shortcuts (e.g. Ctrl+Alt+C -> launch Chrome)
             val matchedAppShortcut = hotkeys.firstOrNull { hk ->
                 hk.actionType == HotkeyActionType.LAUNCH_APP &&
                     hk.targetPackageName.isNotBlank() &&
@@ -291,6 +313,13 @@ object KeyDispatcher {
         if (hapticEnabled) {
             triggerHaptic(context)
         }
+        if (hotkey.actionType == HotkeyActionType.TOGGLE_FLOATING) {
+            launchOrToggleFloatingKeyboard(
+                context = context,
+                comboLabel = hotkey.comboText(),
+            )
+            return
+        }
         if (hotkey.actionType == HotkeyActionType.LAUNCH_APP && hotkey.targetPackageName.isNotBlank()) {
             launchAppByPackage(
                 context = context,
@@ -308,6 +337,75 @@ object KeyDispatcher {
             comboLabel = hotkey.comboText(),
             hapticEnabled = false,
         )
+    }
+
+    fun launchOrToggleFloatingKeyboard(
+        context: Context,
+        comboLabel: String = "Ctrl+Alt+F",
+    ): Boolean {
+        if (!Settings.canDrawOverlays(context)) {
+            runCatching {
+                context.startActivity(
+                    Intent(
+                        Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
+                        Uri.parse("package:${context.packageName}"),
+                    ).apply {
+                        addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                    },
+                )
+            }
+            KeyDeckRuntimeState.recordDispatchedKey(
+                DispatchedKeyRecord(
+                    timestampMs = System.currentTimeMillis(),
+                    comboLabel = comboLabel,
+                    keyCode = 0,
+                    route = "Setup",
+                    detail = "Enable Display over other apps to open Floating Keyboard",
+                ),
+            )
+            return false
+        }
+
+        val isRunning = KeyDeckRuntimeState.isOverlayServiceRunning.value
+        val isExpanded = KeyDeckRuntimeState.isKeyboardOverlayExpanded.value
+        val imeShown = KeyDeckImeService.activeInstance?.isInputViewShown == true
+        val shouldExpand = !isRunning || !isExpanded || imeShown
+
+        val intent = Intent(context, FloatingKeyboardService::class.java).apply {
+            action = if (shouldExpand) {
+                FloatingKeyboardService.ACTION_START_AND_EXPAND
+            } else {
+                FloatingKeyboardService.ACTION_TOGGLE_KEYBOARD
+            }
+        }
+
+        val started = runCatching {
+            if (!isRunning && Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                context.startForegroundService(intent)
+            } else {
+                context.startService(intent)
+            }
+            true
+        }.getOrDefault(false)
+
+        if (started && shouldExpand) {
+            KeyDeckImeService.activeInstance?.requestHideSelf(0)
+        }
+
+        KeyDeckRuntimeState.recordDispatchedKey(
+            DispatchedKeyRecord(
+                timestampMs = System.currentTimeMillis(),
+                comboLabel = comboLabel,
+                keyCode = 0,
+                route = "Overlay",
+                detail = when {
+                    !started -> "Could not start Floating Keyboard"
+                    shouldExpand -> "Opened Floating Keyboard"
+                    else -> "Minimized Floating Keyboard"
+                },
+            ),
+        )
+        return started
     }
 
     fun launchAppByPackage(

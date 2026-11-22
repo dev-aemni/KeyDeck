@@ -65,6 +65,7 @@ fun GamingMouseTouchpad(
     settings: KeyDeckSettings,
     rgbPhaseDeg: Float,
     rgbEnabled: Boolean,
+    keyOpacity: Float = 1f,
     totalHeight: Dp,
     cornerRadius: Dp,
     onMouseMove: (dx: Float, dy: Float) -> Unit,
@@ -76,7 +77,8 @@ fun GamingMouseTouchpad(
     var normX by remember { mutableFloatStateOf(0.5f) }
     var normY by remember { mutableFloatStateOf(0.5f) }
 
-    val borderCol = if (settings.showKeyBorder) palette.keyBorder.copy(alpha = 0.85f) else null
+    val borderVisible = settings.isKeyBorderVisible()
+    val borderCol = if (borderVisible && !rgbEnabled) palette.keyBorder.copy(alpha = 0.85f) else null
 
     Column(
         modifier = modifier
@@ -85,12 +87,18 @@ fun GamingMouseTouchpad(
         verticalArrangement = Arrangement.spacedBy(4.dp),
     ) {
         // Recessed Mouse / Look Touchpad Area
+        val padBaseColor = if (fingerActive) palette.activeFill else palette.modifierBg
+        val padSurface = if (keyOpacity < 0.99f) {
+            padBaseColor.copy(alpha = (padBaseColor.alpha * keyOpacity).coerceIn(0.16f, 1f))
+        } else {
+            padBaseColor
+        }
         Box(
             modifier = Modifier
                 .fillMaxWidth()
                 .weight(1f)
                 .neumorphicInset(
-                    surfaceColor = if (fingerActive) palette.activeFill else palette.modifierBg,
+                    surfaceColor = padSurface,
                     shadowLight = palette.shadowLight,
                     shadowDark = palette.shadowDark,
                     cornerRadius = cornerRadius,
@@ -222,7 +230,8 @@ fun GamingMouseTouchpad(
                 cornerRadius = (cornerRadius - 2.dp).coerceAtLeast(4.dp),
                 rgbPhaseDeg = rgbPhaseDeg,
                 rgbEnabled = rgbEnabled,
-                showBorder = settings.showKeyBorder,
+                showBorder = borderVisible,
+                keyOpacity = keyOpacity,
                 testTag = "gaming_lmb_button",
                 modifier = Modifier
                     .weight(1f)
@@ -235,7 +244,8 @@ fun GamingMouseTouchpad(
                 cornerRadius = (cornerRadius - 2.dp).coerceAtLeast(4.dp),
                 rgbPhaseDeg = rgbPhaseDeg,
                 rgbEnabled = rgbEnabled,
-                showBorder = settings.showKeyBorder,
+                showBorder = borderVisible,
+                keyOpacity = keyOpacity,
                 testTag = "gaming_rmb_button",
                 modifier = Modifier
                     .weight(1f)
@@ -254,19 +264,23 @@ private fun TouchpadMouseButton(
     rgbPhaseDeg: Float,
     rgbEnabled: Boolean,
     showBorder: Boolean,
+    keyOpacity: Float = 1f,
     testTag: String,
     modifier: Modifier = Modifier,
     onClick: () -> Unit,
 ) {
     var pressed by remember { mutableStateOf(false) }
-    val borderCol = if (showBorder) palette.keyBorder.copy(alpha = 0.85f) else null
+    val borderCol = if (showBorder && !rgbEnabled) palette.keyBorder.copy(alpha = 0.85f) else null
+    val btnColor = (if (pressed) palette.activeFill else palette.keyBg).let { c ->
+        if (keyOpacity < 0.99f) c.copy(alpha = (c.alpha * keyOpacity).coerceIn(0.16f, 1f)) else c
+    }
 
     Box(
         modifier = modifier
             .then(
                 if (pressed) {
                     Modifier.neumorphicInset(
-                        surfaceColor = palette.activeFill,
+                        surfaceColor = btnColor,
                         shadowLight = palette.shadowLight,
                         shadowDark = palette.shadowDark,
                         cornerRadius = cornerRadius,
@@ -275,7 +289,7 @@ private fun TouchpadMouseButton(
                     )
                 } else {
                     Modifier.neumorphicRaised(
-                        surfaceColor = palette.keyBg,
+                        surfaceColor = btnColor,
                         shadowLight = palette.shadowLight,
                         shadowDark = palette.shadowDark,
                         cornerRadius = cornerRadius,
@@ -336,7 +350,7 @@ fun DeckQuickResizeStrip(
     onResizeDragDelta: ((dx: Float, dy: Float) -> Unit)? = null,
     modifier: Modifier = Modifier,
 ) {
-    val borderCol = if (settings.showKeyBorder) palette.keyBorder.copy(alpha = 0.65f) else null
+    val borderCol = if (settings.isKeyBorderVisible()) palette.keyBorder.copy(alpha = 0.65f) else null
     Row(
         modifier = modifier
             .fillMaxWidth()
@@ -604,12 +618,12 @@ fun DeckQuickSettingsPopup(
             horizontalArrangement = Arrangement.spacedBy(8.dp),
         ) {
             listOf(
+                KeyboardThemeId.PURE_BLACK,
                 KeyboardThemeId.SOFT_NEUMORPH,
                 KeyboardThemeId.DARK_SLATE_NEU,
-                KeyboardThemeId.MIDNIGHT_NEU,
                 KeyboardThemeId.CYBER_MINT,
-                KeyboardThemeId.MINT_MIST_NEU,
-                KeyboardThemeId.LAVENDER_NEU,
+                KeyboardThemeId.NEUTRAL_GRAY,
+                KeyboardThemeId.MIDNIGHT_NEU,
             ).forEach { theme ->
                 val selected = settings.themeId == theme
                 Box(
@@ -736,6 +750,12 @@ fun DeckQuickSettingsPopup(
             checked = settings.showKeyBorder,
             palette = palette,
             onCheckedChange = { c -> onUpdateSettings { it.copy(showKeyBorder = c) } },
+        )
+        QuickPopupToggle(
+            label = "Theme-Colored Key Borders",
+            checked = settings.themeAdaptiveBorder,
+            palette = palette,
+            onCheckedChange = { c -> onUpdateSettings { it.copy(themeAdaptiveBorder = c) } },
         )
         QuickPopupToggle(
             label = "F1–F12 Row",

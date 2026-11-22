@@ -60,6 +60,7 @@ enum class KeyboardThemeId(
     val secondaryText: Color,
     val activeIndicator: Color,
     val isDark: Boolean = false,
+    val themeBorderColor: Color = accentBg,
 ) {
     SOFT_NEUMORPH(
         displayName = "Soft UI Slate",
@@ -75,6 +76,7 @@ enum class KeyboardThemeId(
         secondaryText = Color(0xFF4B5563),
         activeIndicator = Color(0xFF4F46E5),
         isDark = false,
+        themeBorderColor = Color(0xFF64748B),
     ),
     LAVENDER_NEU(
         displayName = "Soft Lavender",
@@ -90,6 +92,7 @@ enum class KeyboardThemeId(
         secondaryText = Color(0xFF5A5178),
         activeIndicator = Color(0xFF6D28D9),
         isDark = false,
+        themeBorderColor = Color(0xFF7C3AED),
     ),
     WARM_SAND_NEU(
         displayName = "Warm Stone",
@@ -105,6 +108,7 @@ enum class KeyboardThemeId(
         secondaryText = Color(0xFF63574B),
         activeIndicator = Color(0xFFD97706),
         isDark = false,
+        themeBorderColor = Color(0xFFD97706),
     ),
     MINT_MIST_NEU(
         displayName = "Sage Mist",
@@ -120,6 +124,7 @@ enum class KeyboardThemeId(
         secondaryText = Color(0xFF46655C),
         activeIndicator = Color(0xFF0D9488),
         isDark = false,
+        themeBorderColor = Color(0xFF0D9488),
     ),
     DARK_SLATE_NEU(
         displayName = "Dark Neumorph",
@@ -135,6 +140,7 @@ enum class KeyboardThemeId(
         secondaryText = Color(0xFF94A3B8),
         activeIndicator = Color(0xFF818CF8),
         isDark = true,
+        themeBorderColor = Color(0xFF64748B),
     ),
     MIDNIGHT_NEU(
         displayName = "Midnight Gaming",
@@ -150,6 +156,7 @@ enum class KeyboardThemeId(
         secondaryText = Color(0xFF93C5FD),
         activeIndicator = Color(0xFF38BDF8),
         isDark = true,
+        themeBorderColor = Color(0xFF38BDF8),
     ),
     ROSE_QUARTZ(
         displayName = "Dusty Rose",
@@ -165,6 +172,7 @@ enum class KeyboardThemeId(
         secondaryText = Color(0xFF6D4C56),
         activeIndicator = Color(0xFFE11D48),
         isDark = false,
+        themeBorderColor = Color(0xFFE11D48),
     ),
     CYBER_MINT(
         displayName = "Carbon Stealth",
@@ -180,6 +188,135 @@ enum class KeyboardThemeId(
         secondaryText = Color(0xFF6EE7B7),
         activeIndicator = Color(0xFF10B981),
         isDark = true,
+        themeBorderColor = Color(0xFF10B981),
+    ),
+    PURE_BLACK(
+        displayName = "Pure Black #000",
+        deckBg = Color(0xFF000000),
+        keyBg = Color(0xFF0A0A0A),
+        modifierBg = Color(0xFF141414),
+        activeFill = Color(0xFF1E293B),
+        accentBg = Color(0xFF3B82F6),
+        shadowLight = Color(0xFF161616),
+        shadowDark = Color(0xFF000000),
+        keyBorder = Color(0xFF262626),
+        primaryText = Color(0xFFFFFFFF),
+        secondaryText = Color(0xFFA3A3A3),
+        activeIndicator = Color(0xFF60A5FA),
+        isDark = true,
+        themeBorderColor = Color(0xFF52525B),
+    ),
+    CLASSIC_DARK(
+        displayName = "Classic Dark",
+        deckBg = Color(0xFF1B1C1E),
+        keyBg = Color(0xFF2E3033),
+        modifierBg = Color(0xFF232528),
+        activeFill = Color(0xFF2A4165),
+        accentBg = Color(0xFF60A5FA),
+        shadowLight = Color(0xFF3B3E44),
+        shadowDark = Color(0xFF101113),
+        keyBorder = Color.Black,
+        primaryText = Color(0xFFF1F3F4),
+        secondaryText = Color(0xFF9AA0A6),
+        activeIndicator = Color(0xFF60A5FA),
+        isDark = true,
+        themeBorderColor = Color(0xFF6B7280),
+    ),
+    DEEP_CHARCOAL(
+        displayName = "Deep Charcoal",
+        deckBg = Color(0xFF121212),
+        keyBg = Color(0xFF212121),
+        modifierBg = Color(0xFF181818),
+        activeFill = Color(0xFF2C3E50),
+        accentBg = Color(0xFF38BDF8),
+        shadowLight = Color(0xFF2E2E2E),
+        shadowDark = Color(0xFF080808),
+        keyBorder = Color(0xFF303030),
+        primaryText = Color(0xFFFAFAFA),
+        secondaryText = Color(0xFFA1A1AA),
+        activeIndicator = Color(0xFF38BDF8),
+        isDark = true,
+        themeBorderColor = Color(0xFF71717A),
+    ),
+    NAVY_BLUE(
+        displayName = "Classic Navy",
+        deckBg = Color(0xFF0F172A),
+        keyBg = Color(0xFF1E293B),
+        modifierBg = Color(0xFF172033),
+        activeFill = Color(0xFF1E3A8A),
+        accentBg = Color(0xFF38BDF8),
+        shadowLight = Color(0xFF2C3B52),
+        shadowDark = Color(0xFF090D16),
+        keyBorder = Color.Black,
+        primaryText = Color(0xFFF8FAFC),
+        secondaryText = Color(0xFF94A3B8),
+        activeIndicator = Color(0xFF38BDF8),
+        isDark = true,
+        themeBorderColor = Color(0xFF38BDF8),
+    ),
+    PURE_WHITE(
+        displayName = "Clean White",
+        deckBg = Color(0xFFF3F4F6),
+        keyBg = Color(0xFFFFFFFF),
+        modifierBg = Color(0xFFE5E7EB),
+        activeFill = Color(0xFFDBEAFE),
+        accentBg = Color(0xFF2563EB),
+        shadowLight = Color(0xFFFFFFFF),
+        shadowDark = Color(0xFFD1D5DB),
+        keyBorder = Color.Black,
+        primaryText = Color(0xFF111827),
+        secondaryText = Color(0xFF4B5563),
+        activeIndicator = Color(0xFF2563EB),
+        isDark = false,
+        themeBorderColor = Color(0xFF9CA3AF),
+    ),
+    NEUTRAL_GRAY(
+        displayName = "Neutral Gray",
+        deckBg = Color(0xFFE5E7EB),
+        keyBg = Color(0xFFF9FAFB),
+        modifierBg = Color(0xFFD1D5DB),
+        activeFill = Color(0xFFBFDBFE),
+        accentBg = Color(0xFF1D4ED8),
+        shadowLight = Color(0xFFFFFFFF),
+        shadowDark = Color(0xFF9CA3AF),
+        keyBorder = Color.Black,
+        primaryText = Color(0xFF1F2937),
+        secondaryText = Color(0xFF4B5563),
+        activeIndicator = Color(0xFF1D4ED8),
+        isDark = false,
+        themeBorderColor = Color(0xFF6B7280),
+    ),
+    CLASSIC_SLATE(
+        displayName = "Cool Blue-Gray",
+        deckBg = Color(0xFFCFD8DC),
+        keyBg = Color(0xFFECEFF1),
+        modifierBg = Color(0xFFB0BEC5),
+        activeFill = Color(0xFFBBDEFB),
+        accentBg = Color(0xFF1976D2),
+        shadowLight = Color(0xFFFFFFFF),
+        shadowDark = Color(0xFF90A4AE),
+        keyBorder = Color.Black,
+        primaryText = Color(0xFF263238),
+        secondaryText = Color(0xFF546E7A),
+        activeIndicator = Color(0xFF1976D2),
+        isDark = false,
+        themeBorderColor = Color(0xFF64748B),
+    ),
+    WARM_CREAM(
+        displayName = "Minimal Cream",
+        deckBg = Color(0xFFF5F2EB),
+        keyBg = Color(0xFFFFFFFF),
+        modifierBg = Color(0xFFE7E2D8),
+        activeFill = Color(0xFFFDE68A),
+        accentBg = Color(0xFFB45309),
+        shadowLight = Color(0xFFFFFFFF),
+        shadowDark = Color(0xFFD6CFC2),
+        keyBorder = Color.Black,
+        primaryText = Color(0xFF292524),
+        secondaryText = Color(0xFF57534E),
+        activeIndicator = Color(0xFFB45309),
+        isDark = false,
+        themeBorderColor = Color(0xFFB45309),
     ),
     CUSTOM_STUDIO(
         displayName = "Custom Studio",
@@ -195,6 +332,7 @@ enum class KeyboardThemeId(
         secondaryText = Color(0xFF4B5563),
         activeIndicator = Color(0xFF4F46E5),
         isDark = false,
+        themeBorderColor = Color(0xFF4F46E5),
     ),
 }
 
@@ -228,6 +366,7 @@ enum class HotkeyCategory(val label: String) {
 enum class HotkeyActionType(val label: String) {
     KEY_COMBO("Key Combo"),
     LAUNCH_APP("Launch App"),
+    TOGGLE_FLOATING("Float Deck"),
 }
 
 data class CustomHotkey(
@@ -256,11 +395,17 @@ data class CustomHotkey(
     }
 
     fun actionSummary(): String {
-        return if (actionType == HotkeyActionType.LAUNCH_APP && targetPackageName.isNotBlank()) {
-            val appName = targetAppLabel.ifBlank { targetPackageName }
-            "${comboText()} → $appName"
-        } else {
-            comboText()
+        return when (actionType) {
+            HotkeyActionType.LAUNCH_APP -> {
+                if (targetPackageName.isNotBlank()) {
+                    val appName = targetAppLabel.ifBlank { targetPackageName }
+                    "${comboText()} → $appName"
+                } else {
+                    comboText()
+                }
+            }
+            HotkeyActionType.TOGGLE_FLOATING -> "${comboText()} → Float Deck"
+            HotkeyActionType.KEY_COMBO -> comboText()
         }
     }
 
@@ -339,9 +484,11 @@ data class KeyDeckSettings(
     val fontScale: Float = 0.96f,
     val overlayOpacity: Float = 0.96f,
     val bubbleSizeDp: Int = 48,
-    // Visual borders & RGB
+    // Visual borders, RGB & Wallpapers
     val rgbBorderMode: RgbBorderMode = RgbBorderMode.GAMING_ONLY,
-    val showKeyBorder: Boolean = true,
+    val showKeyBorder: Boolean = false,
+    val themeAdaptiveBorder: Boolean = false,
+    val activeWallpaperId: String = "",
     // Gaming & Touchpad tuning
     val touchpadSensitivity: Float = 1.6f,
     val touchpadWidthFraction: Float = 0.42f,
@@ -354,6 +501,8 @@ data class KeyDeckSettings(
     val customTextHex: Long = 0xFF1F2937,
     val customAccentHex: Long = 0xFF4F46E5,
 ) {
+    fun isKeyBorderVisible(): Boolean = showKeyBorder || themeAdaptiveBorder
+
     fun isRgbActiveForCurrentMode(): Boolean = when (rgbBorderMode) {
         RgbBorderMode.GAMING_ONLY -> layoutMode == KeyboardLayoutMode.GAMING
         RgbBorderMode.ALL -> true
@@ -366,6 +515,11 @@ data class KeyDeckSettings(
         } else {
             themeId
         }
+        val themeBorder = when {
+            overrideAccentHex != 0L -> Color(overrideAccentHex)
+            effectiveTheme == KeyboardThemeId.CUSTOM_STUDIO -> Color(customAccentHex)
+            else -> effectiveTheme.themeBorderColor
+        }
         return if (effectiveTheme == KeyboardThemeId.CUSTOM_STUDIO) {
             val deck = Color(customDeckHex)
             val key = Color(customKeyHex)
@@ -376,7 +530,7 @@ data class KeyDeckSettings(
             val sLight = if (isLightDeck) Color(0xFFF3F6FA) else androidx.compose.ui.graphics.lerp(deck, Color.White, 0.12f)
             val sDark = if (isLightDeck) androidx.compose.ui.graphics.lerp(deck, Color(0xFF7B8596), 0.45f) else androidx.compose.ui.graphics.lerp(deck, Color.Black, 0.48f)
             val active = if (isLightDeck) Color(0xFFCDE0F8) else androidx.compose.ui.graphics.lerp(deck, accent, 0.26f)
-            val border = Color.Black
+            val border = if (themeAdaptiveBorder) themeBorder else Color.Black
             ResolvedKeyboardPalette(
                 deckBg = deck,
                 keyBg = key,
@@ -394,6 +548,7 @@ data class KeyDeckSettings(
         } else {
             val accent = if (overrideAccentHex != 0L) Color(overrideAccentHex) else effectiveTheme.accentBg
             val indicator = if (overrideAccentHex != 0L) Color(overrideAccentHex) else effectiveTheme.activeIndicator
+            val border = if (themeAdaptiveBorder) themeBorder else effectiveTheme.keyBorder
             ResolvedKeyboardPalette(
                 deckBg = effectiveTheme.deckBg,
                 keyBg = effectiveTheme.keyBg,
@@ -402,7 +557,7 @@ data class KeyDeckSettings(
                 accentBg = accent,
                 shadowLight = effectiveTheme.shadowLight,
                 shadowDark = effectiveTheme.shadowDark,
-                keyBorder = effectiveTheme.keyBorder,
+                keyBorder = border,
                 primaryText = effectiveTheme.primaryText,
                 secondaryText = effectiveTheme.secondaryText,
                 activeIndicator = indicator,

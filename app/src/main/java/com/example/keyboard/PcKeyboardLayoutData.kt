@@ -88,7 +88,7 @@ object PcKeyboardLayoutData {
         ),
         listOf(
             KeySpec("ctrl", "Ctrl", keyCode = KeyEvent.KEYCODE_CTRL_LEFT, weight = 1.25f, isModifier = true, modifierType = ModifierKey.CTRL),
-            KeySpec("meta", "Win", keyCode = KeyEvent.KEYCODE_META_LEFT, weight = 1.05f, isModifier = true, modifierType = ModifierKey.META),
+            KeySpec("meta", "Win", keyCode = KeyEvent.KEYCODE_META_LEFT, weight = 0.95f, isModifier = true, modifierType = ModifierKey.META, iconType = KeyIconType.META_WIN),
             KeySpec("alt", "Alt", keyCode = KeyEvent.KEYCODE_ALT_LEFT, weight = 1.05f, isModifier = true, modifierType = ModifierKey.ALT),
             KeySpec("space", "Space", keyCode = KeyEvent.KEYCODE_SPACE, charPrimary = ' ', charShift = ' ', weight = 4.2f),
             KeySpec("alt_r", "Alt", keyCode = KeyEvent.KEYCODE_ALT_RIGHT, weight = 1.0f, isModifier = true, modifierType = ModifierKey.ALT),
@@ -272,7 +272,7 @@ object PcKeyboardLayoutData {
             ),
         ),
         listOf(
-            KeySpec("sm_shift", "⇧", keyCode = KeyEvent.KEYCODE_SHIFT_LEFT, weight = 1.45f, isModifier = true, modifierType = ModifierKey.SHIFT, iconType = KeyIconType.SHIFT),
+            KeySpec("sm_shift", "⇧", keyCode = KeyEvent.KEYCODE_SHIFT_LEFT, weight = 1.5f, isModifier = true, modifierType = ModifierKey.SHIFT, iconType = KeyIconType.SHIFT),
             KeySpec(
                 "sm_z", "z", "Z", keyCode = KeyEvent.KEYCODE_Z, charPrimary = 'z', charShift = 'Z',
                 cornerHint = "*",
@@ -295,7 +295,7 @@ object PcKeyboardLayoutData {
                 longPressShiftChars = listOf("!", "Ñ", "Ń"),
             ),
             KeySpec("sm_m", "m", "M", keyCode = KeyEvent.KEYCODE_M, charPrimary = 'm', charShift = 'M', cornerHint = "?", longPressChars = listOf("?")),
-            KeySpec("sm_bksp", "⌫", keyCode = KeyEvent.KEYCODE_DEL, weight = 1.45f, isModifier = true, iconType = KeyIconType.BACKSPACE),
+            KeySpec("sm_bksp", "⌫", keyCode = KeyEvent.KEYCODE_DEL, weight = 1.5f, isModifier = true, iconType = KeyIconType.BACKSPACE),
         ),
         listOf(
             KeySpec("simple_sym_toggle", "?123", keyCode = KeyEvent.KEYCODE_SYM, weight = 1.45f, isModifier = true),
@@ -432,6 +432,17 @@ object PcKeyboardLayoutData {
     )
 
     val defaultHotkeys: List<CustomHotkey> = listOf(
+        CustomHotkey(
+            id = "hk_float_deck",
+            label = "Float Keyboard",
+            keyCode = KeyEvent.KEYCODE_F,
+            keyDisplay = "F",
+            ctrl = true,
+            alt = true,
+            category = HotkeyCategory.NAVIGATION,
+            accentHex = 0xFF0D9488,
+            actionType = HotkeyActionType.TOGGLE_FLOATING,
+        ),
         CustomHotkey("hk_copy", "Copy", KeyEvent.KEYCODE_C, "C", ctrl = true, category = HotkeyCategory.EDITING, accentHex = 0xFF4F46E5),
         CustomHotkey("hk_paste", "Paste", KeyEvent.KEYCODE_V, "V", ctrl = true, category = HotkeyCategory.EDITING, accentHex = 0xFF0D9488),
         CustomHotkey("hk_cut", "Cut", KeyEvent.KEYCODE_X, "X", ctrl = true, category = HotkeyCategory.EDITING, accentHex = 0xFFD97706),

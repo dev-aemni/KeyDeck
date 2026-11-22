@@ -23,10 +23,12 @@ import androidx.lifecycle.setViewTreeViewModelStoreOwner
 import androidx.savedstate.setViewTreeSavedStateRegistryOwner
 import com.example.data.KeyDeckRepository
 import com.example.data.KeyDeckRuntimeState
+import com.example.keyboard.BuiltInWallpapers
 import com.example.keyboard.KeyDeckSettings
 import com.example.keyboard.KeyDispatcher
 import com.example.keyboard.KeyboardDockAlignment
 import com.example.keyboard.PcKeyboardDeck
+import com.example.keyboard.WallpaperSourceType
 import com.example.ui.theme.KeyDeckTheme
 import com.example.ui.theme.resolveIsAppDark
 import kotlinx.coroutines.CoroutineScope
@@ -120,6 +122,10 @@ class KeyDeckImeService : InputMethodService() {
                 val hotkeys by repository.hotkeysFlow.collectAsStateWithLifecycle(
                     initialValue = com.example.keyboard.PcKeyboardLayoutData.defaultHotkeys,
                 )
+                val savedWallpapers by repository.wallpapersFlow.collectAsStateWithLifecycle(
+                    initialValue = emptyList(),
+                )
+                val activeWallpaper = BuiltInWallpapers.resolve(settings.activeWallpaperId, savedWallpapers)
                 val isDark = resolveIsAppDark(settings.appThemeMode)
                 KeyDeckTheme(darkTheme = isDark) {
                     val palette = settings.resolvePalette(isDark)
@@ -128,10 +134,18 @@ class KeyDeckImeService : InputMethodService() {
                         KeyboardDockAlignment.CENTER -> Alignment.Center
                         KeyboardDockAlignment.RIGHT -> Alignment.CenterEnd
                     }
+                    val imeNavBg = if (activeWallpaper != null &&
+                        activeWallpaper.sourceType != WallpaperSourceType.NONE &&
+                        activeWallpaper.darkBackdrop
+                    ) {
+                        androidx.compose.ui.graphics.Color.Black
+                    } else {
+                        palette.deckBg
+                    }
                     Box(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .background(palette.deckBg)
+                            .background(imeNavBg)
                             .navigationBarsPadding(),
                         contentAlignment = dockAlign,
                     ) {
@@ -140,6 +154,7 @@ class KeyDeckImeService : InputMethodService() {
                             routeLabel = "IME",
                             isOverlay = false,
                             hotkeys = hotkeys,
+                            activeWallpaper = activeWallpaper,
                             onHotkeyDispatch = { hk ->
                                 KeyDispatcher.dispatchHotkey(
                                     context = this@KeyDeckImeService,

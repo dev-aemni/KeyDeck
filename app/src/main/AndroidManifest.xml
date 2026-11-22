@@ -42,15 +42,15 @@
         </activity>
 
         <!-- Floating Bubble & Floating PC Keyboard Overlay Service.
-             stopWithTask=true guarantees the keyboard stops immediately if the app tab is closed. -->
+             stopWithTask=false keeps the floating keyboard alive even if the KeyDeck app tab is closed. -->
         <service
             android:name=".service.FloatingKeyboardService"
             android:exported="false"
             android:foregroundServiceType="specialUse"
-            android:stopWithTask="true">
+            android:stopWithTask="false">
             <property
                 android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
-                android:value="Floating virtual PC keyboard overlay tied to active app session" />
+                android:value="Persistent floating virtual PC keyboard overlay across apps" />
         </service>
 
         <!-- Native Android Input Method Service for direct InputConnection key & shortcut events -->

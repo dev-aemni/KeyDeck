@@ -19,8 +19,10 @@ import com.example.keyboard.KeyDeckSettings
 import com.example.keyboard.KeyboardDockAlignment
 import com.example.keyboard.KeyboardLayoutMode
 import com.example.keyboard.KeyboardThemeId
+import com.example.keyboard.KeyboardWallpaper
 import com.example.keyboard.PcKeyboardLayoutData
 import com.example.keyboard.RgbBorderMode
+import com.example.keyboard.WallpaperSourceType
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -112,6 +114,9 @@ class KeyDeckRepository(private val context: Context) {
         val BUBBLE_SIZE_DP = intPreferencesKey("bubble_size_dp")
         val RGB_BORDER_MODE = stringPreferencesKey("rgb_border_mode")
         val SHOW_KEY_BORDER = booleanPreferencesKey("show_key_border")
+        val THEME_ADAPTIVE_BORDER = booleanPreferencesKey("theme_adaptive_border")
+        val ACTIVE_WALLPAPER_ID = stringPreferencesKey("active_wallpaper_id")
+        val SAVED_WALLPAPERS_JSON = stringPreferencesKey("saved_wallpapers_json")
         val TOUCHPAD_SENSITIVITY = floatPreferencesKey("touchpad_sensitivity")
         val TOUCHPAD_WIDTH_FRACTION = floatPreferencesKey("touchpad_width_fraction")
         val GAMING_MCPE_LOOK_MODE = booleanPreferencesKey("gaming_mcpe_look_mode")
@@ -137,15 +142,42 @@ class KeyDeckRepository(private val context: Context) {
         }
     }
 
+    val wallpapersFlow: Flow<List<KeyboardWallpaper>> = context.keyDeckDataStore.data.map { prefs ->
+        val raw = prefs[Keys.SAVED_WALLPAPERS_JSON]
+        if (raw.isNullOrBlank()) {
+            emptyList()
+        } else {
+            decodeWallpapers(raw)
+        }
+    }
+
     suspend fun migrateSchemaIfNeeded() {
         context.keyDeckDataStore.edit { prefs ->
             val currentVersion = prefs[Keys.SETTINGS_SCHEMA_VERSION] ?: 0
-            if (currentVersion < CURRENT_SCHEMA_VERSION) {
-                prefs[Keys.SETTINGS_SCHEMA_VERSION] = CURRENT_SCHEMA_VERSION
+            if (currentVersion < 2) {
                 prefs[Keys.LAYOUT_MODE] = KeyboardLayoutMode.PC_STANDARD.name
                 prefs[Keys.RGB_BORDER_MODE] = RgbBorderMode.GAMING_ONLY.name
-                prefs[Keys.SHOW_KEY_BORDER] = true
                 prefs[Keys.SUPPRESS_AUTO_IME_ON_INPUT] = true
+            }
+            if (currentVersion < 3) {
+                val rawHotkeys = prefs[Keys.CUSTOM_HOTKEYS_JSON]
+                if (!rawHotkeys.isNullOrBlank()) {
+                    val decoded = decodeHotkeys(rawHotkeys)
+                    if (decoded.none { it.actionType == HotkeyActionType.TOGGLE_FLOATING }) {
+                        val defaultFloat = PcKeyboardLayoutData.defaultHotkeys
+                            .firstOrNull { it.actionType == HotkeyActionType.TOGGLE_FLOATING }
+                        if (defaultFloat != null) {
+                            prefs[Keys.CUSTOM_HOTKEYS_JSON] = encodeHotkeys(listOf(defaultFloat) + decoded)
+                        }
+                    }
+                }
+            }
+            if (currentVersion < 4) {
+                prefs[Keys.SHOW_KEY_BORDER] = false
+                prefs[Keys.THEME_ADAPTIVE_BORDER] = false
+            }
+            if (currentVersion < CURRENT_SCHEMA_VERSION) {
+                prefs[Keys.SETTINGS_SCHEMA_VERSION] = CURRENT_SCHEMA_VERSION
             }
         }
     }
@@ -177,6 +209,8 @@ class KeyDeckRepository(private val context: Context) {
             prefs[Keys.BUBBLE_SIZE_DP] = updated.bubbleSizeDp
             prefs[Keys.RGB_BORDER_MODE] = updated.rgbBorderMode.name
             prefs[Keys.SHOW_KEY_BORDER] = updated.showKeyBorder
+            prefs[Keys.THEME_ADAPTIVE_BORDER] = updated.themeAdaptiveBorder
+            prefs[Keys.ACTIVE_WALLPAPER_ID] = updated.activeWallpaperId
             prefs[Keys.TOUCHPAD_SENSITIVITY] = updated.touchpadSensitivity
             prefs[Keys.TOUCHPAD_WIDTH_FRACTION] = updated.touchpadWidthFraction
             prefs[Keys.GAMING_MCPE_LOOK_MODE] = updated.gamingMcpeLookMode
@@ -191,7 +225,8 @@ class KeyDeckRepository(private val context: Context) {
 
     private fun decodeSettings(prefs: Preferences): KeyDeckSettings {
         val schemaVersion = prefs[Keys.SETTINGS_SCHEMA_VERSION] ?: 0
-        val isLegacyV1 = schemaVersion < CURRENT_SCHEMA_VERSION
+        val isLegacyV1 = schemaVersion < 2
+        val isLegacyBeforeV4 = schemaVersion < 4
         val layoutName = if (isLegacyV1) {
             KeyboardLayoutMode.PC_STANDARD.name
         } else {
@@ -232,7 +267,9 @@ class KeyDeckRepository(private val context: Context) {
             bubbleSizeDp = (prefs[Keys.BUBBLE_SIZE_DP] ?: 48).coerceIn(36, 68),
             rgbBorderMode = runCatching { RgbBorderMode.valueOf(rgbName) }
                 .getOrDefault(RgbBorderMode.GAMING_ONLY),
-            showKeyBorder = if (isLegacyV1) true else (prefs[Keys.SHOW_KEY_BORDER] ?: true),
+            showKeyBorder = if (isLegacyBeforeV4) false else (prefs[Keys.SHOW_KEY_BORDER] ?: false),
+            themeAdaptiveBorder = if (isLegacyBeforeV4) false else (prefs[Keys.THEME_ADAPTIVE_BORDER] ?: false),
+            activeWallpaperId = prefs[Keys.ACTIVE_WALLPAPER_ID] ?: "",
             touchpadSensitivity = (prefs[Keys.TOUCHPAD_SENSITIVITY] ?: 1.6f).coerceIn(0.6f, 3.5f),
             touchpadWidthFraction = (prefs[Keys.TOUCHPAD_WIDTH_FRACTION] ?: 0.42f).coerceIn(0.30f, 0.55f),
             gamingMcpeLookMode = prefs[Keys.GAMING_MCPE_LOOK_MODE] ?: true,
@@ -311,7 +348,70 @@ class KeyDeckRepository(private val context: Context) {
         }.getOrElse { PcKeyboardLayoutData.defaultHotkeys }
     }
 
+    suspend fun saveWallpapers(wallpapers: List<KeyboardWallpaper>) {
+        context.keyDeckDataStore.edit { prefs ->
+            prefs[Keys.SAVED_WALLPAPERS_JSON] = encodeWallpapers(wallpapers)
+        }
+    }
+
+    private fun encodeWallpapers(list: List<KeyboardWallpaper>): String {
+        val arr = JSONArray()
+        list.forEach { wp ->
+            arr.put(
+                JSONObject().apply {
+                    put("id", wp.id)
+                    put("name", wp.name)
+                    put("sourceType", wp.sourceType.name)
+                    put("imagePath", wp.imagePath)
+                    put("lightness", wp.lightness.toDouble())
+                    put("saturation", wp.saturation.toDouble())
+                    put("contrast", wp.contrast.toDouble())
+                    put("brightness", wp.brightness.toDouble())
+                    put("tintHex", wp.tintHex)
+                    put("tintIntensity", wp.tintIntensity.toDouble())
+                    put("keyOpacity", wp.keyOpacity.toDouble())
+                    put("darkBackdrop", wp.darkBackdrop)
+                    put("fitCenter", wp.fitCenter)
+                    put("createdAtMs", wp.createdAtMs)
+                },
+            )
+        }
+        return arr.toString()
+    }
+
+    private fun decodeWallpapers(raw: String): List<KeyboardWallpaper> {
+        return runCatching {
+            val arr = JSONArray(raw)
+            buildList {
+                for (i in 0 until arr.length()) {
+                    val obj = arr.getJSONObject(i)
+                    add(
+                        KeyboardWallpaper(
+                            id = obj.getString("id"),
+                            name = obj.optString("name", "Custom Wallpaper"),
+                            sourceType = runCatching {
+                                WallpaperSourceType.valueOf(obj.optString("sourceType", WallpaperSourceType.NONE.name))
+                            }.getOrDefault(WallpaperSourceType.NONE),
+                            imagePath = obj.optString("imagePath", ""),
+                            lightness = obj.optDouble("lightness", 0.16).toFloat().coerceIn(0.03f, 1.0f),
+                            saturation = obj.optDouble("saturation", 0.90).toFloat().coerceIn(0.0f, 2.0f),
+                            contrast = obj.optDouble("contrast", 1.08).toFloat().coerceIn(0.4f, 2.0f),
+                            brightness = obj.optDouble("brightness", 0.0).toFloat().coerceIn(-0.5f, 0.5f),
+                            tintHex = obj.optLong("tintHex", 0L),
+                            tintIntensity = obj.optDouble("tintIntensity", 0.24).toFloat().coerceIn(0f, 0.85f),
+                            keyOpacity = obj.optDouble("keyOpacity", 0.64).toFloat().coerceIn(0.15f, 1.0f),
+                            darkBackdrop = obj.optBoolean("darkBackdrop", true),
+                            fitCenter = obj.optBoolean("fitCenter", false),
+                            isBuiltIn = false,
+                            createdAtMs = obj.optLong("createdAtMs", 0L),
+                        ),
+                    )
+                }
+            }
+        }.getOrElse { emptyList() }
+    }
+
     companion object {
-        private const val CURRENT_SCHEMA_VERSION = 2
+        private const val CURRENT_SCHEMA_VERSION = 4
     }
 }

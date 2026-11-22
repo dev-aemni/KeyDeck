@@ -32,6 +32,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowLeft
 import androidx.compose.material.icons.automirrored.filled.ArrowRight
@@ -46,9 +47,11 @@ import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Dialpad
 import androidx.compose.material.icons.filled.DragHandle
 import androidx.compose.material.icons.filled.KeyboardHide
+import androidx.compose.material.icons.filled.Layers
 import androidx.compose.material.icons.filled.OpenInFull
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Upload
+import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -61,12 +64,17 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.input.pointer.positionChange
 import androidx.compose.ui.layout.LayoutCoordinates
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalDensity
@@ -119,10 +127,38 @@ fun PcKeyboardDeck(
     onCloseOverlay: (() -> Unit)? = null,
     onSetupAccessibility: (() -> Unit)? = null,
     onSetupIme: (() -> Unit)? = null,
+    activeWallpaper: KeyboardWallpaper? = null,
     modifier: Modifier = Modifier,
 ) {
     val isAppDark = KeyDeckColors.current.isDark
-    val palette = remember(settings, isAppDark) { settings.resolvePalette(isAppDark) }
+    val basePalette = remember(settings, isAppDark) { settings.resolvePalette(isAppDark) }
+    val hasWallpaper = activeWallpaper != null && activeWallpaper.sourceType != WallpaperSourceType.NONE
+    val keyOpacity = if (hasWallpaper) activeWallpaper!!.keyOpacity.coerceIn(0.15f, 1.0f) else 1f
+    val palette = remember(basePalette, activeWallpaper) {
+        if (activeWallpaper != null && activeWallpaper.sourceType != WallpaperSourceType.NONE && activeWallpaper.darkBackdrop) {
+            basePalette.copy(
+                deckBg = Color.Black,
+                keyBg = if (basePalette.isDark) {
+                    androidx.compose.ui.graphics.lerp(basePalette.keyBg, Color(0xFF0A0A0D), 0.55f)
+                } else {
+                    Color(0xFF0E1015)
+                },
+                modifierBg = if (basePalette.isDark) {
+                    androidx.compose.ui.graphics.lerp(basePalette.modifierBg, Color(0xFF050608), 0.55f)
+                } else {
+                    Color(0xFF151820)
+                },
+                activeFill = androidx.compose.ui.graphics.lerp(Color(0xFF121620), basePalette.accentBg, 0.28f),
+                shadowLight = Color(0xFF222630),
+                shadowDark = Color(0xFF000000),
+                primaryText = Color(0xFFF8FAFC),
+                secondaryText = Color(0xFFCBD5E1),
+                isDark = true,
+            )
+        } else {
+            basePalette
+        }
+    }
     var ctrlActive by remember { mutableStateOf(false) }
     var altActive by remember { mutableStateOf(false) }
     var shiftActive by remember { mutableStateOf(false) }
@@ -133,6 +169,7 @@ fun PcKeyboardDeck(
     var showShortcutsStrip by remember { mutableStateOf(false) }
     var showResizeStrip by remember { mutableStateOf(false) }
     var showQuickSettingsPopup by remember { mutableStateOf(false) }
+    var showCloseConfirm by remember { mutableStateOf(false) }
     var simpleSymbolLayer by remember { mutableStateOf(false) }
     var simpleSymbolAltLayer by remember { mutableStateOf(false) }
 
@@ -322,15 +359,32 @@ fun PcKeyboardDeck(
         clearStickyModifiersIfNeeded()
     }
 
+    fun handleSpaceCursorSlide(direction: Int) {
+        val code = if (direction < 0) KeyEvent.KEYCODE_DPAD_LEFT else KeyEvent.KEYCODE_DPAD_RIGHT
+        val label = if (direction < 0) "◀ Cursor" else "Cursor ▶"
+        onKeyDispatch(
+            code,
+            currentMetaState(),
+            null,
+            formatComboLabel(label),
+        )
+    }
+
     val isTightDeck = settings.keyHeightDp <= 32
-    val borderCol = if (settings.showKeyBorder) palette.keyBorder.copy(alpha = 0.85f) else null
+    val borderVisible = settings.isKeyBorderVisible()
+    val borderCol = if (borderVisible) palette.keyBorder.copy(alpha = 0.85f) else null
 
     Box(
         modifier = modifier
             .fillMaxWidth()
-            .background(palette.deckBg.copy(alpha = if (isOverlay) settings.overlayOpacity else 1f))
             .onGloballyPositioned { rootCoords = it },
     ) {
+        KeyboardWallpaperBackdrop(
+            wallpaper = activeWallpaper,
+            palette = palette,
+            overlayAlpha = if (isOverlay) settings.overlayOpacity else 1f,
+            modifier = Modifier.matchParentSize(),
+        )
         Column(
             modifier = Modifier
                 .fillMaxWidth()
@@ -474,7 +528,7 @@ fun PcKeyboardDeck(
                         palette = palette,
                         borderColor = borderCol,
                         testTag = "overlay_close_button",
-                        onClick = onCloseOverlay,
+                        onClick = { showCloseConfirm = true },
                     )
                 }
             }
@@ -483,7 +537,13 @@ fun PcKeyboardDeck(
         // Expandable Custom App & Hotkey Strip
         AnimatedVisibility(visible = showShortcutsStrip && hotkeys.isNotEmpty()) {
             val orderedHotkeys = remember(hotkeys) {
-                hotkeys.sortedByDescending { it.actionType == HotkeyActionType.LAUNCH_APP }
+                hotkeys.sortedByDescending {
+                    when (it.actionType) {
+                        HotkeyActionType.TOGGLE_FLOATING -> 2
+                        HotkeyActionType.LAUNCH_APP -> 1
+                        HotkeyActionType.KEY_COMBO -> 0
+                    }
+                }
             }
             Row(
                 modifier = Modifier
@@ -496,11 +556,13 @@ fun PcKeyboardDeck(
             ) {
                 orderedHotkeys.forEach { hk ->
                     val isAppLaunch = hk.actionType == HotkeyActionType.LAUNCH_APP && hk.targetPackageName.isNotBlank()
+                    val isFloatDeck = hk.actionType == HotkeyActionType.TOGGLE_FLOATING
+                    val isSpecial = isAppLaunch || isFloatDeck
                     val accent = Color(hk.accentHex)
                     Row(
                         modifier = Modifier
                             .neumorphicRaised(
-                                surfaceColor = if (isAppLaunch) palette.activeFill else palette.keyBg,
+                                surfaceColor = if (isSpecial) palette.activeFill else palette.keyBg,
                                 shadowLight = palette.shadowLight,
                                 shadowDark = palette.shadowDark,
                                 cornerRadius = 8.dp,
@@ -521,9 +583,9 @@ fun PcKeyboardDeck(
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(4.dp),
                     ) {
-                        if (isAppLaunch) {
+                        if (isAppLaunch || isFloatDeck) {
                             Icon(
-                                imageVector = Icons.Default.Apps,
+                                imageVector = if (isFloatDeck) Icons.Default.Layers else Icons.Default.Apps,
                                 contentDescription = null,
                                 tint = accent,
                                 modifier = Modifier.size(12.dp),
@@ -534,7 +596,7 @@ fun PcKeyboardDeck(
                             fontFamily = BodyFontFamily,
                             fontSize = 10.sp,
                             fontWeight = FontWeight.Bold,
-                            color = if (isAppLaunch) accent else palette.primaryText,
+                            color = if (isSpecial) accent else palette.primaryText,
                             maxLines = 1,
                         )
                         Text(
@@ -571,7 +633,7 @@ fun PcKeyboardDeck(
             )
         }
 
-        // Readiness notice shown ONLY inside the floating overlay when neither Accessibility nor KeyDeck IME is active
+        // Readiness notice shown ONLY inside the floating overlay when neither KeyDeck IME nor Accessibility is active
         if (isOverlay && routeLabel == "Setup") {
             Row(
                 modifier = Modifier
@@ -590,7 +652,7 @@ fun PcKeyboardDeck(
                 horizontalArrangement = Arrangement.SpaceBetween,
             ) {
                 Text(
-                    text = "A11y off: Enable Accessibility or IME to type in other apps",
+                    text = "Select KeyDeck IME to type anywhere (A11y optional)",
                     fontFamily = BodyFontFamily,
                     fontSize = 10.sp,
                     fontWeight = FontWeight.SemiBold,
@@ -600,26 +662,26 @@ fun PcKeyboardDeck(
                     modifier = Modifier.weight(1f).padding(end = 6.dp),
                 )
                 Row(horizontalArrangement = Arrangement.spacedBy(5.dp)) {
-                    if (onSetupAccessibility != null) {
-                        DeckModeChip(
-                            label = "Enable A11y",
-                            selected = true,
-                            palette = palette,
-                            borderColor = borderCol,
-                            compact = true,
-                            testTag = "overlay_setup_a11y",
-                            onClick = onSetupAccessibility,
-                        )
-                    }
                     if (onSetupIme != null) {
                         DeckModeChip(
-                            label = "IME",
+                            label = "Select IME",
                             selected = true,
                             palette = palette,
                             borderColor = borderCol,
                             compact = true,
                             testTag = "overlay_setup_ime",
                             onClick = onSetupIme,
+                        )
+                    }
+                    if (onSetupAccessibility != null) {
+                        DeckModeChip(
+                            label = "A11y (Opt)",
+                            selected = false,
+                            palette = palette,
+                            borderColor = borderCol,
+                            compact = true,
+                            testTag = "overlay_setup_a11y",
+                            onClick = onSetupAccessibility,
                         )
                     }
                 }
@@ -668,7 +730,8 @@ fun PcKeyboardDeck(
                         fnActive = false,
                         isModifierLit = spec.id == "num_toggle_top" && settings.layoutMode != KeyboardLayoutMode.PC_STANDARD,
                         compact = true,
-                        showKeyBorder = settings.showKeyBorder,
+                        showKeyBorder = borderVisible,
+                        keyOpacity = keyOpacity,
                         rgbActive = rgbActive,
                         rgbPhaseDeg = rgbPhaseDeg,
                         modifier = Modifier.weight(spec.weight),
@@ -701,9 +764,11 @@ fun PcKeyboardDeck(
                         metaActive = metaActive,
                         fnActive = fnActive,
                         compact = true,
-                        showKeyBorder = settings.showKeyBorder,
+                        showKeyBorder = borderVisible,
+                        keyOpacity = keyOpacity,
                         rgbActive = rgbActive,
                         rgbPhaseDeg = rgbPhaseDeg,
+                        onSpaceCursorSlide = { dir -> handleSpaceCursorSlide(dir) },
                         modifier = Modifier.weight(0.68f),
                         onKeyTap = { handleKeyTap(it, isFromNumpad = false) },
                     )
@@ -716,7 +781,8 @@ fun PcKeyboardDeck(
                         fontScale = fontScale * 0.94f,
                         numLockOn = settings.numLockOn,
                         compact = true,
-                        showKeyBorder = settings.showKeyBorder,
+                        showKeyBorder = borderVisible,
+                        keyOpacity = keyOpacity,
                         rgbActive = rgbActive,
                         rgbPhaseDeg = rgbPhaseDeg,
                         modifier = Modifier.weight(0.32f),
@@ -742,15 +808,17 @@ fun PcKeyboardDeck(
                     metaActive = metaActive,
                     fnActive = fnActive,
                     compact = isTightDeck,
-                    showKeyBorder = settings.showKeyBorder,
+                    showKeyBorder = borderVisible,
+                    keyOpacity = keyOpacity,
                     rgbActive = rgbActive,
                     rgbPhaseDeg = rgbPhaseDeg,
+                    onSpaceCursorSlide = { dir -> handleSpaceCursorSlide(dir) },
                     onKeyTap = { handleKeyTap(it, isFromNumpad = false) },
                 )
             }
 
             KeyboardLayoutMode.SIMPLE -> {
-                val simpleKeyHeight = (keyHeight + 4.dp).coerceIn(34.dp, 50.dp)
+                val simpleKeyHeight = (keyHeight + 5.dp).coerceIn(36.dp, 52.dp)
                 val simpleRows = when {
                     simpleSymbolLayer && simpleSymbolAltLayer -> PcKeyboardLayoutData.simpleSymbolAltRows
                     simpleSymbolLayer -> PcKeyboardLayoutData.simpleSymbolRows
@@ -760,10 +828,10 @@ fun PcKeyboardDeck(
                     rows = simpleRows,
                     palette = palette,
                     keyHeight = simpleKeyHeight,
-                    hGap = (hGap + 1.dp).coerceAtMost(7.dp),
-                    vGap = (vGap + 2.dp).coerceAtMost(8.dp),
-                    keyCorner = (keyCorner + 2.dp).coerceAtMost(16.dp),
-                    fontScale = (fontScale * 1.08f).coerceAtMost(1.26f),
+                    hGap = hGap.coerceIn(3.dp, 5.dp),
+                    vGap = (vGap + 2.dp).coerceIn(5.dp, 8.dp),
+                    keyCorner = keyCorner.coerceIn(8.dp, 12.dp),
+                    fontScale = (fontScale * 1.08f).coerceAtMost(1.24f),
                     upperCaseLetters = effectiveUpperCase,
                     ctrlActive = ctrlActive,
                     altActive = altActive,
@@ -773,7 +841,8 @@ fun PcKeyboardDeck(
                     fnActive = fnActive,
                     compact = false,
                     centerShortRows = !simpleSymbolLayer,
-                    showKeyBorder = settings.showKeyBorder,
+                    showKeyBorder = borderVisible,
+                    keyOpacity = keyOpacity,
                     rgbActive = rgbActive,
                     rgbPhaseDeg = rgbPhaseDeg,
                     rootCoordsProvider = { rootCoords },
@@ -787,6 +856,7 @@ fun PcKeyboardDeck(
                         activeHoldPopup = null
                         handleHoldCharCommit(chosen)
                     },
+                    onSpaceCursorSlide = { dir -> handleSpaceCursorSlide(dir) },
                     modifier = Modifier.testTag("simple_mode_deck"),
                     onKeyTap = { handleKeyTap(it, isFromNumpad = false) },
                 )
@@ -802,7 +872,8 @@ fun PcKeyboardDeck(
                     fontScale = fontScale * 1.08f,
                     numLockOn = settings.numLockOn,
                     compact = false,
-                    showKeyBorder = settings.showKeyBorder,
+                    showKeyBorder = borderVisible,
+                    keyOpacity = keyOpacity,
                     rgbActive = rgbActive,
                     rgbPhaseDeg = rgbPhaseDeg,
                     modifier = Modifier.fillMaxWidth(),
@@ -829,7 +900,8 @@ fun PcKeyboardDeck(
                         vGap = vGap,
                         keyCorner = keyCorner,
                         fontScale = fontScale,
-                        showKeyBorder = settings.showKeyBorder,
+                        showKeyBorder = borderVisible,
+                        keyOpacity = keyOpacity,
                         rgbActive = rgbActive,
                         rgbPhaseDeg = rgbPhaseDeg,
                         modifier = Modifier.weight(1f - padWeight),
@@ -846,6 +918,7 @@ fun PcKeyboardDeck(
                         settings = settings,
                         rgbPhaseDeg = rgbPhaseDeg,
                         rgbEnabled = rgbActive,
+                        keyOpacity = keyOpacity,
                         totalHeight = totalPadHeight,
                         cornerRadius = keyCorner,
                         modifier = Modifier.weight(padWeight),
@@ -924,6 +997,157 @@ fun PcKeyboardDeck(
                 }
             }
         }
+
+        // In-Compose Close Confirmation Warning Overlay (prevents accidental service shutdown)
+        if (showCloseConfirm && isOverlay && onCloseOverlay != null) {
+            Box(
+                modifier = Modifier
+                    .matchParentSize()
+                    .zIndex(60f)
+                    .background(Color.Black.copy(alpha = 0.56f))
+                    .clickable(
+                        interactionSource = remember { MutableInteractionSource() },
+                        indication = null,
+                    ) { showCloseConfirm = false }
+                    .padding(10.dp),
+                contentAlignment = Alignment.Center,
+            ) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth(0.92f)
+                        .neumorphicRaised(
+                            surfaceColor = palette.deckBg,
+                            shadowLight = palette.shadowLight,
+                            shadowDark = palette.shadowDark,
+                            cornerRadius = 16.dp,
+                            shadowOffset = 6.dp,
+                            blurRadius = 12.dp,
+                            borderColor = borderCol ?: palette.keyBorder.copy(alpha = 0.75f),
+                        )
+                        .clickable(
+                            interactionSource = remember { MutableInteractionSource() },
+                            indication = null,
+                            onClick = {},
+                        )
+                        .verticalScroll(rememberScrollState())
+                        .padding(horizontal = 14.dp, vertical = 12.dp)
+                        .testTag("overlay_close_confirm_dialog"),
+                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Warning,
+                            contentDescription = "Warning",
+                            tint = Color(0xFFD97706),
+                            modifier = Modifier.size(18.dp),
+                        )
+                        Text(
+                            text = "Close Floating Keyboard?",
+                            fontFamily = BodyFontFamily,
+                            fontSize = 14.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = palette.primaryText,
+                        )
+                    }
+                    val floatComboText = remember(hotkeys) {
+                        hotkeys.firstOrNull { it.actionType == HotkeyActionType.TOGGLE_FLOATING }?.comboText()
+                            ?: "Ctrl+Alt+F"
+                    }
+                    Text(
+                        text = "This turns off the floating icon completely until you open KeyDeck or press $floatComboText on KeyDeck IME.",
+                        fontFamily = BodyFontFamily,
+                        fontSize = 11.5.sp,
+                        color = palette.secondaryText,
+                    )
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .weight(1f)
+                                .height(48.dp)
+                                .neumorphicRaised(
+                                    surfaceColor = palette.keyBg,
+                                    shadowLight = palette.shadowLight,
+                                    shadowDark = palette.shadowDark,
+                                    cornerRadius = 10.dp,
+                                    shadowOffset = 2.dp,
+                                    blurRadius = 4.dp,
+                                    borderColor = borderCol,
+                                )
+                                .clickable { showCloseConfirm = false }
+                                .testTag("overlay_close_cancel"),
+                            contentAlignment = Alignment.Center,
+                        ) {
+                            Text(
+                                text = "Keep Open",
+                                fontFamily = BodyFontFamily,
+                                fontSize = 11.5.sp,
+                                fontWeight = FontWeight.SemiBold,
+                                color = palette.primaryText,
+                                maxLines = 1,
+                            )
+                        }
+                        if (onMinimize != null) {
+                            Box(
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .height(48.dp)
+                                    .neumorphicInset(
+                                        surfaceColor = palette.activeFill,
+                                        shadowLight = palette.shadowLight,
+                                        shadowDark = palette.shadowDark,
+                                        cornerRadius = 10.dp,
+                                        depth = 2.dp,
+                                        borderColor = borderCol,
+                                    )
+                                    .clickable {
+                                        showCloseConfirm = false
+                                        onMinimize()
+                                    }
+                                    .testTag("overlay_close_minimize"),
+                                contentAlignment = Alignment.Center,
+                            ) {
+                                Text(
+                                    text = "Minimize",
+                                    fontFamily = BodyFontFamily,
+                                    fontSize = 11.5.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = palette.accentBg,
+                                    maxLines = 1,
+                                )
+                            }
+                        }
+                        Box(
+                            modifier = Modifier
+                                .weight(1f)
+                                .height(48.dp)
+                                .clip(androidx.compose.foundation.shape.RoundedCornerShape(10.dp))
+                                .background(Color(0xFFE11D48))
+                                .clickable {
+                                    showCloseConfirm = false
+                                    onCloseOverlay()
+                                }
+                                .testTag("overlay_close_confirm"),
+                            contentAlignment = Alignment.Center,
+                        ) {
+                            Text(
+                                text = "Close",
+                                fontFamily = BodyFontFamily,
+                                fontSize = 11.5.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = Color.White,
+                                maxLines = 1,
+                            )
+                        }
+                    }
+                }
+            }
+        }
     }
 }
 
@@ -946,11 +1170,13 @@ private fun KeyGridBlock(
     compact: Boolean,
     centerShortRows: Boolean = false,
     showKeyBorder: Boolean,
+    keyOpacity: Float = 1f,
     rgbActive: Boolean,
     rgbPhaseDeg: Float,
     rootCoordsProvider: () -> LayoutCoordinates? = { null },
     onPopupChanged: ((ActiveHoldPopup?) -> Unit)? = null,
     onPopupCommit: ((String) -> Unit)? = null,
+    onSpaceCursorSlide: ((Int) -> Unit)? = null,
     modifier: Modifier = Modifier,
     onKeyTap: (KeySpec) -> Unit,
 ) {
@@ -990,11 +1216,13 @@ private fun KeyGridBlock(
                         isModifierLit = isLit,
                         compact = compact,
                         showKeyBorder = showKeyBorder,
+                        keyOpacity = keyOpacity,
                         rgbActive = rgbActive,
                         rgbPhaseDeg = rgbPhaseDeg,
                         rootCoordsProvider = rootCoordsProvider,
                         onPopupChanged = onPopupChanged,
                         onPopupCommit = onPopupCommit,
+                        onSpaceCursorSlide = onSpaceCursorSlide,
                         modifier = Modifier.weight(spec.weight),
                         onClick = { onKeyTap(spec) },
                     )
@@ -1017,6 +1245,7 @@ private fun GamingKeysBlock(
     keyCorner: Dp,
     fontScale: Float,
     showKeyBorder: Boolean,
+    keyOpacity: Float = 1f,
     rgbActive: Boolean,
     rgbPhaseDeg: Float,
     modifier: Modifier = Modifier,
@@ -1039,6 +1268,7 @@ private fun GamingKeysBlock(
                         keyCorner = keyCorner,
                         fontScale = fontScale,
                         showKeyBorder = showKeyBorder,
+                        keyOpacity = keyOpacity,
                         rgbActive = rgbActive,
                         rgbPhaseDeg = rgbPhaseDeg,
                         modifier = Modifier.weight(spec.weight),
@@ -1058,6 +1288,7 @@ private fun GamingHoldKeyCap(
     keyCorner: Dp,
     fontScale: Float,
     showKeyBorder: Boolean,
+    keyOpacity: Float = 1f,
     rgbActive: Boolean,
     rgbPhaseDeg: Float,
     modifier: Modifier = Modifier,
@@ -1071,11 +1302,16 @@ private fun GamingHoldKeyCap(
     )
 
     val borderCol = if (showKeyBorder && !rgbActive) palette.keyBorder.copy(alpha = 0.90f) else null
-    val keyBg = when {
+    val baseKeyBg = when {
         held -> palette.activeFill
         spec.isAccent -> palette.activeFill.copy(alpha = 0.75f)
         spec.isModifier -> palette.modifierBg
         else -> palette.keyBg
+    }
+    val keyBg = if (keyOpacity < 0.99f) {
+        baseKeyBg.copy(alpha = (baseKeyBg.alpha * if (held) (keyOpacity + 0.18f).coerceAtMost(0.95f) else keyOpacity).coerceIn(0.14f, 1f))
+    } else {
+        baseKeyBg
     }
     val textColor = when {
         held || spec.isAccent -> palette.accentBg
@@ -1163,6 +1399,7 @@ private fun NumpadBlock(
     numLockOn: Boolean,
     compact: Boolean,
     showKeyBorder: Boolean,
+    keyOpacity: Float = 1f,
     rgbActive: Boolean,
     rgbPhaseDeg: Float,
     modifier: Modifier = Modifier,
@@ -1172,7 +1409,7 @@ private fun NumpadBlock(
     Column(
         modifier = modifier
             .neumorphicInset(
-                surfaceColor = palette.deckBg,
+                surfaceColor = if (keyOpacity < 0.99f) palette.deckBg.copy(alpha = (keyOpacity * 0.45f).coerceIn(0.12f, 0.7f)) else palette.deckBg,
                 shadowLight = palette.shadowLight,
                 shadowDark = palette.shadowDark,
                 cornerRadius = keyCorner + 2.dp,
@@ -1207,6 +1444,7 @@ private fun NumpadBlock(
                         isModifierLit = isNumLockKey && numLockOn,
                         compact = compact,
                         showKeyBorder = showKeyBorder,
+                        keyOpacity = keyOpacity,
                         rgbActive = rgbActive,
                         rgbPhaseDeg = rgbPhaseDeg,
                         modifier = Modifier.weight(spec.weight),
@@ -1231,17 +1469,20 @@ private fun PcKeyCap(
     isModifierLit: Boolean,
     compact: Boolean,
     showKeyBorder: Boolean,
+    keyOpacity: Float = 1f,
     rgbActive: Boolean,
     rgbPhaseDeg: Float,
     rootCoordsProvider: () -> LayoutCoordinates? = { null },
     onPopupChanged: ((ActiveHoldPopup?) -> Unit)? = null,
     onPopupCommit: ((String) -> Unit)? = null,
+    onSpaceCursorSlide: ((Int) -> Unit)? = null,
     modifier: Modifier = Modifier,
     onClick: () -> Unit,
 ) {
     val interactionSource = remember { MutableInteractionSource() }
     val interactionPressed by interactionSource.collectIsPressedAsState()
     var gesturePressed by remember { mutableStateOf(false) }
+    var isSlidingCursor by remember { mutableStateOf(false) }
     val isPressed = interactionPressed || gesturePressed
     val isEngaged = isPressed || isModifierLit
 
@@ -1253,6 +1494,7 @@ private fun PcKeyCap(
 
     val isLetter = spec.charPrimary?.isLetter() == true
     val primaryText = when {
+        spec.keyCode == KeyEvent.KEYCODE_SPACE && isSlidingCursor -> "◀  Cursor  ▶"
         fnActive && spec.fnLabel != null -> spec.fnLabel
         isLetter && upperCaseLetters && spec.charShift != null -> spec.charShift.toString()
         !isLetter && shiftActive && spec.charShift != null -> spec.charShift.toString()
@@ -1280,13 +1522,20 @@ private fun PcKeyCap(
     val latestCornerHint by rememberUpdatedState(spec.cornerHint)
     val latestOnPopupChanged by rememberUpdatedState(onPopupChanged)
     val latestOnPopupCommit by rememberUpdatedState(onPopupCommit)
+    val latestOnSpaceCursorSlide by rememberUpdatedState(onSpaceCursorSlide)
     val density = LocalDensity.current
 
-    val keyBg = when {
+    val baseKeyBg = when {
         isEngaged -> palette.activeFill
         spec.isAccent -> palette.accentBg
         spec.isModifier -> palette.modifierBg
         else -> palette.keyBg
+    }
+    val keyBg = if (keyOpacity < 0.99f && !spec.isAccent) {
+        val targetAlpha = if (isEngaged) (keyOpacity + 0.20f).coerceAtMost(0.95f) else keyOpacity
+        baseKeyBg.copy(alpha = (baseKeyBg.alpha * targetAlpha).coerceIn(0.14f, 1f))
+    } else {
+        baseKeyBg
     }
 
     val textColor = when {
@@ -1401,6 +1650,56 @@ private fun PcKeyCap(
                 }
             }
         }
+    } else if (spec.keyCode == KeyEvent.KEYCODE_SPACE && onSpaceCursorSlide != null) {
+        Modifier.pointerInput(spec.id) {
+            awaitEachGesture {
+                val down = awaitFirstDown(requireUnconsumed = false)
+                gesturePressed = true
+                var totalDx = 0f
+                var accumX = 0f
+                var slid = false
+                val activationPx = with(density) { 10.dp.toPx() }
+                val stepPx = with(density) { 11.dp.toPx() }
+                try {
+                    while (true) {
+                        val ev = awaitPointerEvent()
+                        val ch = ev.changes.firstOrNull { it.id == down.id }
+                        if (ch == null || !ch.pressed) {
+                            if (!slid) {
+                                latestOnClick()
+                            }
+                            break
+                        }
+                        val dx = ch.positionChange().x
+                        if (!slid) {
+                            totalDx += dx
+                            if (kotlin.math.abs(totalDx) >= activationPx) {
+                                slid = true
+                                isSlidingCursor = true
+                                accumX = totalDx
+                                ch.consume()
+                            }
+                        } else {
+                            accumX += dx
+                            ch.consume()
+                        }
+                        if (slid) {
+                            while (accumX <= -stepPx) {
+                                accumX += stepPx
+                                latestOnSpaceCursorSlide?.invoke(-1)
+                            }
+                            while (accumX >= stepPx) {
+                                accumX -= stepPx
+                                latestOnSpaceCursorSlide?.invoke(1)
+                            }
+                        }
+                    }
+                } finally {
+                    gesturePressed = false
+                    isSlidingCursor = false
+                }
+            }
+        }
     } else if (spec.keyCode == KeyEvent.KEYCODE_DEL) {
         Modifier.pointerInput(spec.id) {
             awaitEachGesture {
@@ -1498,7 +1797,9 @@ private fun PcKeyCap(
         }
 
         Box(
-            modifier = Modifier.align(Alignment.Center),
+            modifier = Modifier
+                .align(Alignment.Center)
+                .padding(top = if (cornerText != null && spec.iconType == null) 3.dp else 0.dp),
             contentAlignment = Alignment.Center,
         ) {
             when (spec.iconType) {
@@ -1520,11 +1821,10 @@ private fun PcKeyCap(
                     tint = textColor,
                     modifier = Modifier.size(iconSize),
                 )
-                KeyIconType.SHIFT -> Icon(
-                    imageVector = Icons.Default.Upload,
-                    contentDescription = "Shift",
-                    tint = textColor,
-                    modifier = Modifier.size(iconSize),
+                KeyIconType.SHIFT -> ShiftArrowGlyph(
+                    color = textColor,
+                    filled = isModifierLit,
+                    size = iconSize,
                 )
                 KeyIconType.ARROW_UP -> Icon(
                     imageVector = Icons.Default.ArrowDropUp,
@@ -1556,9 +1856,9 @@ private fun PcKeyCap(
                     tint = palette.activeIndicator,
                     modifier = Modifier.size(iconSize),
                 )
-                KeyIconType.META_WIN -> MetaDiamondGlyph(
+                KeyIconType.META_WIN -> WindowsLogoGlyph(
                     color = textColor,
-                    size = (iconSize - 2.dp).coerceAtLeast(9.dp),
+                    size = (iconSize - 1.dp).coerceAtLeast(10.dp),
                 )
                 KeyIconType.SPACE -> SpaceBarGlyph(
                     color = textColor,
@@ -1597,29 +1897,47 @@ private fun PcKeyCap(
 }
 
 @Composable
-private fun MetaDiamondGlyph(color: Color, size: Dp) {
+private fun WindowsLogoGlyph(color: Color, size: Dp) {
     Canvas(modifier = Modifier.size(size)) {
         val w = this.size.width
         val h = this.size.height
-        val cx = w / 2f
-        val cy = h / 2f
-        val gap = w * 0.08f
-        val r = w * 0.20f
+        val pad = w * 0.08f
+        val gap = (w * 0.10f).coerceAtLeast(1.2.dp.toPx())
+        val paneW = (w - pad * 2f - gap) / 2f
+        val paneH = (h - pad * 2f - gap) / 2f
+        val corner = CornerRadius(0.8.dp.toPx(), 0.8.dp.toPx())
 
-        fun diamond(dx: Float, dy: Float) {
-            val path = Path().apply {
-                moveTo(dx, dy - r)
-                lineTo(dx + r, dy)
-                lineTo(dx, dy + r)
-                lineTo(dx - r, dy)
-                close()
-            }
-            drawPath(path, color = color)
+        drawRoundRect(color = color, topLeft = Offset(pad, pad), size = Size(paneW, paneH), cornerRadius = corner)
+        drawRoundRect(color = color, topLeft = Offset(pad + paneW + gap, pad), size = Size(paneW, paneH), cornerRadius = corner)
+        drawRoundRect(color = color, topLeft = Offset(pad, pad + paneH + gap), size = Size(paneW, paneH), cornerRadius = corner)
+        drawRoundRect(color = color, topLeft = Offset(pad + paneW + gap, pad + paneH + gap), size = Size(paneW, paneH), cornerRadius = corner)
+    }
+}
+
+@Composable
+private fun ShiftArrowGlyph(color: Color, filled: Boolean, size: Dp) {
+    Canvas(modifier = Modifier.size(size)) {
+        val w = this.size.width
+        val h = this.size.height
+        val path = Path().apply {
+            moveTo(w * 0.50f, h * 0.14f)
+            lineTo(w * 0.86f, h * 0.54f)
+            lineTo(w * 0.66f, h * 0.54f)
+            lineTo(w * 0.66f, h * 0.86f)
+            lineTo(w * 0.34f, h * 0.86f)
+            lineTo(w * 0.34f, h * 0.54f)
+            lineTo(w * 0.14f, h * 0.54f)
+            close()
         }
-        diamond(cx, cy - r - gap)
-        diamond(cx, cy + r + gap)
-        diamond(cx - r - gap, cy)
-        diamond(cx + r + gap, cy)
+        if (filled) {
+            drawPath(path = path, color = color)
+        } else {
+            drawPath(
+                path = path,
+                color = color,
+                style = Stroke(width = 1.65.dp.toPx(), join = StrokeJoin.Round),
+            )
+        }
     }
 }
 
