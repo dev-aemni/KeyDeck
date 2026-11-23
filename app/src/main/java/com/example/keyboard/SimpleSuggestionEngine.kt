@@ -139,31 +139,339 @@ object SimpleSuggestionEngine {
     }
 
     private val defaultStarters = listOf("I", "The", "Hello")
+    private val midSentenceFallbacks = listOf("and", "to", "the")
+
+    private val trigramPredictions: Map<String, List<String>> = mapOf(
+        "i love" to listOf("you", "it", "that"),
+        "love you" to listOf("so", "too", "more"),
+        "i like" to listOf("it", "this", "that"),
+        "i want" to listOf("to", "you", "this"),
+        "i need" to listOf("to", "help", "this"),
+        "i am" to listOf("so", "good", "sorry"),
+        "i'm so" to listOf("sorry", "happy", "glad"),
+        "i have" to listOf("a", "to", "been"),
+        "i think" to listOf("so", "it", "that"),
+        "i know" to listOf("you", "it", "that"),
+        "i miss" to listOf("you", "it", "this"),
+        "i hope" to listOf("you", "so", "it"),
+        "i feel" to listOf("like", "so", "good"),
+        "i don't" to listOf("know", "think", "want"),
+        "i can't" to listOf("wait", "believe", "do"),
+        "i will" to listOf("be", "do", "send"),
+        "thank you" to listOf("so", "very", "much"),
+        "thanks for" to listOf("the", "your", "everything"),
+        "how are" to listOf("you", "things", "we"),
+        "what are" to listOf("you", "we", "they"),
+        "where are" to listOf("you", "we", "they"),
+        "what is" to listOf("the", "this", "that"),
+        "who is" to listOf("that", "this", "there"),
+        "how is" to listOf("it", "the", "your"),
+        "how much" to listOf("is", "does", "time"),
+        "going to" to listOf("be", "do", "have"),
+        "want to" to listOf("go", "see", "do"),
+        "need to" to listOf("be", "do", "get"),
+        "have to" to listOf("go", "be", "do"),
+        "try to" to listOf("make", "get", "find"),
+        "used to" to listOf("be", "have", "do"),
+        "nice to" to listOf("meet", "see", "have"),
+        "good to" to listOf("see", "know", "be"),
+        "let me" to listOf("know", "see", "check"),
+        "tell me" to listOf("what", "why", "how"),
+        "give me" to listOf("a", "the", "some"),
+        "send me" to listOf("a", "the", "that"),
+        "see you" to listOf("soon", "later", "tomorrow"),
+        "talk to" to listOf("you", "me", "him"),
+        "wait for" to listOf("me", "you", "it"),
+        "looking for" to listOf("a", "the", "you"),
+        "do you" to listOf("want", "have", "know"),
+        "are you" to listOf("okay", "sure", "ready"),
+        "can you" to listOf("please", "help", "send"),
+        "will you" to listOf("be", "come", "help"),
+        "would you" to listOf("like", "please", "be"),
+        "could you" to listOf("please", "help", "send"),
+        "don't know" to listOf("what", "why", "if"),
+        "do not" to listOf("know", "want", "have"),
+        "it is" to listOf("a", "not", "so"),
+        "this is" to listOf("a", "the", "so"),
+        "that is" to listOf("so", "why", "true"),
+        "there is" to listOf("a", "no", "one"),
+        "there are" to listOf("no", "many", "some"),
+        "we are" to listOf("going", "all", "here"),
+        "you are" to listOf("the", "so", "welcome"),
+        "they are" to listOf("not", "all", "here"),
+        "so much" to listOf("for", "more", "better"),
+        "a lot" to listOf("of", "more", "better"),
+        "right now" to listOf("and", "I", "please"),
+        "all the" to listOf("time", "way", "best"),
+        "of the" to listOf("day", "year", "world"),
+        "in the" to listOf("world", "morning", "evening"),
+        "on the" to listOf("way", "phone", "table"),
+        "at the" to listOf("moment", "same", "end"),
+        "by the" to listOf("way", "time", "end"),
+        "for the" to listOf("first", "best", "next"),
+        "good morning" to listOf("everyone", "to", "my"),
+        "good night" to listOf("everyone", "sweet", "sleep"),
+        "happy birthday" to listOf("to", "my", "friend"),
+    )
 
     private val nextWordBigrams: Map<String, List<String>> = mapOf(
+        // Pronouns & starters
         "i" to listOf("am", "have", "think"),
+        "i'm" to listOf("so", "good", "not"),
+        "i've" to listOf("been", "got", "had"),
+        "i'll" to listOf("be", "do", "send"),
+        "i'd" to listOf("like", "love", "rather"),
         "you" to listOf("are", "can", "have"),
+        "you're" to listOf("so", "right", "welcome"),
         "we" to listOf("are", "can", "have"),
+        "we're" to listOf("going", "here", "ready"),
         "they" to listOf("are", "have", "will"),
+        "they're" to listOf("not", "here", "coming"),
+        "he" to listOf("is", "was", "has"),
+        "he's" to listOf("not", "good", "here"),
+        "she" to listOf("is", "was", "has"),
+        "she's" to listOf("not", "good", "here"),
         "it" to listOf("is", "was", "will"),
+        "it's" to listOf("a", "not", "so"),
         "this" to listOf("is", "was", "will"),
         "that" to listOf("is", "was", "would"),
-        "what" to listOf("is", "are", "do"),
-        "how" to listOf("are", "to", "do"),
-        "thank" to listOf("you", "god", "heavens"),
+        "that's" to listOf("so", "good", "right"),
+        "there" to listOf("is", "are", "was"),
+        "there's" to listOf("a", "no", "nothing"),
+        "here" to listOf("is", "are", "you"),
+        "here's" to listOf("the", "a", "my"),
+
+        // Common verbs (the exact gap behind "I love ", "I want ", etc.)
+        "love" to listOf("you", "it", "that"),
+        "loves" to listOf("you", "it", "this"),
+        "loved" to listOf("it", "you", "that"),
+        "like" to listOf("that", "it", "this"),
+        "liked" to listOf("it", "that", "this"),
+        "hate" to listOf("it", "that", "when"),
+        "miss" to listOf("you", "it", "this"),
+        "want" to listOf("to", "it", "you"),
+        "wanted" to listOf("to", "you", "this"),
+        "wants" to listOf("to", "it", "you"),
+        "need" to listOf("to", "it", "you"),
+        "needed" to listOf("to", "it", "help"),
+        "needs" to listOf("to", "a", "some"),
+        "hope" to listOf("you", "so", "it"),
+        "wish" to listOf("you", "I", "we"),
+        "feel" to listOf("like", "so", "good"),
+        "feels" to listOf("good", "like", "great"),
+        "think" to listOf("so", "it", "that"),
+        "know" to listOf("that", "what", "you"),
+        "knew" to listOf("it", "that", "you"),
+        "understand" to listOf("what", "why", "that"),
+        "remember" to listOf("that", "when", "the"),
+        "forget" to listOf("to", "about", "it"),
+        "believe" to listOf("it", "you", "that"),
+        "see" to listOf("you", "it", "what"),
+        "saw" to listOf("you", "it", "that"),
+        "look" to listOf("at", "like", "for"),
+        "looking" to listOf("for", "at", "good"),
+        "watch" to listOf("the", "this", "it"),
+        "hear" to listOf("you", "that", "from"),
+        "listen" to listOf("to", "up", "carefully"),
+        "tell" to listOf("me", "you", "him"),
+        "told" to listOf("me", "you", "him"),
+        "ask" to listOf("you", "me", "for"),
+        "say" to listOf("that", "hello", "goodbye"),
+        "said" to listOf("that", "it", "he"),
+        "talk" to listOf("to", "about", "soon"),
+        "speak" to listOf("to", "with", "about"),
+        "give" to listOf("me", "you", "it"),
+        "gave" to listOf("me", "you", "it"),
+        "send" to listOf("me", "it", "you"),
+        "sent" to listOf("you", "me", "it"),
+        "make" to listOf("it", "sure", "a"),
+        "made" to listOf("it", "a", "me"),
+        "making" to listOf("it", "a", "sure"),
+        "take" to listOf("care", "it", "a"),
+        "took" to listOf("a", "the", "me"),
+        "get" to listOf("it", "the", "back"),
+        "got" to listOf("it", "to", "a"),
+        "getting" to listOf("a", "ready", "better"),
+        "have" to listOf("a", "to", "you"),
+        "has" to listOf("been", "a", "to"),
+        "had" to listOf("a", "to", "been"),
+        "having" to listOf("a", "fun", "trouble"),
+        "keep" to listOf("it", "going", "the"),
+        "let" to listOf("me", "us", "you"),
+        "let's" to listOf("go", "do", "see"),
+        "put" to listOf("it", "the", "that"),
+        "use" to listOf("the", "it", "this"),
+        "using" to listOf("the", "a", "this"),
+        "find" to listOf("out", "the", "it"),
+        "found" to listOf("out", "the", "it"),
+        "show" to listOf("me", "you", "the"),
+        "help" to listOf("you", "me", "with"),
+        "try" to listOf("to", "it", "this"),
+        "trying" to listOf("to", "my", "hard"),
+        "wait" to listOf("for", "a", "here"),
+        "waiting" to listOf("for", "to", "on"),
+        "go" to listOf("to", "home", "back"),
+        "going" to listOf("to", "home", "on"),
+        "went" to listOf("to", "home", "out"),
+        "come" to listOf("back", "here", "over"),
+        "coming" to listOf("back", "soon", "home"),
+        "came" to listOf("back", "to", "from"),
+        "work" to listOf("on", "with", "today"),
+        "working" to listOf("on", "now", "hard"),
+        "play" to listOf("with", "the", "games"),
+        "playing" to listOf("the", "with", "a"),
+        "call" to listOf("you", "me", "later"),
+        "check" to listOf("the", "it", "out"),
+        "open" to listOf("the", "it", "a"),
+        "close" to listOf("the", "it", "to"),
+        "start" to listOf("the", "with", "now"),
+        "stop" to listOf("it", "the", "now"),
+        "save" to listOf("the", "it", "this"),
+        "write" to listOf("a", "to", "it"),
+        "read" to listOf("the", "this", "it"),
+        "thank" to listOf("you", "god", "everyone"),
         "thanks" to listOf("for", "a", "so"),
-        "hello" to listOf("there", "world", "everyone"),
+
+        // Auxiliary & modal verbs
+        "am" to listOf("so", "good", "sorry"),
+        "is" to listOf("a", "the", "not"),
+        "are" to listOf("you", "the", "we"),
+        "was" to listOf("a", "so", "not"),
+        "were" to listOf("you", "not", "all"),
+        "be" to listOf("back", "there", "able"),
+        "been" to listOf("good", "there", "busy"),
+        "do" to listOf("you", "not", "it"),
+        "doing" to listOf("good", "well", "great"),
+        "did" to listOf("you", "not", "it"),
+        "does" to listOf("it", "not", "anyone"),
+        "don't" to listOf("know", "think", "worry"),
+        "didn't" to listOf("know", "see", "have"),
+        "can" to listOf("you", "I", "we"),
+        "can't" to listOf("wait", "believe", "do"),
+        "could" to listOf("you", "be", "have"),
+        "couldn't" to listOf("find", "do", "believe"),
+        "will" to listOf("be", "do", "send"),
+        "won't" to listOf("be", "work", "have"),
+        "would" to listOf("you", "be", "like"),
+        "wouldn't" to listOf("be", "do", "want"),
+        "should" to listOf("be", "we", "I"),
+        "shouldn't" to listOf("be", "have", "do"),
+        "must" to listOf("be", "have", "do"),
+
+        // Question words & conjunctions
+        "what" to listOf("is", "are", "do"),
+        "what's" to listOf("up", "new", "wrong"),
+        "how" to listOf("are", "to", "about"),
+        "how's" to listOf("it", "everything", "your"),
+        "why" to listOf("did", "are", "not"),
+        "where" to listOf("are", "is", "did"),
+        "when" to listOf("you", "will", "is"),
+        "who" to listOf("is", "are", "can"),
+        "which" to listOf("one", "is", "way"),
+        "if" to listOf("you", "I", "it"),
+        "because" to listOf("I", "it", "of"),
+        "and" to listOf("I", "the", "you"),
+        "but" to listOf("I", "it", "not"),
+        "or" to listOf("not", "maybe", "just"),
+        "so" to listOf("much", "good", "sorry"),
+
+        // Adjectives, adverbs, greetings, determiners, prepositions
+        "hello" to listOf("there", "everyone", "world"),
+        "hi" to listOf("there", "everyone", "how"),
+        "hey" to listOf("there", "how", "man"),
         "good" to listOf("morning", "night", "luck"),
+        "great" to listOf("job", "idea", "day"),
+        "happy" to listOf("to", "birthday", "for"),
+        "sorry" to listOf("for", "about", "to"),
+        "please" to listOf("send", "check", "let"),
+        "yes" to listOf("I", "please", "sure"),
+        "no" to listOf("problem", "worries", "way"),
+        "okay" to listOf("cool", "thanks", "see"),
+        "ok" to listOf("cool", "thanks", "sure"),
+        "very" to listOf("good", "much", "nice"),
+        "really" to listOf("good", "like", "nice"),
+        "just" to listOf("wanted", "checking", "a"),
+        "not" to listOf("sure", "bad", "yet"),
+        "always" to listOf("be", "love", "remember"),
+        "never" to listOf("mind", "had", "been"),
+        "maybe" to listOf("we", "later", "tomorrow"),
+        "right" to listOf("now", "here", "away"),
+        "my" to listOf("friend", "name", "phone"),
+        "your" to listOf("name", "phone", "time"),
+        "our" to listOf("team", "new", "best"),
+        "their" to listOf("own", "new", "best"),
+        "his" to listOf("name", "own", "best"),
+        "her" to listOf("name", "own", "best"),
+        "a" to listOf("good", "lot", "new"),
+        "an" to listOf("update", "hour", "email"),
+        "the" to listOf("best", "same", "new"),
+        "some" to listOf("time", "more", "help"),
+        "more" to listOf("than", "time", "info"),
+        "all" to listOf("the", "good", "day"),
         "in" to listOf("the", "a", "my"),
         "on" to listOf("the", "my", "this"),
         "for" to listOf("the", "you", "this"),
         "to" to listOf("the", "be", "do"),
-        "is" to listOf("a", "the", "not"),
-        "are" to listOf("you", "the", "we"),
-        "can" to listOf("you", "I", "we"),
-        "do" to listOf("you", "not", "it"),
-        "please" to listOf("send", "check", "let"),
+        "of" to listOf("the", "my", "this"),
+        "with" to listOf("you", "me", "the"),
+        "from" to listOf("the", "my", "you"),
+        "about" to listOf("it", "that", "you"),
+        "at" to listOf("the", "home", "work"),
+        "by" to listOf("the", "now", "tomorrow"),
+        "into" to listOf("the", "a", "this"),
+        "after" to listOf("the", "that", "work"),
+        "before" to listOf("the", "we", "I"),
+        "between" to listOf("the", "you", "us"),
     )
+
+    fun extractContextWordsBeforeCursor(
+        textBeforeCursor: String,
+        activeWord: String = "",
+    ): Pair<String, String> {
+        if (textBeforeCursor.isEmpty()) return "" to ""
+        var prefix = textBeforeCursor
+        if (activeWord.isNotEmpty() && prefix.endsWith(activeWord, ignoreCase = false)) {
+            prefix = prefix.dropLast(activeWord.length)
+        }
+        val trimmedEnd = prefix.trimEnd { it == ' ' || it == '\t' }
+        if (trimmedEnd.isEmpty()) return "" to ""
+        val lastChar = trimmedEnd.last()
+        if (lastChar == '.' || lastChar == '!' || lastChar == '?' || lastChar == '\n' || lastChar == ';' || lastChar == ':') {
+            return "" to ""
+        }
+        // Scan backwards within the current sentence clause
+        var clauseStart = 0
+        for (i in trimmedEnd.length - 1 downTo 0) {
+            val c = trimmedEnd[i]
+            if (c == '.' || c == '!' || c == '?' || c == '\n' || c == ';' || c == ':') {
+                clauseStart = i + 1
+                break
+            }
+        }
+        val clause = trimmedEnd.substring(clauseStart)
+        val tokens = Regex("[A-Za-z][A-Za-z']*").findAll(clause).map { it.value }.toList()
+        return when {
+            tokens.isEmpty() -> "" to ""
+            tokens.size == 1 -> "" to tokens[0]
+            else -> tokens[tokens.size - 2] to tokens[tokens.size - 1]
+        }
+    }
+
+    private fun contextualNextWords(
+        lastCommittedWord: String,
+        prevCommittedWord: String,
+    ): List<String> {
+        val lastLower = lastCommittedWord.trim().lowercase(Locale.US)
+        if (lastLower.isEmpty()) return defaultStarters
+        val prevLower = prevCommittedWord.trim().lowercase(Locale.US)
+        if (prevLower.isNotEmpty()) {
+            trigramPredictions["$prevLower $lastLower"]?.let { return it }
+        }
+        nextWordBigrams[lastLower]?.let { return it }
+        return midSentenceFallbacks
+            .filterNot { it.equals(lastLower, ignoreCase = true) }
+            .ifEmpty { defaultStarters }
+    }
 
     fun isKnownWord(word: String): Boolean {
         if (word.isBlank()) return false
@@ -173,15 +481,16 @@ object SimpleSuggestionEngine {
     fun evaluate(
         activeWord: String,
         lastCommittedWord: String = "",
+        prevCommittedWord: String = "",
         learnedWords: Set<String> = emptySet(),
         autoCorrectEnabled: Boolean = true,
         eligibleForAutoCorrect: Boolean = true,
     ): SuggestionEvalResult {
+        val contextCandidates = contextualNextWords(lastCommittedWord, prevCommittedWord)
         val trimmed = activeWord.trim()
         if (trimmed.isEmpty()) {
-            val starters = nextWordBigrams[lastCommittedWord.lowercase(Locale.US)] ?: defaultStarters
             return SuggestionEvalResult(
-                slots = starters.take(3).map { SuggestionSlot(text = it, commitTextValue = it) },
+                slots = contextCandidates.take(3).map { SuggestionSlot(text = it, commitTextValue = it) },
                 autoCorrectReplacement = null,
             )
         }
@@ -192,6 +501,20 @@ object SimpleSuggestionEngine {
         val isLearned = lower in learnedWords
         val exactRank = wordRankMap[lower]
         val isExactKnown = exactRank != null || isLearned
+
+        val contextPrefixMatches = contextCandidates
+            .asSequence()
+            .filter {
+                val wl = it.lowercase(Locale.US)
+                wl.startsWith(lower) && wl != lower
+            }
+            .toList()
+
+        val learnedPrefixMatches = learnedWords
+            .asSequence()
+            .filter { it.startsWith(lower) && it != lower }
+            .take(3)
+            .toList()
 
         val prefixMatches = commonWordsOrdered
             .asSequence()
@@ -232,6 +555,12 @@ object SimpleSuggestionEngine {
         val orderedSuggestions = linkedSetOf<String>()
         if (rawAutoCandidate != null) {
             orderedSuggestions.add(rawAutoCandidate)
+        }
+        contextPrefixMatches.forEach { w ->
+            orderedSuggestions.add(applyWordCase(trimmed, w))
+        }
+        learnedPrefixMatches.forEach { w ->
+            orderedSuggestions.add(applyWordCase(trimmed, w))
         }
         prefixMatches.forEach { w ->
             orderedSuggestions.add(applyWordCase(trimmed, w))
@@ -300,7 +629,7 @@ object SimpleSuggestionEngine {
         }
 
         // Pad up to 3 slots cleanly so the 3-slot bar never collapses unevenly
-        val fallbackPool = defaultStarters + commonWordsOrdered.take(12)
+        val fallbackPool = contextCandidates + midSentenceFallbacks + defaultStarters + commonWordsOrdered.take(12)
         for (fb in fallbackPool) {
             if (slots.size >= 3) break
             if (slots.none { it.text.equals(fb, ignoreCase = true) }) {
@@ -642,6 +971,9 @@ class SimpleTypingController {
     var lastCommittedWord: String = ""
         private set
 
+    var prevCommittedWord: String = ""
+        private set
+
     var wordEligibleForAutoCorrect: Boolean = false
         private set
 
@@ -655,10 +987,20 @@ class SimpleTypingController {
         return SimpleSuggestionEngine.evaluate(
             activeWord = activeWord,
             lastCommittedWord = lastCommittedWord,
+            prevCommittedWord = prevCommittedWord,
             learnedWords = _learnedCustomWords,
             autoCorrectEnabled = autoCorrectEnabled,
             eligibleForAutoCorrect = wordEligibleForAutoCorrect,
         )
+    }
+
+    fun syncContextFromSurroundingText(beforeCursor: String) {
+        val (prev, last) = SimpleSuggestionEngine.extractContextWordsBeforeCursor(
+            textBeforeCursor = beforeCursor,
+            activeWord = activeWord,
+        )
+        prevCommittedWord = prev
+        lastCommittedWord = last
     }
 
     /**
@@ -683,10 +1025,12 @@ class SimpleTypingController {
 
         // Separator (space or sentence punctuation)
         val isAutoCorrectTrigger = ch == ' ' || ch in SENTENCE_TRIGGERS
+        val isSentenceEnd = ch in SENTENCE_END_PUNCT
         if (isAutoCorrectTrigger && activeWord.isNotEmpty()) {
             val eval = SimpleSuggestionEngine.evaluate(
                 activeWord = activeWord,
                 lastCommittedWord = lastCommittedWord,
+                prevCommittedWord = prevCommittedWord,
                 learnedWords = _learnedCustomWords,
                 autoCorrectEnabled = autoCorrectEnabled,
                 eligibleForAutoCorrect = wordEligibleForAutoCorrect,
@@ -699,7 +1043,13 @@ class SimpleTypingController {
                     originalWord = original,
                     replacedTextWithSeparator = replacementWithTrigger,
                 )
-                lastCommittedWord = candidate
+                if (isSentenceEnd) {
+                    prevCommittedWord = ""
+                    lastCommittedWord = ""
+                } else {
+                    prevCommittedWord = lastCommittedWord
+                    lastCommittedWord = candidate
+                }
                 activeWord = ""
                 wordEligibleForAutoCorrect = false
                 return AutoCorrectAction(
@@ -709,9 +1059,14 @@ class SimpleTypingController {
             }
         }
 
-        if (activeWord.isNotEmpty()) {
+        if (isSentenceEnd) {
+            prevCommittedWord = ""
+            lastCommittedWord = ""
+        } else if (activeWord.isNotEmpty()) {
+            prevCommittedWord = lastCommittedWord
             lastCommittedWord = activeWord
-        } else {
+        } else if (ch != ' ') {
+            prevCommittedWord = ""
             lastCommittedWord = ""
         }
         pendingUndo = null
@@ -752,6 +1107,7 @@ class SimpleTypingController {
         pendingUndo = null
         wordEligibleForAutoCorrect = false
         if (clearLastWord) {
+            prevCommittedWord = ""
             lastCommittedWord = ""
         }
     }
@@ -767,6 +1123,7 @@ class SimpleTypingController {
             _learnedCustomWords.add(prior.lowercase(Locale.US))
         }
         val toCommit = slot.commitTextValue + " "
+        prevCommittedWord = lastCommittedWord
         lastCommittedWord = slot.commitTextValue
         activeWord = ""
         pendingUndo = null
@@ -780,5 +1137,6 @@ class SimpleTypingController {
 
     companion object {
         private val SENTENCE_TRIGGERS = charArrayOf('.', ',', '!', '?', ';', ':')
+        private val SENTENCE_END_PUNCT = charArrayOf('.', '!', '?', '\n')
     }
 }

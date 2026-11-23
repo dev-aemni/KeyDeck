@@ -116,6 +116,7 @@ object KeyDeckProfileCodec {
         sb.appendLine("@kdb.suppressime:${settings.suppressAutoImeOnInput}")
         sb.appendLine("@kdb.suggestions:${settings.simpleSuggestionsEnabled}")
         sb.appendLine("@kdb.autocorrect:${settings.simpleAutoCorrectEnabled}")
+        sb.appendLine("@kdb.hold_repeat:${settings.holdToRepeat}")
         sb.appendLine("@kdb.sync_dark:${settings.syncKeyboardWithDarkMode}")
         sb.appendLine("@kdb.borders:${settings.showKeyBorder}")
         sb.appendLine("@kdb.theme_borders:${settings.themeAdaptiveBorder}")
@@ -293,6 +294,9 @@ object KeyDeckProfileCodec {
         }
         props["@kdb.autocorrect"]?.toBooleanStrictOrNull()?.let {
             resolvedSettings = resolvedSettings.copy(simpleAutoCorrectEnabled = it)
+        }
+        props["@kdb.hold_repeat"]?.toBooleanStrictOrNull()?.let {
+            resolvedSettings = resolvedSettings.copy(holdToRepeat = it)
         }
         props["@kdb.sync_dark"]?.toBooleanStrictOrNull()?.let {
             resolvedSettings = resolvedSettings.copy(syncKeyboardWithDarkMode = it)

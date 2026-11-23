@@ -913,6 +913,14 @@ fun SettingsSheet(
             )
 
             SettingsSwitchRow(
+                title = "Hold to Repeat (PC Mode)",
+                subtitle = "Holding letters, numbers, or keys in PC mode repeats them continuously like a physical PC keyboard (on by default)",
+                checked = settings.holdToRepeat,
+                testTag = "switch_hold_to_repeat",
+                onCheckedChange = { checked -> onUpdateSettings { it.copy(holdToRepeat = checked) } },
+            )
+
+            SettingsSwitchRow(
                 title = "Tactile Haptic Feedback",
                 subtitle = "Subtle mechanical pulse on every keycap & hotkey press",
                 checked = settings.hapticFeedback,

@@ -360,6 +360,17 @@ class FloatingKeyboardService : Service() {
                                     hotkeys = hotkeys,
                                 )
                             },
+                            onRepeatKeyDispatch = { keyCode, metaState, charToCommit, comboLabel ->
+                                KeyDispatcher.dispatchKey(
+                                    context = this@FloatingKeyboardService,
+                                    keyCode = keyCode,
+                                    metaState = metaState,
+                                    charToCommit = charToCommit,
+                                    comboLabel = comboLabel,
+                                    hapticEnabled = false,
+                                    hotkeys = hotkeys,
+                                )
+                            },
                             onKeyHoldDispatch = { keyCode, metaState, isDown, comboLabel ->
                                 KeyDispatcher.dispatchKeyHold(
                                     context = this@FloatingKeyboardService,

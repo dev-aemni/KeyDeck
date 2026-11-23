@@ -771,6 +771,17 @@ fun DeckQuickSettingsPopup(
                 )
             }
         }
+        if (settings.layoutMode == KeyboardLayoutMode.PC_STANDARD ||
+            settings.layoutMode == KeyboardLayoutMode.PC_WITH_NUMPAD ||
+            settings.layoutMode == KeyboardLayoutMode.NUMPAD_ONLY
+        ) {
+            QuickPopupToggle(
+                label = "Hold to Repeat (PC Mode)",
+                checked = settings.holdToRepeat,
+                palette = palette,
+                onCheckedChange = { c -> onUpdateSettings { it.copy(holdToRepeat = c) } },
+            )
+        }
         QuickPopupToggle(
             label = "Black Key Borders",
             checked = settings.showKeyBorder,

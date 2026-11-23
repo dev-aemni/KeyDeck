@@ -237,7 +237,9 @@ class KeyDeckLogicTest {
             showKeyBorder = true,
             simpleSuggestionsEnabled = true,
             simpleAutoCorrectEnabled = false,
+            holdToRepeat = false,
         )
+        assertTrue(KeyDeckSettings().holdToRepeat)
         val hotkeys = listOf(
             CustomHotkey(
                 id = "hk_copy",
@@ -278,6 +280,7 @@ class KeyDeckLogicTest {
         assertTrue(serialized.contains("@kdb.contrast:1.32"))
         assertTrue(serialized.contains("@kdb.suggestions:true"))
         assertTrue(serialized.contains("@kdb.autocorrect:false"))
+        assertTrue(serialized.contains("@kdb.hold_repeat:false"))
 
         val parsed = KeyDeckProfileCodec.parse(
             content = serialized,
@@ -295,6 +298,7 @@ class KeyDeckLogicTest {
         assertTrue(parsed.settings.showKeyBorder)
         assertTrue(parsed.settings.simpleSuggestionsEnabled)
         assertFalse(parsed.settings.simpleAutoCorrectEnabled)
+        assertFalse(parsed.settings.holdToRepeat)
         assertEquals(2, parsed.hotkeys?.size)
         assertEquals("Ctrl+C", parsed.hotkeys?.first()?.comboText())
         assertEquals(HotkeyActionType.TOGGLE_FLOATING, parsed.hotkeys?.get(1)?.actionType)
@@ -351,5 +355,30 @@ class KeyDeckLogicTest {
         // 5. Known dictionary word is never rewritten
         "hello".forEach { ch -> controller.onCharTyped(ch, autoCorrectEnabled = true, isCursorTouchingExistingWord = false) }
         assertNull(controller.onCharTyped(' ', autoCorrectEnabled = true))
+    }
+
+    @Test
+    fun `simple mode predicts contextual next words accurately for phrases like I love`() {
+        val controller = SimpleTypingController()
+        "I love ".forEach { ch ->
+            controller.onCharTyped(ch, autoCorrectEnabled = true, isCursorTouchingExistingWord = false)
+        }
+        val afterLove = controller.currentEval(autoCorrectEnabled = true)
+        assertEquals(listOf("you", "it", "that"), afterLove.slots.map { it.text })
+
+        // Typing a prefix boosts contextual match first
+        controller.onCharTyped('y', autoCorrectEnabled = true, isCursorTouchingExistingWord = false)
+        val afterY = controller.currentEval(autoCorrectEnabled = true)
+        assertEquals("y", afterY.slots[0].text)
+        assertEquals("you", afterY.slots[1].text)
+
+        // Syncing from an existing cursor context also yields accurate next-word predictions
+        val synced = SimpleTypingController()
+        synced.syncContextFromSurroundingText("Thank you ")
+        assertEquals(listOf("so", "very", "much"), synced.currentEval(true).slots.map { it.text })
+
+        // Sentence boundary resets back to sentence starters
+        synced.syncContextFromSurroundingText("I love you. ")
+        assertEquals(listOf("I", "The", "Hello"), synced.currentEval(true).slots.map { it.text })
     }
 }

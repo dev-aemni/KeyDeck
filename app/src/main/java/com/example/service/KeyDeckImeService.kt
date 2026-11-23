@@ -177,6 +177,17 @@ class KeyDeckImeService : InputMethodService() {
                                     hotkeys = hotkeys,
                                 )
                             },
+                            onRepeatKeyDispatch = { keyCode, metaState, charToCommit, comboLabel ->
+                                KeyDispatcher.dispatchKey(
+                                    context = this@KeyDeckImeService,
+                                    keyCode = keyCode,
+                                    metaState = metaState,
+                                    charToCommit = charToCommit,
+                                    comboLabel = comboLabel,
+                                    hapticEnabled = false,
+                                    hotkeys = hotkeys,
+                                )
+                            },
                             onKeyHoldDispatch = { keyCode, metaState, isDown, comboLabel ->
                                 KeyDispatcher.dispatchKeyHold(
                                     context = this@KeyDeckImeService,

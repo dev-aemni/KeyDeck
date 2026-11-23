@@ -475,6 +475,7 @@ data class KeyDeckSettings(
     val suppressAutoImeOnInput: Boolean = true,
     val simpleSuggestionsEnabled: Boolean = true,
     val simpleAutoCorrectEnabled: Boolean = true,
+    val holdToRepeat: Boolean = true,
     // Granular size & tightness customization
     val keyHeightDp: Int = 38,
     val keyboardWidthFraction: Float = 1.0f,

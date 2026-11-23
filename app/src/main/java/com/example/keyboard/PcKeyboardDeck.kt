@@ -108,12 +108,18 @@ private data class ActiveHoldPopup(
     val selectedIndex: Int,
 )
 
+private data class ActiveKeyPreview(
+    val keyRectInRoot: Rect,
+    val label: String,
+)
+
 @Composable
 fun PcKeyboardDeck(
     settings: KeyDeckSettings,
     routeLabel: String,
     isOverlay: Boolean,
     onKeyDispatch: (keyCode: Int, metaState: Int, charToCommit: Char?, comboLabel: String) -> Unit,
+    onRepeatKeyDispatch: ((keyCode: Int, metaState: Int, charToCommit: Char?, comboLabel: String) -> Unit)? = null,
     onChangeLayoutMode: (KeyboardLayoutMode) -> Unit,
     onToggleNumLock: () -> Unit,
     onToggleFunctionRow: () -> Unit,
@@ -179,6 +185,7 @@ fun PcKeyboardDeck(
 
     var rootCoords by remember { mutableStateOf<LayoutCoordinates?>(null) }
     var activeHoldPopup by remember { mutableStateOf<ActiveHoldPopup?>(null) }
+    var activeKeyPreview by remember { mutableStateOf<ActiveKeyPreview?>(null) }
     val density = LocalDensity.current
     val haptic = LocalHapticFeedback.current
 
@@ -201,12 +208,24 @@ fun PcKeyboardDeck(
     ) {
         if (settings.layoutMode != KeyboardLayoutMode.SIMPLE || !settings.simpleSuggestionsEnabled || !enableLiveSuggestions) {
             typingController.resetOnCursorOrBoundary(clearLastWord = true)
+            refreshSuggestionEval()
+        } else {
+            val before = KeyDispatcher.getSurroundingChars(48, 0)?.first
+            if (before != null && typingController.activeWord.isEmpty()) {
+                typingController.syncContextFromSurroundingText(before)
+            }
+            refreshSuggestionEval()
         }
-        refreshSuggestionEval()
     }
 
     LaunchedEffect(inputSessionGen) {
         typingController.resetOnCursorOrBoundary(clearLastWord = true)
+        if (enableLiveSuggestions && settings.layoutMode == KeyboardLayoutMode.SIMPLE && settings.simpleSuggestionsEnabled) {
+            val before = KeyDispatcher.getSurroundingChars(48, 0)?.first
+            if (before != null) {
+                typingController.syncContextFromSurroundingText(before)
+            }
+        }
         refreshSuggestionEval()
     }
 
@@ -214,10 +233,29 @@ fun PcKeyboardDeck(
         if (settings.layoutMode != KeyboardLayoutMode.SIMPLE) {
             simpleSymbolLayer = false
             simpleSymbolAltLayer = false
+            activeKeyPreview = null
         }
     }
 
     val lastDispatched by KeyDeckRuntimeState.lastDispatchedKey.collectAsStateWithLifecycle()
+    LaunchedEffect(
+        lastDispatched?.timestampMs,
+        settings.layoutMode,
+        settings.simpleSuggestionsEnabled,
+        enableLiveSuggestions,
+    ) {
+        if (!enableLiveSuggestions || settings.layoutMode != KeyboardLayoutMode.SIMPLE || !settings.simpleSuggestionsEnabled) {
+            return@LaunchedEffect
+        }
+        delay(18L)
+        if (typingController.activeWord.isEmpty() && !KeyDispatcher.shouldDisableSuggestions()) {
+            val before = KeyDispatcher.getSurroundingChars(48, 0)?.first
+            if (before != null) {
+                typingController.syncContextFromSurroundingText(before)
+                refreshSuggestionEval()
+            }
+        }
+    }
     var overlayFeedbackText by remember { mutableStateOf<String?>(null) }
     LaunchedEffect(isOverlay, lastDispatched?.timestampMs) {
         if (!isOverlay) {
@@ -294,7 +332,18 @@ fun PcKeyboardDeck(
         }
     }
 
-    fun handleKeyTap(spec: KeySpec, isFromNumpad: Boolean = false) {
+    fun handleKeyTap(spec: KeySpec, isFromNumpad: Boolean = false, isRepeat: Boolean = false) {
+        if (isRepeat && (
+                spec.modifierType != null ||
+                    spec.id == "simple_sym_toggle" ||
+                    spec.id == "simple_sym_alt_toggle" ||
+                    spec.id == "num_toggle_top" ||
+                    spec.id == "num_toggle" ||
+                    spec.id == "num_lock"
+                )
+        ) {
+            return
+        }
         when (spec.modifierType) {
             ModifierKey.CTRL -> {
                 ctrlActive = !ctrlActive
@@ -448,7 +497,8 @@ fun PcKeyboardDeck(
             }
         }
 
-        onKeyDispatch(
+        val dispatcher = if (isRepeat) (onRepeatKeyDispatch ?: onKeyDispatch) else onKeyDispatch
+        dispatcher(
             effectiveKeyCode,
             effectiveMeta,
             effectiveChar,
@@ -543,6 +593,10 @@ fun PcKeyboardDeck(
     val isTightDeck = settings.keyHeightDp <= 32
     val borderVisible = settings.isKeyBorderVisible()
     val borderCol = if (borderVisible) palette.keyBorder.copy(alpha = 0.85f) else null
+    val isPcRepeatMode = settings.layoutMode == KeyboardLayoutMode.PC_STANDARD ||
+        settings.layoutMode == KeyboardLayoutMode.PC_WITH_NUMPAD ||
+        settings.layoutMode == KeyboardLayoutMode.NUMPAD_ONLY
+    val holdToRepeatForDeck = settings.holdToRepeat && isPcRepeatMode
 
     Box(
         modifier = modifier
@@ -905,7 +959,9 @@ fun PcKeyboardDeck(
                         keyOpacity = keyOpacity,
                         rgbActive = rgbActive,
                         rgbPhaseDeg = rgbPhaseDeg,
+                        holdToRepeatEnabled = holdToRepeatForDeck,
                         modifier = Modifier.weight(spec.weight),
+                        onRepeat = { handleKeyTap(spec, isRepeat = true) },
                         onClick = { handleKeyTap(spec) },
                     )
                 }
@@ -939,8 +995,10 @@ fun PcKeyboardDeck(
                         keyOpacity = keyOpacity,
                         rgbActive = rgbActive,
                         rgbPhaseDeg = rgbPhaseDeg,
+                        holdToRepeatEnabled = holdToRepeatForDeck,
                         onSpaceCursorSlide = { dir -> handleSpaceCursorSlide(dir) },
                         modifier = Modifier.weight(0.68f),
+                        onKeyRepeat = { handleKeyTap(it, isFromNumpad = false, isRepeat = true) },
                         onKeyTap = { handleKeyTap(it, isFromNumpad = false) },
                     )
                     NumpadBlock(
@@ -956,7 +1014,9 @@ fun PcKeyboardDeck(
                         keyOpacity = keyOpacity,
                         rgbActive = rgbActive,
                         rgbPhaseDeg = rgbPhaseDeg,
+                        holdToRepeatEnabled = holdToRepeatForDeck,
                         modifier = Modifier.weight(0.32f),
+                        onKeyRepeat = { handleKeyTap(it, isFromNumpad = true, isRepeat = true) },
                         onKeyTap = { handleKeyTap(it, isFromNumpad = true) },
                     )
                 }
@@ -983,7 +1043,9 @@ fun PcKeyboardDeck(
                     keyOpacity = keyOpacity,
                     rgbActive = rgbActive,
                     rgbPhaseDeg = rgbPhaseDeg,
+                    holdToRepeatEnabled = holdToRepeatForDeck,
                     onSpaceCursorSlide = { dir -> handleSpaceCursorSlide(dir) },
+                    onKeyRepeat = { handleKeyTap(it, isFromNumpad = false, isRepeat = true) },
                     onKeyTap = { handleKeyTap(it, isFromNumpad = false) },
                 )
             }
@@ -1041,19 +1103,26 @@ fun PcKeyboardDeck(
                         keyOpacity = keyOpacity,
                         rgbActive = rgbActive,
                         rgbPhaseDeg = rgbPhaseDeg,
+                        holdToRepeatEnabled = false,
                         rootCoordsProvider = { rootCoords },
+                        onKeyPreviewChanged = { preview -> activeKeyPreview = preview },
                         onPopupChanged = { popup ->
                             if (popup != null && activeHoldPopup == null && settings.hapticFeedback) {
                                 haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                            }
+                            if (popup != null) {
+                                activeKeyPreview = null
                             }
                             activeHoldPopup = popup
                         },
                         onPopupCommit = { chosen ->
                             activeHoldPopup = null
+                            activeKeyPreview = null
                             handleHoldCharCommit(chosen)
                         },
                         onSpaceCursorSlide = { dir -> handleSpaceCursorSlide(dir) },
                         modifier = Modifier.testTag("simple_mode_deck"),
+                        onKeyRepeat = { handleKeyTap(it, isFromNumpad = false, isRepeat = true) },
                         onKeyTap = { handleKeyTap(it, isFromNumpad = false) },
                     )
                 }
@@ -1073,7 +1142,9 @@ fun PcKeyboardDeck(
                     keyOpacity = keyOpacity,
                     rgbActive = rgbActive,
                     rgbPhaseDeg = rgbPhaseDeg,
+                    holdToRepeatEnabled = holdToRepeatForDeck,
                     modifier = Modifier.fillMaxWidth(),
+                    onKeyRepeat = { handleKeyTap(it, isFromNumpad = true, isRepeat = true) },
                     onKeyTap = { handleKeyTap(it, isFromNumpad = true) },
                 )
             }
@@ -1125,6 +1196,47 @@ fun PcKeyboardDeck(
                 }
             }
         }
+        }
+
+        // Instant Key-Press Preview Bubble for Simple Mode (Gboard-style tactile feedback)
+        val keyPreview = activeKeyPreview
+        if (keyPreview != null && activeHoldPopup == null) {
+            val bubbleW = 42.dp
+            val bubbleH = 48.dp
+            val bubbleWPx = with(density) { bubbleW.toPx() }
+            val bubbleHPx = with(density) { bubbleH.toPx() }
+            val rootWidthPx = (rootCoords?.size?.width ?: 1080).toFloat()
+
+            val targetX = (keyPreview.keyRectInRoot.center.x - bubbleWPx / 2f)
+                .coerceIn(6f, (rootWidthPx - bubbleWPx - 6f).coerceAtLeast(6f))
+            val targetY = (keyPreview.keyRectInRoot.top - bubbleHPx - 6f).coerceAtLeast(4f)
+
+            Box(
+                modifier = Modifier
+                    .zIndex(45f)
+                    .offset { IntOffset(targetX.roundToInt(), targetY.roundToInt()) }
+                    .size(width = bubbleW, height = bubbleH)
+                    .neumorphicRaised(
+                        surfaceColor = palette.keyBg,
+                        shadowLight = palette.shadowLight,
+                        shadowDark = palette.shadowDark,
+                        cornerRadius = 12.dp,
+                        shadowOffset = 4.dp,
+                        blurRadius = 8.dp,
+                        borderColor = borderCol ?: palette.keyBorder.copy(alpha = 0.65f),
+                    )
+                    .testTag("simple_key_preview_bubble"),
+                contentAlignment = Alignment.Center,
+            ) {
+                Text(
+                    text = keyPreview.label,
+                    color = palette.primaryText,
+                    fontFamily = BodyFontFamily,
+                    fontSize = 22.sp,
+                    fontWeight = FontWeight.Bold,
+                    maxLines = 1,
+                )
+            }
         }
 
         // In-Compose Floating Hold-to-Write Accent & Symbol Picker Overlay
@@ -1370,11 +1482,14 @@ private fun KeyGridBlock(
     keyOpacity: Float = 1f,
     rgbActive: Boolean,
     rgbPhaseDeg: Float,
+    holdToRepeatEnabled: Boolean = false,
     rootCoordsProvider: () -> LayoutCoordinates? = { null },
+    onKeyPreviewChanged: ((ActiveKeyPreview?) -> Unit)? = null,
     onPopupChanged: ((ActiveHoldPopup?) -> Unit)? = null,
     onPopupCommit: ((String) -> Unit)? = null,
     onSpaceCursorSlide: ((Int) -> Unit)? = null,
     modifier: Modifier = Modifier,
+    onKeyRepeat: ((KeySpec) -> Unit)? = null,
     onKeyTap: (KeySpec) -> Unit,
 ) {
     Column(
@@ -1418,11 +1533,14 @@ private fun KeyGridBlock(
                         keyOpacity = keyOpacity,
                         rgbActive = rgbActive,
                         rgbPhaseDeg = rgbPhaseDeg,
+                        holdToRepeatEnabled = holdToRepeatEnabled,
                         rootCoordsProvider = rootCoordsProvider,
+                        onKeyPreviewChanged = onKeyPreviewChanged,
                         onPopupChanged = onPopupChanged,
                         onPopupCommit = onPopupCommit,
                         onSpaceCursorSlide = onSpaceCursorSlide,
                         modifier = Modifier.weight(spec.weight),
+                        onRepeat = onKeyRepeat?.let { repeatCb -> { repeatCb(spec) } },
                         onClick = { onKeyTap(spec) },
                     )
                 }
@@ -1609,7 +1727,9 @@ private fun NumpadBlock(
     keyOpacity: Float = 1f,
     rgbActive: Boolean,
     rgbPhaseDeg: Float,
+    holdToRepeatEnabled: Boolean = false,
     modifier: Modifier = Modifier,
+    onKeyRepeat: ((KeySpec) -> Unit)? = null,
     onKeyTap: (KeySpec) -> Unit,
 ) {
     val borderCol = if (showKeyBorder && !rgbActive) palette.keyBorder.copy(alpha = 0.78f) else null
@@ -1656,7 +1776,9 @@ private fun NumpadBlock(
                         keyOpacity = keyOpacity,
                         rgbActive = rgbActive,
                         rgbPhaseDeg = rgbPhaseDeg,
+                        holdToRepeatEnabled = holdToRepeatEnabled,
                         modifier = Modifier.weight(spec.weight),
+                        onRepeat = onKeyRepeat?.let { repeatCb -> { repeatCb(spec) } },
                         onClick = { onKeyTap(spec) },
                     )
                 }
@@ -1683,18 +1805,19 @@ private fun PcKeyCap(
     keyOpacity: Float = 1f,
     rgbActive: Boolean,
     rgbPhaseDeg: Float,
+    holdToRepeatEnabled: Boolean = false,
     rootCoordsProvider: () -> LayoutCoordinates? = { null },
+    onKeyPreviewChanged: ((ActiveKeyPreview?) -> Unit)? = null,
     onPopupChanged: ((ActiveHoldPopup?) -> Unit)? = null,
     onPopupCommit: ((String) -> Unit)? = null,
     onSpaceCursorSlide: ((Int) -> Unit)? = null,
     modifier: Modifier = Modifier,
+    onRepeat: (() -> Unit)? = null,
     onClick: () -> Unit,
 ) {
-    val interactionSource = remember { MutableInteractionSource() }
-    val interactionPressed by interactionSource.collectIsPressedAsState()
     var gesturePressed by remember { mutableStateOf(false) }
     var isSlidingCursor by remember { mutableStateOf(false) }
-    val isPressed = interactionPressed || gesturePressed
+    val isPressed = gesturePressed
     val isEngaged = isPressed || isModifierLit
 
     val pressOffsetY by animateDpAsState(
@@ -1729,12 +1852,35 @@ private fun PcKeyCap(
     }
     var keyRectInRoot by remember { mutableStateOf<Rect?>(null) }
     val latestOnClick by rememberUpdatedState(onClick)
+    val latestOnRepeat by rememberUpdatedState(onRepeat)
+    val latestHoldToRepeat by rememberUpdatedState(holdToRepeatEnabled)
     val latestHoldOptions by rememberUpdatedState(holdOptions)
     val latestCornerHint by rememberUpdatedState(spec.cornerHint)
+    val latestPrimaryText by rememberUpdatedState(primaryText)
+    val latestOnKeyPreviewChanged by rememberUpdatedState(onKeyPreviewChanged)
     val latestOnPopupChanged by rememberUpdatedState(onPopupChanged)
     val latestOnPopupCommit by rememberUpdatedState(onPopupCommit)
     val latestOnSpaceCursorSlide by rememberUpdatedState(onSpaceCursorSlide)
     val density = LocalDensity.current
+
+    val isRepeatableSpec = remember(spec.id, spec.keyCode, spec.isModifier) {
+        spec.keyCode == KeyEvent.KEYCODE_DEL || (
+            !spec.isModifier &&
+                spec.id != "num_lock" &&
+                spec.id != "num_toggle" &&
+                spec.id != "num_toggle_top" &&
+                spec.id != "simple_sym_toggle" &&
+                spec.id != "simple_sym_alt_toggle"
+            )
+    }
+    val canShowKeyPreview = onKeyPreviewChanged != null &&
+        !spec.isModifier &&
+        spec.iconType == null &&
+        spec.keyCode != KeyEvent.KEYCODE_SPACE &&
+        spec.keyCode != KeyEvent.KEYCODE_DEL &&
+        spec.keyCode != KeyEvent.KEYCODE_ENTER &&
+        spec.id != "simple_sym_toggle" &&
+        spec.id != "simple_sym_alt_toggle"
 
     val baseKeyBg = when {
         isEngaged -> palette.activeFill
@@ -1792,21 +1938,36 @@ private fun PcKeyCap(
             awaitEachGesture {
                 val down = awaitFirstDown(requireUnconsumed = false)
                 gesturePressed = true
+                if (canShowKeyPreview) {
+                    keyRectInRoot?.let { rect ->
+                        latestOnKeyPreviewChanged?.invoke(ActiveKeyPreview(rect, latestPrimaryText))
+                    }
+                }
                 var releasedEarly = false
+                var abortedByScroll = false
                 try {
-                    val waitResult = withTimeoutOrNull(250L) {
+                    val waitResult = withTimeoutOrNull(300L) {
                         while (true) {
                             val ev = awaitPointerEvent()
                             val ch = ev.changes.firstOrNull { it.id == down.id }
                             if (ch == null || !ch.pressed) {
                                 releasedEarly = true
+                                abortedByScroll = ch?.isConsumed == true
+                                break
+                            }
+                            if (ch.isConsumed) {
+                                abortedByScroll = true
                                 break
                             }
                         }
                     }
                     if (waitResult != null && releasedEarly) {
-                        latestOnClick()
-                    } else {
+                        latestOnKeyPreviewChanged?.invoke(null)
+                        if (!abortedByScroll) {
+                            latestOnClick()
+                        }
+                    } else if (!abortedByScroll) {
+                        latestOnKeyPreviewChanged?.invoke(null)
                         val opts = latestHoldOptions
                         val rect = keyRectInRoot
                         if (opts.isNotEmpty() && rect != null) {
@@ -1861,6 +2022,7 @@ private fun PcKeyCap(
                     }
                 } finally {
                     gesturePressed = false
+                    latestOnKeyPreviewChanged?.invoke(null)
                     latestOnPopupChanged?.invoke(null)
                 }
             }
@@ -1873,39 +2035,101 @@ private fun PcKeyCap(
                 var totalDx = 0f
                 var accumX = 0f
                 var slid = false
+                var releasedEarly = false
+                var abortedByScroll = false
                 val activationPx = with(density) { 10.dp.toPx() }
                 val stepPx = with(density) { 11.dp.toPx() }
                 try {
-                    while (true) {
-                        val ev = awaitPointerEvent()
-                        val ch = ev.changes.firstOrNull { it.id == down.id }
-                        if (ch == null || !ch.pressed) {
-                            if (!slid) {
-                                latestOnClick()
+                    val waitResult = withTimeoutOrNull(340L) {
+                        while (true) {
+                            val ev = awaitPointerEvent()
+                            val ch = ev.changes.firstOrNull { it.id == down.id }
+                            if (ch == null || !ch.pressed) {
+                                releasedEarly = true
+                                abortedByScroll = ch?.isConsumed == true
+                                break
                             }
-                            break
-                        }
-                        val dx = ch.positionChange().x
-                        if (!slid) {
-                            totalDx += dx
-                            if (kotlin.math.abs(totalDx) >= activationPx) {
-                                slid = true
-                                isSlidingCursor = true
-                                accumX = totalDx
+                            if (ch.isConsumed) {
+                                abortedByScroll = true
+                                break
+                            }
+                            val dx = ch.positionChange().x
+                            if (!slid) {
+                                totalDx += dx
+                                if (kotlin.math.abs(totalDx) >= activationPx) {
+                                    slid = true
+                                    isSlidingCursor = true
+                                    accumX = totalDx
+                                    ch.consume()
+                                }
+                            } else {
+                                accumX += dx
                                 ch.consume()
                             }
-                        } else {
-                            accumX += dx
-                            ch.consume()
-                        }
-                        if (slid) {
-                            while (accumX <= -stepPx) {
-                                accumX += stepPx
-                                latestOnSpaceCursorSlide?.invoke(-1)
+                            if (slid) {
+                                while (accumX <= -stepPx) {
+                                    accumX += stepPx
+                                    latestOnSpaceCursorSlide?.invoke(-1)
+                                }
+                                while (accumX >= stepPx) {
+                                    accumX -= stepPx
+                                    latestOnSpaceCursorSlide?.invoke(1)
+                                }
                             }
-                            while (accumX >= stepPx) {
-                                accumX -= stepPx
-                                latestOnSpaceCursorSlide?.invoke(1)
+                        }
+                    }
+                    if (waitResult != null) {
+                        if (releasedEarly && !slid && !abortedByScroll) {
+                            latestOnClick()
+                        }
+                    } else if (!abortedByScroll) {
+                        if (!slid && latestHoldToRepeat) {
+                            latestOnClick()
+                            while (true) {
+                                val nextWait = withTimeoutOrNull(55L) {
+                                    while (true) {
+                                        val ev = awaitPointerEvent()
+                                        val ch = ev.changes.firstOrNull { it.id == down.id }
+                                        if (ch == null || !ch.pressed) break
+                                    }
+                                }
+                                if (nextWait != null) break
+                                (latestOnRepeat ?: latestOnClick).invoke()
+                            }
+                        } else {
+                            while (true) {
+                                val ev = awaitPointerEvent()
+                                val ch = ev.changes.firstOrNull { it.id == down.id }
+                                if (ch == null || !ch.pressed) {
+                                    if (!slid && ch?.isConsumed != true) {
+                                        latestOnClick()
+                                    }
+                                    break
+                                }
+                                if (ch.isConsumed && !slid) break
+                                val dx = ch.positionChange().x
+                                if (!slid) {
+                                    totalDx += dx
+                                    if (kotlin.math.abs(totalDx) >= activationPx) {
+                                        slid = true
+                                        isSlidingCursor = true
+                                        accumX = totalDx
+                                        ch.consume()
+                                    }
+                                } else {
+                                    accumX += dx
+                                    ch.consume()
+                                }
+                                if (slid) {
+                                    while (accumX <= -stepPx) {
+                                        accumX += stepPx
+                                        latestOnSpaceCursorSlide?.invoke(-1)
+                                    }
+                                    while (accumX >= stepPx) {
+                                        accumX -= stepPx
+                                        latestOnSpaceCursorSlide?.invoke(1)
+                                    }
+                                }
                             }
                         }
                     }
@@ -1915,35 +2139,44 @@ private fun PcKeyCap(
                 }
             }
         }
-    } else if (spec.keyCode == KeyEvent.KEYCODE_DEL) {
+    } else if (isRepeatableSpec && (spec.keyCode == KeyEvent.KEYCODE_DEL || holdToRepeatEnabled)) {
         Modifier.pointerInput(spec.id) {
             awaitEachGesture {
                 val down = awaitFirstDown(requireUnconsumed = false)
                 gesturePressed = true
                 var releasedEarly = false
+                var abortedByScroll = false
                 try {
-                    val waitResult = withTimeoutOrNull(320L) {
+                    val waitResult = withTimeoutOrNull(340L) {
                         while (true) {
                             val ev = awaitPointerEvent()
                             val ch = ev.changes.firstOrNull { it.id == down.id }
                             if (ch == null || !ch.pressed) {
                                 releasedEarly = true
+                                abortedByScroll = ch?.isConsumed == true
+                                break
+                            }
+                            if (ch.isConsumed) {
+                                abortedByScroll = true
                                 break
                             }
                         }
                     }
-                    latestOnClick()
-                    if (waitResult == null && !releasedEarly) {
-                        while (true) {
-                            val nextWait = withTimeoutOrNull(65L) {
-                                while (true) {
-                                    val ev = awaitPointerEvent()
-                                    val ch = ev.changes.firstOrNull { it.id == down.id }
-                                    if (ch == null || !ch.pressed) break
+                    if (!abortedByScroll) {
+                        latestOnClick()
+                        if (waitResult == null && !releasedEarly) {
+                            val repeatIntervalMs = if (spec.keyCode == KeyEvent.KEYCODE_DEL) 62L else 55L
+                            while (true) {
+                                val nextWait = withTimeoutOrNull(repeatIntervalMs) {
+                                    while (true) {
+                                        val ev = awaitPointerEvent()
+                                        val ch = ev.changes.firstOrNull { it.id == down.id }
+                                        if (ch == null || !ch.pressed) break
+                                    }
                                 }
+                                if (nextWait != null) break
+                                (latestOnRepeat ?: latestOnClick).invoke()
                             }
-                            if (nextWait != null) break
-                            latestOnClick()
                         }
                     }
                 } finally {
@@ -1952,11 +2185,42 @@ private fun PcKeyCap(
             }
         }
     } else {
-        Modifier.clickable(
-            interactionSource = interactionSource,
-            indication = null,
-            onClick = onClick,
-        )
+        Modifier.pointerInput(spec.id) {
+            awaitEachGesture {
+                val down = awaitFirstDown(requireUnconsumed = false)
+                gesturePressed = true
+                if (canShowKeyPreview) {
+                    keyRectInRoot?.let { rect ->
+                        latestOnKeyPreviewChanged?.invoke(ActiveKeyPreview(rect, latestPrimaryText))
+                    }
+                }
+                val slopPx = with(density) { 18.dp.toPx() }
+                try {
+                    while (true) {
+                        val ev = awaitPointerEvent()
+                        val ch = ev.changes.firstOrNull { it.id == down.id }
+                        if (ch == null) break
+                        if (!ch.pressed) {
+                            if (!ch.isConsumed) {
+                                val inBounds = ch.position.x >= -slopPx &&
+                                    ch.position.x <= size.width + slopPx &&
+                                    ch.position.y >= -slopPx &&
+                                    ch.position.y <= size.height + slopPx
+                                if (inBounds) {
+                                    latestOnKeyPreviewChanged?.invoke(null)
+                                    latestOnClick()
+                                }
+                            }
+                            break
+                        }
+                        if (ch.isConsumed) break
+                    }
+                } finally {
+                    gesturePressed = false
+                    latestOnKeyPreviewChanged?.invoke(null)
+                }
+            }
+        }
     }
 
     Box(
