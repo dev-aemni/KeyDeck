@@ -3,9 +3,17 @@ package com.example.keyboard
 import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
+import android.graphics.ColorMatrixColorFilter
+import android.graphics.ImageDecoder
 import android.graphics.Matrix
+import android.graphics.drawable.AnimatedImageDrawable
+import android.graphics.drawable.Drawable
 import android.media.ExifInterface
 import android.net.Uri
+import android.os.Build
+import android.os.Handler
+import android.os.Looper
+import android.os.SystemClock
 import android.util.LruCache
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
@@ -13,8 +21,10 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -31,11 +41,16 @@ import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.drawscope.clipRect
+import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.lerp
+import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.withContext
 import java.io.File
 import java.io.FileOutputStream
@@ -43,6 +58,8 @@ import java.util.UUID
 import kotlin.math.PI
 import kotlin.math.cos
 import kotlin.math.max
+import kotlin.math.min
+import kotlin.math.roundToInt
 import kotlin.math.sin
 
 enum class WallpaperSourceType(val label: String) {
@@ -74,9 +91,12 @@ data class KeyboardWallpaper(
     val cropZoom: Float = 1.0f,        // 0.40f..4.0f zoom multiplier from interactive cropper
     val cropPanX: Float = 0.0f,        // normalized horizontal pan fraction (-1.5f..1.5f)
     val cropPanY: Float = 0.0f,        // normalized vertical pan fraction (-1.5f..1.5f)
+    val isAnimatedGif: Boolean = false,
     val isBuiltIn: Boolean = false,
     val createdAtMs: Long = 0L,
-)
+) {
+    fun isGifWallpaper(): Boolean = isAnimatedGif || imagePath.endsWith(".gif", ignoreCase = true)
+}
 
 object BuiltInWallpapers {
     val presets: List<KeyboardWallpaper> = listOf(
@@ -231,13 +251,41 @@ object WallpaperBitmapCache {
     }
 }
 
-suspend fun importWallpaperFromUri(context: Context, uri: Uri): String? = withContext(Dispatchers.IO) {
+data class ImportedWallpaperResult(
+    val path: String,
+    val isAnimatedGif: Boolean,
+)
+
+private fun isGifHeader(bytes: ByteArray): Boolean {
+    if (bytes.size < 6) return false
+    return bytes[0] == 'G'.code.toByte() &&
+        bytes[1] == 'I'.code.toByte() &&
+        bytes[2] == 'F'.code.toByte() &&
+        bytes[3] == '8'.code.toByte() &&
+        (bytes[4] == '7'.code.toByte() || bytes[4] == '9'.code.toByte()) &&
+        bytes[5] == 'a'.code.toByte()
+}
+
+suspend fun importWallpaperFromUri(context: Context, uri: Uri): ImportedWallpaperResult? = withContext(Dispatchers.IO) {
     runCatching {
         val resolver = context.contentResolver
-        val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
-        resolver.openInputStream(uri)?.use { stream ->
-            BitmapFactory.decodeStream(stream, null, bounds)
+        val mime = resolver.getType(uri)?.lowercase().orEmpty()
+        val rawBytes = resolver.openInputStream(uri)?.use { it.readBytes() } ?: return@runCatching null
+        if (rawBytes.isEmpty()) return@runCatching null
+
+        val isGif = mime.contains("gif") || isGifHeader(rawBytes)
+        if (isGif) {
+            val dir = File(context.filesDir, "wallpapers").apply { mkdirs() }
+            val outFile = File(dir, "wp_${UUID.randomUUID().toString().take(10)}.gif")
+            FileOutputStream(outFile).use { fos -> fos.write(rawBytes) }
+            BitmapFactory.decodeByteArray(rawBytes, 0, rawBytes.size)?.let { firstFrame ->
+                WallpaperBitmapCache.putCached(outFile.absolutePath, firstFrame.asImageBitmap())
+            }
+            return@runCatching ImportedWallpaperResult(outFile.absolutePath, isAnimatedGif = true)
         }
+
+        val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+        BitmapFactory.decodeByteArray(rawBytes, 0, rawBytes.size, bounds)
         val maxDim = max(bounds.outWidth, bounds.outHeight)
         if (maxDim <= 0) return@runCatching null
 
@@ -250,17 +298,16 @@ suspend fun importWallpaperFromUri(context: Context, uri: Uri): String? = withCo
             inSampleSize = sampleSize
             inPreferredConfig = Bitmap.Config.ARGB_8888
         }
-        val rawBmp = resolver.openInputStream(uri)?.use { stream ->
-            BitmapFactory.decodeStream(stream, null, decodeOpts)
-        } ?: return@runCatching null
+        val rawBmp = BitmapFactory.decodeByteArray(rawBytes, 0, rawBytes.size, decodeOpts)
+            ?: return@runCatching null
 
         val orientation = runCatching {
-            resolver.openInputStream(uri)?.use { stream ->
+            rawBytes.inputStream().use { stream ->
                 ExifInterface(stream).getAttributeInt(
                     ExifInterface.TAG_ORIENTATION,
                     ExifInterface.ORIENTATION_NORMAL,
                 )
-            } ?: ExifInterface.ORIENTATION_NORMAL
+            }
         }.getOrDefault(ExifInterface.ORIENTATION_NORMAL)
 
         val rotatedBmp = rotateBitmapIfNeeded(rawBmp, orientation)
@@ -280,7 +327,41 @@ suspend fun importWallpaperFromUri(context: Context, uri: Uri): String? = withCo
             }
         }
         WallpaperBitmapCache.putCached(outFile.absolutePath, rotatedBmp.asImageBitmap())
-        outFile.absolutePath
+        ImportedWallpaperResult(outFile.absolutePath, isAnimatedGif = false)
+    }.getOrNull()
+}
+
+suspend fun importWallpaperFromBytes(
+    context: Context,
+    rawBytes: ByteArray,
+    preferGif: Boolean = false,
+): ImportedWallpaperResult? = withContext(Dispatchers.IO) {
+    runCatching {
+        if (rawBytes.isEmpty()) return@runCatching null
+        val dir = File(context.filesDir, "wallpapers").apply { mkdirs() }
+        val isGif = preferGif || isGifHeader(rawBytes)
+        if (isGif) {
+            val outFile = File(dir, "wp_${UUID.randomUUID().toString().take(10)}.gif")
+            FileOutputStream(outFile).use { it.write(rawBytes) }
+            BitmapFactory.decodeByteArray(rawBytes, 0, rawBytes.size)?.let { firstFrame ->
+                WallpaperBitmapCache.putCached(outFile.absolutePath, firstFrame.asImageBitmap())
+            }
+            return@runCatching ImportedWallpaperResult(outFile.absolutePath, isAnimatedGif = true)
+        }
+
+        val rawBmp = BitmapFactory.decodeByteArray(rawBytes, 0, rawBytes.size) ?: return@runCatching null
+        val usePng = rawBmp.hasAlpha()
+        val ext = if (usePng) "png" else "jpg"
+        val outFile = File(dir, "wp_${UUID.randomUUID().toString().take(10)}.$ext")
+        FileOutputStream(outFile).use { fos ->
+            if (usePng) {
+                rawBmp.compress(Bitmap.CompressFormat.PNG, 100, fos)
+            } else {
+                rawBmp.compress(Bitmap.CompressFormat.JPEG, 92, fos)
+            }
+        }
+        WallpaperBitmapCache.putCached(outFile.absolutePath, rawBmp.asImageBitmap())
+        ImportedWallpaperResult(outFile.absolutePath, isAnimatedGif = false)
     }.getOrNull()
 }
 
@@ -317,6 +398,7 @@ fun KeyboardWallpaperBackdrop(
     wallpaper: KeyboardWallpaper?,
     palette: ResolvedKeyboardPalette,
     overlayAlpha: Float = 1f,
+    animateGif: Boolean = true,
     modifier: Modifier = Modifier,
 ) {
     if (wallpaper == null || wallpaper.sourceType == WallpaperSourceType.NONE) {
@@ -343,48 +425,19 @@ fun KeyboardWallpaperBackdrop(
 
     Box(modifier = modifier.clipToBounds().background(baseColor)) {
         if (wallpaper.sourceType == WallpaperSourceType.CUSTOM_IMAGE && wallpaper.imagePath.isNotBlank()) {
-            var loadedBitmap by remember(wallpaper.imagePath) {
-                mutableStateOf(WallpaperBitmapCache.getCached(wallpaper.imagePath))
-            }
-            LaunchedEffect(wallpaper.imagePath) {
-                if (loadedBitmap == null) {
-                    val decoded = withContext(Dispatchers.IO) {
-                        runCatching {
-                            val file = File(wallpaper.imagePath)
-                            if (file.exists()) {
-                                BitmapFactory.decodeFile(file.absolutePath)?.asImageBitmap()
-                            } else {
-                                null
-                            }
-                        }.getOrNull()
-                    }
-                    if (decoded != null) {
-                        WallpaperBitmapCache.putCached(wallpaper.imagePath, decoded)
-                        loadedBitmap = decoded
-                    }
-                }
-            }
-            val bmp = loadedBitmap
-            if (bmp != null) {
-                val zoom = wallpaper.cropZoom.coerceIn(0.4f, 4.0f)
-                val panX = wallpaper.cropPanX.coerceIn(-1.5f, 1.5f)
-                val panY = wallpaper.cropPanY.coerceIn(-1.5f, 1.5f)
-                Image(
-                    bitmap = bmp,
-                    contentDescription = wallpaper.name,
-                    contentScale = if (wallpaper.fitCenter) ContentScale.Fit else ContentScale.Crop,
-                    alpha = lightness * overlayAlpha,
-                    colorFilter = ColorFilter.colorMatrix(colorMatrix),
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .graphicsLayer {
-                            scaleX = zoom
-                            scaleY = zoom
-                            translationX = panX * size.width
-                            translationY = panY * size.height
-                        },
-                )
-            }
+            WallpaperMediaLayer(
+                imagePath = wallpaper.imagePath,
+                contentDescription = wallpaper.name,
+                isAnimatedGif = wallpaper.isGifWallpaper(),
+                animateGif = animateGif,
+                fitCenter = wallpaper.fitCenter,
+                cropZoom = wallpaper.cropZoom,
+                cropPanX = wallpaper.cropPanX,
+                cropPanY = wallpaper.cropPanY,
+                alpha = lightness * overlayAlpha,
+                colorMatrix = colorMatrix,
+                modifier = Modifier.fillMaxSize(),
+            )
         } else {
             val basePatternTint = if (wallpaper.tintHex != 0L) {
                 Color(wallpaper.tintHex)
@@ -432,6 +485,202 @@ fun KeyboardWallpaperBackdrop(
                 )
             }
         }
+    }
+}
+
+@Suppress("DEPRECATION")
+@Composable
+fun WallpaperMediaLayer(
+    imagePath: String,
+    contentDescription: String,
+    isAnimatedGif: Boolean,
+    animateGif: Boolean,
+    fitCenter: Boolean,
+    cropZoom: Float,
+    cropPanX: Float,
+    cropPanY: Float,
+    alpha: Float,
+    colorMatrix: ColorMatrix,
+    modifier: Modifier = Modifier,
+) {
+    val zoom = cropZoom.coerceIn(0.4f, 4.0f)
+    val panX = cropPanX.coerceIn(-1.5f, 1.5f)
+    val panY = cropPanY.coerceIn(-1.5f, 1.5f)
+    val clampedAlpha = alpha.coerceIn(0f, 1f)
+
+    if (isAnimatedGif && animateGif && imagePath.isNotBlank()) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+            var animDrawable by remember(imagePath) { mutableStateOf<AnimatedImageDrawable?>(null) }
+            var frameTick by remember(imagePath) { mutableIntStateOf(0) }
+
+            LaunchedEffect(imagePath) {
+                val decoded = withContext(Dispatchers.IO) {
+                    runCatching {
+                        val file = File(imagePath)
+                        if (file.exists()) {
+                            ImageDecoder.decodeDrawable(ImageDecoder.createSource(file)) as? AnimatedImageDrawable
+                        } else {
+                            null
+                        }
+                    }.getOrNull()
+                }
+                animDrawable = decoded
+            }
+
+            val activeDrawable = animDrawable
+            if (activeDrawable != null) {
+                DisposableEffect(activeDrawable) {
+                    val mainHandler = Handler(Looper.getMainLooper())
+                    val cb = object : Drawable.Callback {
+                        override fun invalidateDrawable(who: Drawable) {
+                            frameTick++
+                        }
+
+                        override fun scheduleDrawable(who: Drawable, what: Runnable, `when`: Long) {
+                            mainHandler.postAtTime(what, who, `when`)
+                        }
+
+                        override fun unscheduleDrawable(who: Drawable, what: Runnable) {
+                            mainHandler.removeCallbacks(what, who)
+                        }
+                    }
+                    activeDrawable.repeatCount = AnimatedImageDrawable.REPEAT_INFINITE
+                    activeDrawable.callback = cb
+                    activeDrawable.start()
+                    onDispose {
+                        runCatching {
+                            activeDrawable.stop()
+                            mainHandler.removeCallbacksAndMessages(activeDrawable)
+                            activeDrawable.callback = null
+                        }
+                    }
+                }
+
+                val nativeFilter = remember(colorMatrix) { ColorMatrixColorFilter(colorMatrix.values) }
+                Canvas(modifier = modifier.clipToBounds()) {
+                    @Suppress("UNUSED_VARIABLE")
+                    val currentFrame = frameTick
+                    val iw = activeDrawable.intrinsicWidth.coerceAtLeast(1).toFloat()
+                    val ih = activeDrawable.intrinsicHeight.coerceAtLeast(1).toFloat()
+                    val baseScale = if (fitCenter) {
+                        min(size.width / iw, size.height / ih)
+                    } else {
+                        max(size.width / iw, size.height / ih)
+                    }
+                    val totalScale = baseScale * zoom
+                    val drawW = iw * totalScale
+                    val drawH = ih * totalScale
+                    val left = (size.width - drawW) * 0.5f + panX * size.width
+                    val top = (size.height - drawH) * 0.5f + panY * size.height
+
+                    activeDrawable.alpha = (clampedAlpha * 255f).roundToInt().coerceIn(0, 255)
+                    activeDrawable.colorFilter = nativeFilter
+                    activeDrawable.setBounds(
+                        left.roundToInt(),
+                        top.roundToInt(),
+                        (left + drawW).roundToInt(),
+                        (top + drawH).roundToInt(),
+                    )
+                    clipRect {
+                        drawIntoCanvas { canvas ->
+                            activeDrawable.draw(canvas.nativeCanvas)
+                        }
+                    }
+                }
+                return
+            }
+        } else {
+            var movie by remember(imagePath) { mutableStateOf<android.graphics.Movie?>(null) }
+            var movieTimeMs by remember(imagePath) { mutableIntStateOf(0) }
+            LaunchedEffect(imagePath) {
+                movie = withContext(Dispatchers.IO) {
+                    runCatching {
+                        val file = File(imagePath)
+                        if (file.exists()) android.graphics.Movie.decodeFile(file.absolutePath) else null
+                    }.getOrNull()
+                }
+            }
+            val activeMovie = movie
+            if (activeMovie != null && activeMovie.width() > 0 && activeMovie.height() > 0) {
+                val duration = activeMovie.duration().coerceAtLeast(1000)
+                LaunchedEffect(activeMovie, duration) {
+                    val startMs = SystemClock.uptimeMillis()
+                    while (isActive) {
+                        movieTimeMs = ((SystemClock.uptimeMillis() - startMs) % duration).toInt()
+                        delay(33L)
+                    }
+                }
+                Canvas(modifier = modifier.clipToBounds()) {
+                    val iw = activeMovie.width().toFloat()
+                    val ih = activeMovie.height().toFloat()
+                    val baseScale = if (fitCenter) {
+                        min(size.width / iw, size.height / ih)
+                    } else {
+                        max(size.width / iw, size.height / ih)
+                    }
+                    val totalScale = baseScale * zoom
+                    val drawW = iw * totalScale
+                    val drawH = ih * totalScale
+                    val left = (size.width - drawW) * 0.5f + panX * size.width
+                    val top = (size.height - drawH) * 0.5f + panY * size.height
+
+                    activeMovie.setTime(movieTimeMs)
+                    val paint = android.graphics.Paint().apply {
+                        this.alpha = (clampedAlpha * 255f).roundToInt().coerceIn(0, 255)
+                        this.colorFilter = ColorMatrixColorFilter(colorMatrix.values)
+                    }
+                    clipRect {
+                        drawIntoCanvas { canvas ->
+                            val nc = canvas.nativeCanvas
+                            val saveCount = nc.save()
+                            nc.translate(left, top)
+                            nc.scale(totalScale, totalScale)
+                            activeMovie.draw(nc, 0f, 0f, paint)
+                            nc.restoreToCount(saveCount)
+                        }
+                    }
+                }
+                return
+            }
+        }
+    }
+
+    var loadedBitmap by remember(imagePath) {
+        mutableStateOf(WallpaperBitmapCache.getCached(imagePath))
+    }
+    LaunchedEffect(imagePath) {
+        if (loadedBitmap == null) {
+            val decoded = withContext(Dispatchers.IO) {
+                runCatching {
+                    val file = File(imagePath)
+                    if (file.exists()) {
+                        BitmapFactory.decodeFile(file.absolutePath)?.asImageBitmap()
+                    } else {
+                        null
+                    }
+                }.getOrNull()
+            }
+            if (decoded != null) {
+                WallpaperBitmapCache.putCached(imagePath, decoded)
+                loadedBitmap = decoded
+            }
+        }
+    }
+    val bmp = loadedBitmap
+    if (bmp != null) {
+        Image(
+            bitmap = bmp,
+            contentDescription = contentDescription,
+            contentScale = if (fitCenter) ContentScale.Fit else ContentScale.Crop,
+            alpha = clampedAlpha,
+            colorFilter = ColorFilter.colorMatrix(colorMatrix),
+            modifier = modifier.graphicsLayer {
+                scaleX = zoom
+                scaleY = zoom
+                translationX = panX * size.width
+                translationY = panY * size.height
+            },
+        )
     }
 }
 

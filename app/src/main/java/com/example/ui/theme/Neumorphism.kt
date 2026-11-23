@@ -10,13 +10,17 @@ import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.RoundRect
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Paint
+import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.ShaderBrush
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.drawscope.clipPath
 import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
+import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
@@ -32,9 +36,10 @@ private val RgbSpectrumColors = listOf(
 )
 
 /**
- * Self-contained keycap surface for tightly spaced keyboard grids.
- * Strictly clipped to its own rounded shape so key shadows/highlights NEVER bleed out
- * onto neighboring keys or overlap adjacent keycaps.
+ * Soft, pillowy 3D Neumorphic keycap for tightly spaced keyboard grids.
+ * Uses a tight dark-only bottom-right ambient grounding shadow (no outward bright light bleed)
+ * combined with a strictly clipped diagonal pillow gradient and sculpted top-left inner highlight
+ * so keys look genuinely soft and tactile without ever overlapping or clipping adjacent keys.
  */
 fun Modifier.neumorphicKeyCap(
     surfaceColor: Color = NeuBg,
@@ -45,76 +50,126 @@ fun Modifier.neumorphicKeyCap(
     borderWidth: Dp = 1.dp,
 ): Modifier = composed {
     this
-        .clip(RoundedCornerShape(cornerRadius))
         .drawBehind {
             val radiusPx = cornerRadius.toPx()
-            val strokePx = 1.dp.toPx()
+            val cr = CornerRadius(radiusPx, radiusPx)
+            val surfaceAlpha = surfaceColor.alpha.coerceIn(0f, 1f)
 
-            // Crisp keycap fill strictly inside bounds
-            drawRoundRect(
-                color = surfaceColor,
-                cornerRadius = CornerRadius(radiusPx, radiusPx),
-            )
+            // 1. Tight dark-only bottom-right ambient shadow for soft keycap lift without eating neighbors
+            val dropOffset = 1.1.dp.toPx()
+            val dropBlur = 2.0.dp.toPx().coerceAtLeast(1f)
+            if (surfaceAlpha > 0.08f) {
+                drawIntoCanvas { canvas ->
+                    val dropPaint = Paint().apply {
+                        asFrameworkPaint().apply {
+                            isAntiAlias = true
+                            color = shadowDark.copy(alpha = (0.34f * surfaceAlpha).coerceIn(0.05f, 0.42f)).toArgb()
+                            maskFilter = BlurMaskFilter(dropBlur, BlurMaskFilter.Blur.NORMAL)
+                        }
+                    }
+                    canvas.drawRoundRect(
+                        left = dropOffset * 0.45f,
+                        top = dropOffset * 0.65f,
+                        right = size.width + dropOffset,
+                        bottom = size.height + dropOffset,
+                        radiusX = radiusPx,
+                        radiusY = radiusPx,
+                        paint = dropPaint,
+                    )
+                }
+            }
 
-            // Subtle internal top bevel highlight (no outward bleed)
-            drawRoundRect(
-                brush = Brush.verticalGradient(
-                    colors = listOf(
-                        shadowLight.copy(alpha = (0.34f * surfaceColor.alpha).coerceIn(0.05f, 0.45f)),
-                        Color.Transparent,
+            // 2. Strictly clipped soft pillow surface & sculpted inner bevels
+            val keyPath = Path().apply {
+                addRoundRect(
+                    RoundRect(
+                        left = 0f,
+                        top = 0f,
+                        right = size.width,
+                        bottom = size.height,
+                        cornerRadius = cr,
                     ),
-                    startY = 0f,
-                    endY = (size.height * 0.24f).coerceAtLeast(2f),
-                ),
-                cornerRadius = CornerRadius(radiusPx, radiusPx),
-            )
-
-            // Tactile bottom 3D keycap skirt strictly inside bottom edge
-            drawRoundRect(
-                brush = Brush.verticalGradient(
-                    colors = listOf(
-                        Color.Transparent,
-                        shadowDark.copy(alpha = (0.38f * surfaceColor.alpha).coerceIn(0.06f, 0.48f)),
-                    ),
-                    startY = (size.height * 0.72f).coerceAtLeast(1f),
-                    endY = size.height,
-                ),
-                cornerRadius = CornerRadius(radiusPx, radiusPx),
-            )
-
-            // Delicate top-edge specular hairline for keycap definition
-            drawRoundRect(
-                brush = Brush.verticalGradient(
-                    colors = listOf(
-                        shadowLight.copy(alpha = (0.28f * surfaceColor.alpha).coerceIn(0.04f, 0.35f)),
-                        Color.Transparent,
-                    ),
-                    startY = 0f,
-                    endY = size.height * 0.55f,
-                ),
-                topLeft = Offset(strokePx * 0.5f, strokePx * 0.5f),
-                size = Size(
-                    (size.width - strokePx).coerceAtLeast(1f),
-                    (size.height - strokePx).coerceAtLeast(1f),
-                ),
-                cornerRadius = CornerRadius(radiusPx, radiusPx),
-                style = Stroke(width = strokePx),
-            )
-
-            if (borderColor != null && borderWidth > 0.dp) {
-                val bPx = borderWidth.toPx()
-                drawRoundRect(
-                    color = borderColor,
-                    topLeft = Offset(bPx * 0.5f, bPx * 0.5f),
-                    size = Size(
-                        (size.width - bPx).coerceAtLeast(1f),
-                        (size.height - bPx).coerceAtLeast(1f),
-                    ),
-                    cornerRadius = CornerRadius(radiusPx, radiusPx),
-                    style = Stroke(width = bPx),
                 )
             }
+
+            clipPath(keyPath) {
+                // Soft diagonal pillow gradient (light top-left -> pure base -> soft shaded bottom-right)
+                val topTint = lerp(surfaceColor, shadowLight, 0.24f).copy(alpha = surfaceAlpha)
+                val bottomTint = lerp(surfaceColor, shadowDark, 0.16f).copy(alpha = surfaceAlpha)
+                drawRoundRect(
+                    brush = Brush.linearGradient(
+                        0.0f to topTint,
+                        0.48f to surfaceColor,
+                        1.0f to bottomTint,
+                        start = Offset.Zero,
+                        end = Offset(size.width, size.height),
+                    ),
+                    cornerRadius = cr,
+                )
+
+                // Soft cushion top sheen
+                drawRoundRect(
+                    brush = Brush.verticalGradient(
+                        colors = listOf(
+                            shadowLight.copy(alpha = (0.30f * surfaceAlpha).coerceIn(0.04f, 0.36f)),
+                            Color.Transparent,
+                        ),
+                        startY = 0f,
+                        endY = (size.height * 0.36f).coerceAtLeast(3f),
+                    ),
+                    cornerRadius = cr,
+                )
+
+                // Soft lower 3D keycap skirt
+                drawRoundRect(
+                    brush = Brush.verticalGradient(
+                        colors = listOf(
+                            Color.Transparent,
+                            shadowDark.copy(alpha = (0.28f * surfaceAlpha).coerceIn(0.04f, 0.34f)),
+                        ),
+                        startY = (size.height * 0.68f).coerceAtLeast(1f),
+                        endY = size.height,
+                    ),
+                    cornerRadius = cr,
+                )
+
+                // Sculpted soft inner bevel rim (top-left light arc -> bottom-right shadow arc)
+                val rimStroke = 1.4.dp.toPx()
+                drawRoundRect(
+                    brush = Brush.linearGradient(
+                        colors = listOf(
+                            shadowLight.copy(alpha = (0.45f * surfaceAlpha).coerceIn(0.06f, 0.50f)),
+                            Color.Transparent,
+                            shadowDark.copy(alpha = (0.22f * surfaceAlpha).coerceIn(0.03f, 0.28f)),
+                        ),
+                        start = Offset.Zero,
+                        end = Offset(size.width, size.height),
+                    ),
+                    topLeft = Offset(rimStroke * 0.5f, rimStroke * 0.5f),
+                    size = Size(
+                        (size.width - rimStroke).coerceAtLeast(1f),
+                        (size.height - rimStroke).coerceAtLeast(1f),
+                    ),
+                    cornerRadius = cr,
+                    style = Stroke(width = rimStroke),
+                )
+
+                if (borderColor != null && borderWidth > 0.dp) {
+                    val bPx = borderWidth.toPx()
+                    drawRoundRect(
+                        color = borderColor,
+                        topLeft = Offset(bPx * 0.5f, bPx * 0.5f),
+                        size = Size(
+                            (size.width - bPx).coerceAtLeast(1f),
+                            (size.height - bPx).coerceAtLeast(1f),
+                        ),
+                        cornerRadius = cr,
+                        style = Stroke(width = bPx),
+                    )
+                }
+            }
         }
+        .clip(RoundedCornerShape(cornerRadius))
 }
 
 /**

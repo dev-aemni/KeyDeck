@@ -90,15 +90,13 @@ import com.example.keyboard.PcKeyboardDeck
 import com.example.keyboard.PcKeyboardLayoutData
 import com.example.keyboard.ResolvedKeyboardPalette
 import com.example.keyboard.WallpaperBitmapCache
+import com.example.keyboard.WallpaperMediaLayer
 import com.example.keyboard.WallpaperSourceType
 import com.example.keyboard.buildWallpaperColorMatrix
 import com.example.ui.theme.BodyFontFamily
 import com.example.ui.theme.KeyDeckColors
 import com.example.ui.theme.neumorphicInset
 import com.example.ui.theme.neumorphicRaised
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.withContext
-import java.io.File
 import kotlin.math.roundToInt
 
 private val WALLPAPER_TINT_SWATCHES = listOf(
@@ -281,7 +279,7 @@ fun WallpaperStudioSection(
                         modifier = Modifier.size(19.dp),
                     )
                     Text(
-                        text = "Pick Image / Logo (Drag, Zoom & Crop)",
+                        text = "Pick Image / GIF / Logo (Drag, Zoom & Crop)",
                         color = Color.White,
                         fontWeight = FontWeight.Bold,
                         fontSize = 13.5.sp,
@@ -613,24 +611,6 @@ private fun WallpaperCropDialog(
     var fitCenter by remember(draft.id) { mutableStateOf(draft.fitCenter) }
     var viewportSize by remember { mutableStateOf(IntSize(1, 1)) }
 
-    var loadedBitmap by remember(draft.imagePath) {
-        mutableStateOf(WallpaperBitmapCache.getCached(draft.imagePath))
-    }
-    LaunchedEffect(draft.imagePath) {
-        if (loadedBitmap == null && draft.imagePath.isNotBlank()) {
-            val decoded = withContext(Dispatchers.IO) {
-                runCatching {
-                    val f = File(draft.imagePath)
-                    if (f.exists()) BitmapFactory.decodeFile(f.absolutePath)?.asImageBitmap() else null
-                }.getOrNull()
-            }
-            if (decoded != null) {
-                WallpaperBitmapCache.putCached(draft.imagePath, decoded)
-                loadedBitmap = decoded
-            }
-        }
-    }
-
     val keyboardAspect = remember(settings.layoutMode) {
         when (settings.layoutMode) {
             KeyboardLayoutMode.NUMPAD_ONLY -> 1.35f
@@ -737,21 +717,19 @@ private fun WallpaperCropDialog(
                     .testTag("wallpaper_crop_viewport"),
                 contentAlignment = Alignment.Center,
             ) {
-                val bmp = loadedBitmap
-                if (bmp != null) {
-                    Image(
-                        bitmap = bmp,
+                if (draft.imagePath.isNotBlank()) {
+                    WallpaperMediaLayer(
+                        imagePath = draft.imagePath,
                         contentDescription = "Crop preview",
-                        contentScale = if (fitCenter) ContentScale.Fit else ContentScale.Crop,
-                        colorFilter = ColorFilter.colorMatrix(previewMatrix),
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .graphicsLayer {
-                                scaleX = zoom
-                                scaleY = zoom
-                                translationX = panX * size.width
-                                translationY = panY * size.height
-                            },
+                        isAnimatedGif = draft.isGifWallpaper(),
+                        animateGif = true,
+                        fitCenter = fitCenter,
+                        cropZoom = zoom,
+                        cropPanX = panX,
+                        cropPanY = panY,
+                        alpha = 1f,
+                        colorMatrix = previewMatrix,
+                        modifier = Modifier.fillMaxSize(),
                     )
                 }
 
@@ -1065,6 +1043,7 @@ private fun SavedWallpaperRow(
                     KeyboardWallpaperBackdrop(
                         wallpaper = wallpaper,
                         palette = palette,
+                        animateGif = false,
                         modifier = Modifier.matchParentSize(),
                     )
                 }
@@ -1078,7 +1057,10 @@ private fun SavedWallpaperRow(
                         overflow = TextOverflow.Ellipsis,
                     )
                     Text(
-                        text = "${(wallpaper.lightness * 100).roundToInt()}% Light • Sat ${(wallpaper.saturation * 100).roundToInt()}%",
+                        text = buildString {
+                            if (wallpaper.isGifWallpaper()) append("GIF • ")
+                            append("${(wallpaper.lightness * 100).roundToInt()}% Light • Sat ${(wallpaper.saturation * 100).roundToInt()}%")
+                        },
                         fontSize = 11.sp,
                         color = colors.textSecondary,
                         maxLines = 1,

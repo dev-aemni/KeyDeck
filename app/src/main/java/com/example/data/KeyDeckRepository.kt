@@ -375,6 +375,7 @@ class KeyDeckRepository(private val context: Context) {
                     put("cropZoom", wp.cropZoom.toDouble())
                     put("cropPanX", wp.cropPanX.toDouble())
                     put("cropPanY", wp.cropPanY.toDouble())
+                    put("isAnimatedGif", wp.isAnimatedGif)
                     put("createdAtMs", wp.createdAtMs)
                 },
             )
@@ -408,6 +409,7 @@ class KeyDeckRepository(private val context: Context) {
                             cropZoom = obj.optDouble("cropZoom", 1.0).toFloat().coerceIn(0.4f, 4.0f),
                             cropPanX = obj.optDouble("cropPanX", 0.0).toFloat().coerceIn(-1.5f, 1.5f),
                             cropPanY = obj.optDouble("cropPanY", 0.0).toFloat().coerceIn(-1.5f, 1.5f),
+                            isAnimatedGif = obj.optBoolean("isAnimatedGif", false),
                             isBuiltIn = false,
                             createdAtMs = obj.optLong("createdAtMs", 0L),
                         ),

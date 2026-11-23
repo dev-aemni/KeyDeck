@@ -16,6 +16,8 @@ import android.webkit.WebResourceError
 import android.webkit.WebResourceRequest
 import android.webkit.WebView
 import android.webkit.WebViewClient
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -29,14 +31,19 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.OpenInNew
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.FileDownload
+import androidx.compose.material.icons.filled.FileUpload
 import androidx.compose.material.icons.filled.Public
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.WarningAmber
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -49,22 +56,31 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
+import androidx.compose.ui.window.Dialog
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
+import com.example.keyboard.CustomHotkey
+import com.example.keyboard.KeyDeckProfileCodec
+import com.example.keyboard.KeyDeckSettings
 import com.example.keyboard.KeyDispatcher
+import com.example.keyboard.KeyboardWallpaper
 import com.example.ui.theme.BodyFontFamily
 import com.example.ui.theme.KeyDeckColors
 import com.example.ui.theme.neumorphicInset
 import com.example.ui.theme.neumorphicRaised
+import kotlin.math.roundToInt
 
 private const val PLAYGROUND_URL = "playground://shortcuts"
 private const val PLAYGROUND_BASE_URL = "https://keydeck.local/"
@@ -100,9 +116,15 @@ private class SandboxWebView(context: Context) : WebView(context) {
 @SuppressLint("SetJavaScriptEnabled")
 @Composable
 fun WebSandboxScreen(
+    settings: KeyDeckSettings,
+    hotkeys: List<CustomHotkey>,
+    activeWallpaper: KeyboardWallpaper?,
     isOverlayRunning: Boolean,
     suppressSystemKeyboard: Boolean,
     onLaunchFloatingOverWeb: () -> Unit,
+    onExportProfileToDownloads: (profileName: String, onResult: (Boolean, String) -> Unit) -> Unit,
+    onExportProfileToUri: (Uri, profileName: String, onResult: (Boolean, String) -> Unit) -> Unit,
+    onImportProfileFromUri: (Uri, onResult: (Boolean, String) -> Unit) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val colors = KeyDeckColors.current
@@ -117,6 +139,33 @@ fun WebSandboxScreen(
     var isPendingRecovery by remember { mutableStateOf(false) }
     var isPageLoaded by remember { mutableStateOf(false) }
     var lastLoadError by remember { mutableStateOf<String?>(null) }
+
+    var showExportDialog by remember { mutableStateOf(false) }
+    var exportNameInput by remember { mutableStateOf("My KeyDeck") }
+    var profileStatusMessage by remember { mutableStateOf<String?>(null) }
+    var profileStatusSuccess by remember { mutableStateOf(true) }
+
+    val saveAsLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.CreateDocument("application/octet-stream"),
+    ) { uri ->
+        if (uri != null) {
+            onExportProfileToUri(uri, exportNameInput) { ok, msg ->
+                profileStatusSuccess = ok
+                profileStatusMessage = msg
+            }
+        }
+    }
+
+    val importLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.OpenDocument(),
+    ) { uri ->
+        if (uri != null) {
+            onImportProfileFromUri(uri) { ok, msg ->
+                profileStatusSuccess = ok
+                profileStatusMessage = msg
+            }
+        }
+    }
 
     fun loadTargetIntoWebView(wv: SandboxWebView, rawTarget: String, dark: Boolean) {
         if (wv.isDisposed) return
@@ -260,12 +309,12 @@ fun WebSandboxScreen(
         ) {
             Column(modifier = Modifier.weight(1f).padding(end = 8.dp)) {
                 Text(
-                    text = "Web & Gaming Lab",
+                    text = "Deck Lab & Profiles",
                     style = MaterialTheme.typography.headlineMedium,
                     color = colors.textPrimary,
                 )
                 Text(
-                    text = "Test shortcuts, numpad, WASD hold & mouse touchpad",
+                    text = "Export/import .keydeck backups & test keys/mouse",
                     style = MaterialTheme.typography.bodyMedium,
                     color = colors.textSecondary,
                 )
@@ -300,6 +349,133 @@ fun WebSandboxScreen(
                         color = if (isOverlayRunning) colors.emerald else colors.indigo,
                     )
                 }
+            }
+        }
+
+        // Export / Import .keydeck Profile Backup Card
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .neumorphicRaised(colors.bg, colors.shadowLight, colors.shadowDark, 16.dp, 4.dp, 8.dp, colors.keyBorder.copy(alpha = 0.45f))
+                .padding(horizontal = 12.dp, vertical = 10.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween,
+            ) {
+                Column(modifier = Modifier.weight(1f).padding(end = 8.dp)) {
+                    Text(
+                        text = "Keyboard Profile (.keydeck)",
+                        style = MaterialTheme.typography.titleSmall,
+                        fontWeight = FontWeight.Bold,
+                        color = colors.textPrimary,
+                    )
+                    Text(
+                        text = "${settings.layoutMode.shortLabel} • ${settings.themeId.displayName} • ${hotkeys.size} shortcuts" +
+                            if (activeWallpaper?.isGifWallpaper() == true) " • GIF" else "",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = colors.textSecondary,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                }
+                Text(
+                    text = "v112",
+                    fontSize = 10.5.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = colors.indigo,
+                )
+            }
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(10.dp),
+            ) {
+                Box(
+                    modifier = Modifier
+                        .weight(1f)
+                        .height(44.dp)
+                        .neumorphicRaised(
+                            surfaceColor = colors.accentFill,
+                            shadowLight = colors.shadowLight,
+                            shadowDark = colors.shadowDark,
+                            cornerRadius = 12.dp,
+                            shadowOffset = 3.dp,
+                            blurRadius = 6.dp,
+                            borderColor = null,
+                        )
+                        .clickable { showExportDialog = true }
+                        .testTag("profile_export_button"),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.FileUpload,
+                            contentDescription = null,
+                            tint = Color.White,
+                            modifier = Modifier.size(16.dp),
+                        )
+                        Text(
+                            text = "Export .keydeck",
+                            color = Color.White,
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 12.5.sp,
+                        )
+                    }
+                }
+
+                Box(
+                    modifier = Modifier
+                        .weight(1f)
+                        .height(44.dp)
+                        .neumorphicRaised(
+                            surfaceColor = colors.bg,
+                            shadowLight = colors.shadowLight,
+                            shadowDark = colors.shadowDark,
+                            cornerRadius = 12.dp,
+                            shadowOffset = 3.dp,
+                            blurRadius = 6.dp,
+                            borderColor = colors.keyBorder.copy(alpha = 0.45f),
+                        )
+                        .clickable {
+                            importLauncher.launch(arrayOf("*/*"))
+                        }
+                        .testTag("profile_import_button"),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.FileDownload,
+                            contentDescription = null,
+                            tint = colors.indigo,
+                            modifier = Modifier.size(16.dp),
+                        )
+                        Text(
+                            text = "Import .keydeck",
+                            color = colors.indigo,
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 12.5.sp,
+                        )
+                    }
+                }
+            }
+
+            if (profileStatusMessage != null) {
+                Text(
+                    text = profileStatusMessage.orEmpty(),
+                    fontSize = 11.5.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    color = if (profileStatusSuccess) colors.emerald else colors.coral,
+                    modifier = Modifier.testTag("profile_status_message"),
+                )
             }
         }
 
@@ -451,7 +627,7 @@ fun WebSandboxScreen(
                         contentAlignment = Alignment.Center,
                     ) {
                         Text(
-                            text = "Reload Web Lab",
+                            text = "Reload Deck Lab",
                             color = colors.indigo,
                             fontWeight = FontWeight.Bold,
                         )
@@ -471,10 +647,10 @@ fun WebSandboxScreen(
                                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
                                     setRendererPriorityPolicy(WebView.RENDERER_PRIORITY_IMPORTANT, false)
                                 }
-                                settings.javaScriptEnabled = true
-                                settings.domStorageEnabled = true
-                                settings.allowFileAccess = false
-                                settings.allowContentAccess = false
+                                getSettings().javaScriptEnabled = true
+                                getSettings().domStorageEnabled = true
+                                getSettings().allowFileAccess = false
+                                getSettings().allowContentAccess = false
                                 webViewClient = object : WebViewClient() {
                                     override fun onPageStarted(
                                         view: WebView?,
@@ -575,6 +751,160 @@ fun WebSandboxScreen(
                         },
                         modifier = Modifier.fillMaxSize(),
                     )
+                }
+            }
+        }
+    }
+
+    if (showExportDialog) {
+        val targetFileName = KeyDeckProfileCodec.buildFileName(exportNameInput)
+        val transpPct = ((1f - settings.overlayOpacity.coerceIn(0.25f, 1.0f)) * 100f).roundToInt().coerceIn(0, 75)
+        Dialog(onDismissRequest = { showExportDialog = false }) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .neumorphicRaised(
+                        surfaceColor = colors.bg,
+                        shadowLight = colors.shadowLight,
+                        shadowDark = colors.shadowDark,
+                        cornerRadius = 20.dp,
+                        shadowOffset = 5.dp,
+                        blurRadius = 10.dp,
+                        borderColor = colors.keyBorder.copy(alpha = 0.55f),
+                    )
+                    .padding(18.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp),
+            ) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                ) {
+                    Text(
+                        text = "Export Keyboard Layout",
+                        style = MaterialTheme.typography.titleMedium,
+                        color = colors.textPrimary,
+                    )
+                    Box(
+                        modifier = Modifier
+                            .size(32.dp)
+                            .clip(RoundedCornerShape(16.dp))
+                            .clickable { showExportDialog = false },
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Close,
+                            contentDescription = "Close export dialog",
+                            tint = colors.textSecondary,
+                        )
+                    }
+                }
+
+                OutlinedTextField(
+                    value = exportNameInput,
+                    onValueChange = { exportNameInput = it },
+                    label = { Text("Keyboard Settings Name") },
+                    singleLine = true,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .testTag("export_profile_name_input"),
+                )
+
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .neumorphicInset(
+                            surfaceColor = colors.bg,
+                            shadowLight = colors.shadowLight,
+                            shadowDark = colors.shadowDark,
+                            cornerRadius = 12.dp,
+                            depth = 2.dp,
+                            borderColor = colors.keyBorder.copy(alpha = 0.35f),
+                        )
+                        .padding(10.dp),
+                ) {
+                    Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                        Text(
+                            text = "File: sdcard/Download/$targetFileName",
+                            fontSize = 11.5.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = colors.indigo,
+                        )
+                        Text(
+                            text = "@version:112 • Height ${settings.keyHeightDp}dp • Width ${(settings.keyboardWidthFraction * 100).roundToInt()}%",
+                            fontSize = 11.sp,
+                            color = colors.textSecondary,
+                        )
+                        Text(
+                            text = "Shortcuts: ${hotkeys.size} • Transparency: $transpPct% • GIF: ${activeWallpaper?.isGifWallpaper() == true}",
+                            fontSize = 11.sp,
+                            color = colors.textSecondary,
+                        )
+                    }
+                }
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(10.dp),
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .weight(1f)
+                            .height(46.dp)
+                            .neumorphicRaised(
+                                surfaceColor = colors.bg,
+                                shadowLight = colors.shadowLight,
+                                shadowDark = colors.shadowDark,
+                                cornerRadius = 12.dp,
+                                shadowOffset = 3.dp,
+                                blurRadius = 6.dp,
+                                borderColor = colors.keyBorder.copy(alpha = 0.45f),
+                            )
+                            .clickable {
+                                showExportDialog = false
+                                saveAsLauncher.launch(targetFileName)
+                            }
+                            .testTag("export_profile_save_as_button"),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        Text("Save As...", color = colors.indigo, fontWeight = FontWeight.SemiBold, fontSize = 12.5.sp)
+                    }
+
+                    Box(
+                        modifier = Modifier
+                            .weight(1.4f)
+                            .height(46.dp)
+                            .neumorphicRaised(
+                                surfaceColor = colors.accentFill,
+                                shadowLight = colors.shadowLight,
+                                shadowDark = colors.shadowDark,
+                                cornerRadius = 12.dp,
+                                shadowOffset = 4.dp,
+                                blurRadius = 8.dp,
+                                borderColor = null,
+                            )
+                            .clickable {
+                                val cleanName = exportNameInput.trim().ifBlank { "My KeyDeck" }
+                                showExportDialog = false
+                                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                                    onExportProfileToDownloads(cleanName) { ok, msg ->
+                                        profileStatusSuccess = ok
+                                        profileStatusMessage = msg
+                                    }
+                                } else {
+                                    saveAsLauncher.launch(targetFileName)
+                                }
+                            }
+                            .testTag("export_profile_confirm_button"),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        Text(
+                            text = "Save to Download",
+                            color = Color.White,
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 13.sp,
+                        )
+                    }
                 }
             }
         }

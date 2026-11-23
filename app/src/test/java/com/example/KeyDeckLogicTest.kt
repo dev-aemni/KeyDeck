@@ -7,6 +7,7 @@ import com.example.keyboard.BuiltInWallpapers
 import com.example.keyboard.CustomHotkey
 import com.example.keyboard.HotkeyActionType
 import com.example.keyboard.HotkeyCategory
+import com.example.keyboard.KeyDeckProfileCodec
 import com.example.keyboard.KeyDeckSettings
 import com.example.keyboard.KeyboardLayoutMode
 import com.example.keyboard.KeyboardSizePreset
@@ -16,6 +17,7 @@ import com.example.keyboard.PcKeyboardLayoutData
 import com.example.keyboard.RgbBorderMode
 import com.example.keyboard.WallpaperSourceType
 import com.example.keyboard.buildWallpaperColorMatrix
+import java.util.Base64
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
@@ -200,5 +202,94 @@ class KeyDeckLogicTest {
         val matrix = buildWallpaperColorMatrix(saturation = 1.2f, contrast = 1.1f, brightness = -0.1f)
         assertEquals(20, matrix.values.size)
         assertTrue(matrix.values.all { it.isFinite() })
+    }
+
+    @Test
+    fun `keydeck profile codec exports and imports layouts, shortcuts, and animated gif wallpapers`() {
+        assertEquals("My_Gaming_Deck.keydeck", KeyDeckProfileCodec.buildFileName("My Gaming Deck"))
+        assertEquals("Test_Deck.keydeck", KeyDeckProfileCodec.buildFileName("Test/Deck.keydeck"))
+
+        val fakeGifBytes = "GIF89a\u0001\u0000\u0001\u0000".toByteArray(Charsets.ISO_8859_1)
+        val gifWallpaper = KeyboardWallpaper(
+            id = "wp_gif_1",
+            name = "Pixel Rain",
+            sourceType = WallpaperSourceType.CUSTOM_IMAGE,
+            imagePath = "/data/local/wp_gif_1.gif",
+            lightness = 0.24f,
+            saturation = 1.15f,
+            contrast = 1.32f,
+            brightness = -0.05f,
+            keyOpacity = 0.58f,
+            isAnimatedGif = true,
+        )
+        assertTrue(gifWallpaper.isGifWallpaper())
+
+        val settings = KeyDeckSettings(
+            layoutMode = KeyboardLayoutMode.GAMING,
+            themeId = KeyboardThemeId.PURE_BLACK,
+            appThemeMode = AppThemeMode.DARK,
+            keyHeightDp = 42,
+            keyboardWidthFraction = 0.90f,
+            overlayOpacity = 0.75f,
+            showKeyBorder = true,
+        )
+        val hotkeys = listOf(
+            CustomHotkey(
+                id = "hk_copy",
+                label = "Copy",
+                keyCode = KeyEvent.KEYCODE_C,
+                keyDisplay = "C",
+                ctrl = true,
+            ),
+            CustomHotkey(
+                id = "hk_float",
+                label = "Float Deck",
+                keyCode = KeyEvent.KEYCODE_F,
+                keyDisplay = "F",
+                ctrl = true,
+                alt = true,
+                actionType = HotkeyActionType.TOGGLE_FLOATING,
+            ),
+        )
+
+        val serialized = KeyDeckProfileCodec.serialize(
+            profileName = "Pro Setup",
+            settings = settings,
+            hotkeys = hotkeys,
+            activeWallpaper = gifWallpaper,
+            embeddedImageBytes = fakeGifBytes,
+            base64Encoder = { Base64.getEncoder().encodeToString(it) },
+        )
+
+        assertTrue(serialized.startsWith("@keydeck.aemni"))
+        assertTrue(serialized.contains("@version:112"))
+        assertTrue(serialized.contains("@kdb.name:Pro Setup"))
+        assertTrue(serialized.contains("@kdb.hight:42"))
+        assertTrue(serialized.contains("@kdb.width:0.90"))
+        assertTrue(serialized.contains("@animated.gif:true"))
+        assertTrue(serialized.contains("@kdb.shortcut(Copy): ctrl+c"))
+        assertTrue(serialized.contains("@kdb.tranceparency:25%"))
+        assertTrue(serialized.contains("@kdb.appearane:dark"))
+        assertTrue(serialized.contains("@kdb.contrast:1.32"))
+
+        val parsed = KeyDeckProfileCodec.parse(
+            content = serialized,
+            base64Decoder = { Base64.getDecoder().decode(it) },
+        )!!
+        assertEquals("Pro Setup", parsed.profileName)
+        assertEquals(112, parsed.formatVersion)
+        assertTrue(parsed.isAnimatedGif)
+        assertEquals(42, parsed.settings.keyHeightDp)
+        assertEquals(0.90f, parsed.settings.keyboardWidthFraction, 0.01f)
+        assertEquals(0.75f, parsed.settings.overlayOpacity, 0.01f)
+        assertEquals(AppThemeMode.DARK, parsed.settings.appThemeMode)
+        assertEquals(KeyboardThemeId.PURE_BLACK, parsed.settings.themeId)
+        assertEquals(KeyboardLayoutMode.GAMING, parsed.settings.layoutMode)
+        assertTrue(parsed.settings.showKeyBorder)
+        assertEquals(2, parsed.hotkeys?.size)
+        assertEquals("Ctrl+C", parsed.hotkeys?.first()?.comboText())
+        assertEquals(HotkeyActionType.TOGGLE_FLOATING, parsed.hotkeys?.get(1)?.actionType)
+        assertTrue(parsed.embeddedImageBytes?.contentEquals(fakeGifBytes) == true)
+        assertEquals(1.32f, parsed.wallpaperConfig?.contrast ?: 0f, 0.01f)
     }
 }

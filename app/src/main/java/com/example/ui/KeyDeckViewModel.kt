@@ -3,10 +3,13 @@ package com.example.ui
 import android.accessibilityservice.AccessibilityServiceInfo
 import android.app.Application
 import android.content.ComponentName
+import android.content.ContentValues
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
 import android.os.Build
+import android.os.Environment
+import android.provider.MediaStore
 import android.provider.Settings
 import android.view.accessibility.AccessibilityManager
 import android.view.inputmethod.InputMethodManager
@@ -17,6 +20,7 @@ import com.example.data.KeyDeckRuntimeState
 import com.example.keyboard.BuiltInWallpapers
 import com.example.keyboard.CustomHotkey
 import com.example.keyboard.HotkeyCategory
+import com.example.keyboard.KeyDeckProfileCodec
 import com.example.keyboard.KeyDeckSettings
 import com.example.keyboard.KeyboardLayoutMode
 import com.example.keyboard.KeyboardThemeId
@@ -24,10 +28,12 @@ import com.example.keyboard.KeyboardWallpaper
 import com.example.keyboard.PcKeyboardLayoutData
 import com.example.keyboard.WallpaperSourceType
 import com.example.keyboard.deleteWallpaperFileIfUnused
+import com.example.keyboard.importWallpaperFromBytes
 import com.example.keyboard.importWallpaperFromUri
 import com.example.service.FloatingKeyboardService
 import com.example.service.KeyDeckAccessibilityService
 import com.example.service.KeyDeckImeService
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -35,6 +41,8 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import java.io.File
 import java.util.UUID
 
 data class SystemReadinessState(
@@ -262,8 +270,8 @@ class KeyDeckViewModel(application: Application) : AndroidViewModel(application)
     fun importWallpaperFromGallery(uri: Uri, onReady: (KeyboardWallpaper?) -> Unit) {
         viewModelScope.launch {
             val ctx = getApplication<Application>()
-            val path = importWallpaperFromUri(ctx, uri)
-            if (path == null) {
+            val imported = importWallpaperFromUri(ctx, uri)
+            if (imported == null) {
                 onReady(null)
                 return@launch
             }
@@ -271,10 +279,10 @@ class KeyDeckViewModel(application: Application) : AndroidViewModel(application)
             onReady(
                 KeyboardWallpaper(
                     id = "draft_${UUID.randomUUID().toString().take(6)}",
-                    name = "Photo Theme #$nextNum",
+                    name = if (imported.isAnimatedGif) "GIF Theme #$nextNum" else "Photo Theme #$nextNum",
                     sourceType = WallpaperSourceType.CUSTOM_IMAGE,
-                    imagePath = path,
-                    lightness = 0.16f,
+                    imagePath = imported.path,
+                    lightness = if (imported.isAnimatedGif) 0.22f else 0.16f,
                     saturation = 0.90f,
                     contrast = 1.08f,
                     brightness = 0.0f,
@@ -283,6 +291,7 @@ class KeyDeckViewModel(application: Application) : AndroidViewModel(application)
                     keyOpacity = 0.62f,
                     darkBackdrop = true,
                     fitCenter = false,
+                    isAnimatedGif = imported.isAnimatedGif,
                     isBuiltIn = false,
                     createdAtMs = System.currentTimeMillis(),
                 ),
@@ -350,6 +359,165 @@ class KeyDeckViewModel(application: Application) : AndroidViewModel(application)
                 val newItems = presets.filterNot { it.comboText() in existingCombos }
                 repository.saveHotkeys(newItems + hotkeys.value)
             }
+        }
+    }
+
+    private suspend fun buildSerializedProfile(profileName: String): String = withContext(Dispatchers.IO) {
+        val currentSettings = settings.value
+        val currentHotkeys = hotkeys.value
+        val currentWp = activeWallpaper.value
+        val imageBytes = if (
+            currentWp != null &&
+            currentWp.sourceType == WallpaperSourceType.CUSTOM_IMAGE &&
+            currentWp.imagePath.isNotBlank()
+        ) {
+            runCatching {
+                val f = File(currentWp.imagePath)
+                if (f.exists() && f.length() <= 12L * 1024L * 1024L) f.readBytes() else null
+            }.getOrNull()
+        } else {
+            null
+        }
+        KeyDeckProfileCodec.serialize(
+            profileName = profileName,
+            settings = currentSettings,
+            hotkeys = currentHotkeys,
+            activeWallpaper = currentWp,
+            embeddedImageBytes = imageBytes,
+        )
+    }
+
+    fun exportProfileToDownloads(
+        profileName: String,
+        onResult: (success: Boolean, message: String) -> Unit,
+    ) {
+        viewModelScope.launch {
+            val fileName = KeyDeckProfileCodec.buildFileName(profileName)
+            val content = buildSerializedProfile(profileName)
+            val ctx = getApplication<Application>()
+            val savedPathMessage = withContext(Dispatchers.IO) {
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                    runCatching {
+                        val resolver = ctx.contentResolver
+                        val values = ContentValues().apply {
+                            put(MediaStore.Downloads.DISPLAY_NAME, fileName)
+                            put(MediaStore.Downloads.MIME_TYPE, "application/octet-stream")
+                            put(MediaStore.Downloads.RELATIVE_PATH, Environment.DIRECTORY_DOWNLOADS)
+                            put(MediaStore.Downloads.IS_PENDING, 1)
+                        }
+                        val uri = resolver.insert(MediaStore.Downloads.EXTERNAL_CONTENT_URI, values)
+                            ?: return@runCatching null
+                        resolver.openOutputStream(uri)?.use { out ->
+                            out.write(content.toByteArray(Charsets.UTF_8))
+                        } ?: return@runCatching null
+                        values.clear()
+                        values.put(MediaStore.Downloads.IS_PENDING, 0)
+                        resolver.update(uri, values, null, null)
+                        "Saved to Download/$fileName"
+                    }.getOrNull()
+                } else {
+                    null
+                }
+            }
+            if (savedPathMessage != null) {
+                onResult(true, savedPathMessage)
+            } else {
+                onResult(false, "Unable to write Download/$fileName directly. Use Save As.")
+            }
+        }
+    }
+
+    fun exportProfileToUri(
+        uri: Uri,
+        profileName: String,
+        onResult: (success: Boolean, message: String) -> Unit,
+    ) {
+        viewModelScope.launch {
+            val fileName = KeyDeckProfileCodec.buildFileName(profileName)
+            val content = buildSerializedProfile(profileName)
+            val ctx = getApplication<Application>()
+            val ok = withContext(Dispatchers.IO) {
+                runCatching {
+                    ctx.contentResolver.openOutputStream(uri)?.use { out ->
+                        out.write(content.toByteArray(Charsets.UTF_8))
+                    } != null
+                }.getOrDefault(false)
+            }
+            if (ok) {
+                onResult(true, "Saved profile $fileName")
+            } else {
+                onResult(false, "Could not save .keydeck file to selected location.")
+            }
+        }
+    }
+
+    fun importProfileFromUri(
+        uri: Uri,
+        onResult: (success: Boolean, message: String) -> Unit,
+    ) {
+        viewModelScope.launch {
+            val ctx = getApplication<Application>()
+            val rawText = withContext(Dispatchers.IO) {
+                runCatching {
+                    ctx.contentResolver.openInputStream(uri)?.bufferedReader(Charsets.UTF_8)?.use { reader ->
+                        reader.readText()
+                    }
+                }.getOrNull()
+            }
+            if (rawText.isNullOrBlank()) {
+                onResult(false, "Could not read selected .keydeck file.")
+                return@launch
+            }
+            val parsed = KeyDeckProfileCodec.parse(rawText)
+            if (parsed == null) {
+                onResult(false, "Invalid profile file: missing @keydeck.aemni header.")
+                return@launch
+            }
+
+            var finalWallpaperId = parsed.activeBuiltInWallpaperId.orEmpty()
+            val wpConfig = parsed.wallpaperConfig
+            if (wpConfig != null) {
+                val persistedWp = if (parsed.embeddedImageBytes != null) {
+                    val importedImg = importWallpaperFromBytes(
+                        context = ctx,
+                        rawBytes = parsed.embeddedImageBytes,
+                        preferGif = parsed.isAnimatedGif,
+                    )
+                    if (importedImg != null) {
+                        wpConfig.copy(
+                            id = "wp_${UUID.randomUUID().toString().take(8)}",
+                            imagePath = importedImg.path,
+                            isAnimatedGif = importedImg.isAnimatedGif || parsed.isAnimatedGif,
+                            isBuiltIn = false,
+                        )
+                    } else {
+                        null
+                    }
+                } else {
+                    wpConfig.copy(
+                        id = "wp_${UUID.randomUUID().toString().take(8)}",
+                        isBuiltIn = false,
+                    )
+                }
+
+                if (persistedWp != null) {
+                    val currentWps = savedWallpapers.value.toMutableList()
+                    currentWps.add(0, persistedWp)
+                    repository.saveWallpapers(currentWps)
+                    finalWallpaperId = persistedWp.id
+                }
+            }
+
+            repository.updateSettings {
+                parsed.settings.copy(activeWallpaperId = finalWallpaperId)
+            }
+            parsed.hotkeys?.let { importedHotkeys ->
+                repository.saveHotkeys(importedHotkeys)
+            }
+
+            val shortcutInfo = parsed.hotkeys?.let { " • ${it.size} shortcuts" }.orEmpty()
+            val gifInfo = if (parsed.isAnimatedGif) " • Animated GIF" else ""
+            onResult(true, "Imported \"${parsed.profileName}\" (v${parsed.formatVersion}$shortcutInfo$gifInfo)")
         }
     }
 }

@@ -25,10 +25,10 @@ import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Bolt
 import androidx.compose.material.icons.filled.Keyboard
-import androidx.compose.material.icons.filled.Public
+import androidx.compose.material.icons.filled.Science
 import androidx.compose.material.icons.outlined.Bolt
 import androidx.compose.material.icons.outlined.Keyboard
-import androidx.compose.material.icons.outlined.Public
+import androidx.compose.material.icons.outlined.Science
 import androidx.compose.material3.Icon
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
@@ -69,7 +69,7 @@ import com.example.ui.theme.resolveIsAppDark
 enum class KeyDeckTab(val label: String) {
     DECK("Deck"),
     HOTKEYS("Hotkeys"),
-    WEB_LAB("Web Lab"),
+    DECK_LAB("Deck Lab"),
 }
 
 class MainActivity : ComponentActivity() {
@@ -235,7 +235,7 @@ private fun KeyDeckApp(viewModel: KeyDeckViewModel) {
                         val icon = when (tab) {
                             KeyDeckTab.DECK -> if (selected) Icons.Filled.Keyboard else Icons.Outlined.Keyboard
                             KeyDeckTab.HOTKEYS -> if (selected) Icons.Filled.Bolt else Icons.Outlined.Bolt
-                            KeyDeckTab.WEB_LAB -> if (selected) Icons.Filled.Public else Icons.Outlined.Public
+                            KeyDeckTab.DECK_LAB -> if (selected) Icons.Filled.Science else Icons.Outlined.Science
                         }
                         NavigationBarItem(
                             selected = selected,
@@ -310,7 +310,10 @@ private fun KeyDeckApp(viewModel: KeyDeckViewModel) {
                 modifier = Modifier.padding(innerPadding),
             )
 
-            KeyDeckTab.WEB_LAB -> WebSandboxScreen(
+            KeyDeckTab.DECK_LAB -> WebSandboxScreen(
+                settings = settings,
+                hotkeys = hotkeys,
+                activeWallpaper = activeWallpaper,
                 isOverlayRunning = isOverlayRunning,
                 suppressSystemKeyboard = isKeyboardExpanded && settings.suppressAutoImeOnInput,
                 onLaunchFloatingOverWeb = {
@@ -319,6 +322,15 @@ private fun KeyDeckApp(viewModel: KeyDeckViewModel) {
                     } else {
                         startFloatingWithOptionalNotificationPermission(expandImmediately = true)
                     }
+                },
+                onExportProfileToDownloads = { profileName, onResult ->
+                    viewModel.exportProfileToDownloads(profileName, onResult)
+                },
+                onExportProfileToUri = { uri, profileName, onResult ->
+                    viewModel.exportProfileToUri(uri, profileName, onResult)
+                },
+                onImportProfileFromUri = { uri, onResult ->
+                    viewModel.importProfileFromUri(uri, onResult)
                 },
                 modifier = Modifier.padding(innerPadding),
             )
