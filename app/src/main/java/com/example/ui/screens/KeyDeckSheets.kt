@@ -38,6 +38,7 @@ import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Switch
 import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
+import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -138,6 +139,7 @@ fun ThemePickerSheet(
 ) {
     val colors = KeyDeckColors.current
     val resolvedPalette = settings.resolvePalette(colors.isDark)
+    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     var activeSection by remember(initialSection) { mutableStateOf(initialSection) }
     var editingDraft by remember { mutableStateOf<KeyboardWallpaper?>(null) }
     val previewWallpaper = if (activeSection == ThemeSheetSection.WALLPAPERS) {
@@ -148,6 +150,7 @@ fun ThemePickerSheet(
 
     ModalBottomSheet(
         onDismissRequest = onDismiss,
+        sheetState = sheetState,
         containerColor = colors.bg,
         contentColor = colors.textPrimary,
     ) {
@@ -210,13 +213,13 @@ fun ThemePickerSheet(
                 }
             }
 
-            // Sticky Live Preview — stays visible while adjusting colors or wallpaper filters
-            MiniKeyboardPreviewCard(
+            // Sticky Full-Layout Live Keyboard Preview — stays visible while adjusting themes or wallpaper filters
+            FullKeyboardPreviewCard(
+                settings = settings,
                 palette = resolvedPalette,
-                cornerDp = settings.keyCornerRadiusDp,
-                opacity = settings.overlayOpacity,
-                showKeyBorder = settings.isKeyBorderVisible(),
                 wallpaper = previewWallpaper,
+                applyWidthFraction = false,
+                capPreviewKeyHeight = true,
             )
 
             Column(
@@ -490,13 +493,21 @@ fun ThemePickerSheet(
                 onValueChange = { v -> onUpdateSettings { it.copy(keyCornerRadiusDp = v.roundToInt()) } },
             )
 
+            val floatingTransparency = (1f - settings.overlayOpacity.coerceIn(0.25f, 1.0f)).coerceIn(0f, 0.75f)
             LabeledSlider(
-                label = "Overlay Opacity",
-                valueLabel = "${(settings.overlayOpacity * 100).roundToInt()}%",
-                value = settings.overlayOpacity,
-                range = 0.50f..1.0f,
+                label = "Floating Keyboard Transparency (Overlay Only)",
+                valueLabel = "${(floatingTransparency * 100).roundToInt()}%",
+                value = floatingTransparency,
+                range = 0f..0.75f,
                 accentColor = colors.indigo,
-                onValueChange = { v -> onUpdateSettings { it.copy(overlayOpacity = v) } },
+                onValueChange = { t ->
+                    onUpdateSettings { it.copy(overlayOpacity = (1f - t).coerceIn(0.25f, 1.0f)) }
+                },
+            )
+            Text(
+                text = "Transparency applies only to the Floating Keyboard over other apps (system IME cannot be transparent).",
+                fontSize = 11.sp,
+                color = colors.textSecondary,
             )
                 }
 
@@ -621,13 +632,12 @@ fun LayoutPickerSheet(
                     KeyboardDockAlignment.RIGHT -> Alignment.CenterEnd
                 },
             ) {
-                MiniKeyboardPreviewCard(
+                FullKeyboardPreviewCard(
+                    settings = settings,
                     palette = palette,
-                    cornerDp = settings.keyCornerRadiusDp,
-                    opacity = settings.overlayOpacity,
-                    showKeyBorder = settings.isKeyBorderVisible(),
                     wallpaper = activeWallpaper,
-                    modifier = Modifier.fillMaxWidth(settings.keyboardWidthFraction),
+                    applyWidthFraction = true,
+                    capPreviewKeyHeight = true,
                 )
             }
 
@@ -937,6 +947,23 @@ fun SettingsSheet(
                 onValueChange = { v -> onUpdateSettings { it.copy(bubbleSizeDp = v.roundToInt()) } },
             )
 
+            val settingsTransparency = (1f - settings.overlayOpacity.coerceIn(0.25f, 1.0f)).coerceIn(0f, 0.75f)
+            LabeledSlider(
+                label = "Floating Keyboard Transparency (Overlay Only)",
+                valueLabel = "${(settingsTransparency * 100).roundToInt()}%",
+                value = settingsTransparency,
+                range = 0f..0.75f,
+                accentColor = colors.indigo,
+                onValueChange = { t ->
+                    onUpdateSettings { it.copy(overlayOpacity = (1f - t).coerceIn(0.25f, 1.0f)) }
+                },
+            )
+            Text(
+                text = "Makes only the Floating Keyboard transparent over apps/games behind it. System IME always stays solid.",
+                style = MaterialTheme.typography.bodyMedium,
+                color = colors.textSecondary,
+            )
+
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -951,7 +978,7 @@ fun SettingsSheet(
                     .padding(14.dp),
             ) {
                 Text(
-                    text = "Session Lifecycle: KeyDeck's floating keyboard is bound to the active app task (stopWithTask=true). Closing KeyDeck from Recents stops the overlay immediately.",
+                    text = "Session Lifecycle: KeyDeck's floating keyboard runs as a persistent foreground overlay (stopWithTask=false), so closing KeyDeck from Recents will keep it running until you close it from the overlay or notification.",
                     style = MaterialTheme.typography.bodyMedium,
                     color = colors.textSecondary,
                 )

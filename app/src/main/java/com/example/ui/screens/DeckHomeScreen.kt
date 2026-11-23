@@ -1,7 +1,7 @@
 package com.example.ui.screens
 
 import android.view.KeyEvent
-import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -46,6 +46,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -55,10 +56,15 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.TextRange
@@ -113,10 +119,12 @@ fun DeckHomeScreen(
     val context = LocalContext.current
     val colors = KeyDeckColors.current
     val keyboardController = LocalSoftwareKeyboardController.current
+    val density = LocalDensity.current
     val testInputFocusRequester = remember { FocusRequester() }
     var testFieldValue by remember { mutableStateOf(TextFieldValue("")) }
     var isTestInputFocused by remember { mutableStateOf(false) }
     var showInlinePreview by remember { mutableStateOf(true) }
+    var measuredDeckHeightPx by remember { mutableIntStateOf(0) }
     var inlineMouseInfo by remember { mutableStateOf<String?>(null) }
 
     fun replaceSelectionWith(insertion: String) {
@@ -129,8 +137,8 @@ fun DeckHomeScreen(
         testFieldValue = TextFieldValue(newText, TextRange(newCursor))
     }
 
-    DisposableEffect(showInlinePreview, isKeyboardExpanded) {
-        if (showInlinePreview || isKeyboardExpanded) {
+    DisposableEffect(Unit) {
+        run {
             val target = object : KeyDispatcher.DirectKeyTarget {
                 override fun onDirectKeyEvent(keyCode: Int, metaState: Int, charToCommit: Char?): Boolean {
                     val isCtrl = (metaState and KeyEvent.META_CTRL_ON) != 0
@@ -972,16 +980,17 @@ fun DeckHomeScreen(
             }
         }
 
-        // Extruded Neumorphic Keyboard Frame
-        AnimatedVisibility(visible = showInlinePreview) {
-            val palette = settings.resolvePalette(colors.isDark)
-            val dockAlign = when (settings.dockAlignment) {
-                KeyboardDockAlignment.LEFT -> Alignment.CenterStart
-                KeyboardDockAlignment.CENTER -> Alignment.Center
-                KeyboardDockAlignment.RIGHT -> Alignment.CenterEnd
-            }
-            val outerCorner = (settings.keyCornerRadiusDp + 8).coerceIn(12, 24).dp
-            val borderCol = if (settings.isKeyBorderVisible()) palette.keyBorder.copy(alpha = 0.85f) else null
+        // Extruded Neumorphic Keyboard Frame (or exact-height blank space when hidden so Floating Keyboard fits cleanly below input)
+        val palette = settings.resolvePalette(colors.isDark)
+        val dockAlign = when (settings.dockAlignment) {
+            KeyboardDockAlignment.LEFT -> Alignment.CenterStart
+            KeyboardDockAlignment.CENTER -> Alignment.Center
+            KeyboardDockAlignment.RIGHT -> Alignment.CenterEnd
+        }
+        val outerCorner = (settings.keyCornerRadiusDp + 8).coerceIn(12, 24).dp
+        val borderCol = if (settings.isKeyBorderVisible()) palette.keyBorder.copy(alpha = 0.85f) else null
+
+        if (showInlinePreview) {
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -1044,6 +1053,11 @@ fun DeckHomeScreen(
                     onUpdateSettings = onUpdateSettings,
                     modifier = Modifier
                         .fillMaxWidth(settings.keyboardWidthFraction.coerceIn(0.60f, 1.0f))
+                        .onSizeChanged { size ->
+                            if (size.height > 0) {
+                                measuredDeckHeightPx = size.height
+                            }
+                        }
                         .neumorphicRaised(
                             surfaceColor = palette.deckBg,
                             shadowLight = palette.shadowLight,
@@ -1054,6 +1068,59 @@ fun DeckHomeScreen(
                             borderColor = borderCol,
                         ),
                 )
+            }
+        } else {
+            val fallbackHeightDp = (settings.keyHeightDp * 5 + settings.keyVerticalGapDp * 4 + settings.deckPaddingDp * 2 + 42).dp
+            val exactReservedHeightDp = if (measuredDeckHeightPx > 0) {
+                with(density) { measuredDeckHeightPx.toDp() }
+            } else {
+                fallbackHeightDp
+            }
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(top = 4.dp, bottom = 14.dp, start = 6.dp, end = 6.dp),
+                contentAlignment = dockAlign,
+            ) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth(settings.keyboardWidthFraction.coerceIn(0.60f, 1.0f))
+                        .height(exactReservedHeightDp)
+                        .clip(RoundedCornerShape(outerCorner))
+                        .testTag("hidden_deck_placeholder"),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Canvas(modifier = Modifier.fillMaxSize()) {
+                        val r = outerCorner.toPx()
+                        drawRoundRect(
+                            color = colors.shadowDark.copy(alpha = 0.42f),
+                            cornerRadius = CornerRadius(r, r),
+                            style = Stroke(
+                                width = 1.4.dp.toPx(),
+                                pathEffect = PathEffect.dashPathEffect(floatArrayOf(14f, 10f), 0f),
+                            ),
+                        )
+                    }
+                    Column(
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.spacedBy(4.dp),
+                        modifier = Modifier.padding(16.dp),
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Keyboard,
+                            contentDescription = null,
+                            tint = colors.textSecondary.copy(alpha = 0.55f),
+                            modifier = Modifier.size(22.dp),
+                        )
+                        Text(
+                            text = "Deck Hidden • Space Reserved for Floating Keyboard",
+                            fontFamily = BodyFontFamily,
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.Medium,
+                            color = colors.textSecondary.copy(alpha = 0.72f),
+                        )
+                    }
+                }
             }
         }
     }

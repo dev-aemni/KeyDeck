@@ -168,6 +168,16 @@ class KeyDeckLogicTest {
             assertFalse(preset.sourceType == WallpaperSourceType.NONE)
         }
 
+        val defaultWp = KeyboardWallpaper(
+            id = "wp_default_check",
+            name = "Default Crop",
+            sourceType = WallpaperSourceType.CUSTOM_IMAGE,
+            imagePath = "/tmp/default.png",
+        )
+        assertEquals(1.0f, defaultWp.cropZoom, 0.001f)
+        assertEquals(0.0f, defaultWp.cropPanX, 0.001f)
+        assertEquals(0.0f, defaultWp.cropPanY, 0.001f)
+
         val custom = KeyboardWallpaper(
             id = "custom_1",
             name = "My Dark Logo",
@@ -179,6 +189,9 @@ class KeyDeckLogicTest {
             brightness = -0.05f,
             darkBackdrop = true,
             fitCenter = true,
+            cropZoom = 1.65f,
+            cropPanX = 0.25f,
+            cropPanY = -0.18f,
         )
         assertEquals(custom, BuiltInWallpapers.resolve("custom_1", listOf(custom)))
         assertEquals(BuiltInWallpapers.presets.first(), BuiltInWallpapers.resolve("wp_carbon", listOf(custom)))

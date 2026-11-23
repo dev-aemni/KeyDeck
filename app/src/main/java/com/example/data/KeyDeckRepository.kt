@@ -263,7 +263,7 @@ class KeyDeckRepository(private val context: Context) {
             deckPaddingDp = (prefs[Keys.DECK_PADDING_DP] ?: 6).coerceIn(1, 10),
             keyCornerRadiusDp = (prefs[Keys.KEY_CORNER_DP] ?: 10).coerceIn(4, 16),
             fontScale = (prefs[Keys.FONT_SCALE] ?: 0.96f).coerceIn(0.75f, 1.25f),
-            overlayOpacity = (prefs[Keys.OVERLAY_OPACITY] ?: 0.96f).coerceIn(0.50f, 1.0f),
+            overlayOpacity = (prefs[Keys.OVERLAY_OPACITY] ?: 0.96f).coerceIn(0.25f, 1.0f),
             bubbleSizeDp = (prefs[Keys.BUBBLE_SIZE_DP] ?: 48).coerceIn(36, 68),
             rgbBorderMode = runCatching { RgbBorderMode.valueOf(rgbName) }
                 .getOrDefault(RgbBorderMode.GAMING_ONLY),
@@ -372,6 +372,9 @@ class KeyDeckRepository(private val context: Context) {
                     put("keyOpacity", wp.keyOpacity.toDouble())
                     put("darkBackdrop", wp.darkBackdrop)
                     put("fitCenter", wp.fitCenter)
+                    put("cropZoom", wp.cropZoom.toDouble())
+                    put("cropPanX", wp.cropPanX.toDouble())
+                    put("cropPanY", wp.cropPanY.toDouble())
                     put("createdAtMs", wp.createdAtMs)
                 },
             )
@@ -402,6 +405,9 @@ class KeyDeckRepository(private val context: Context) {
                             keyOpacity = obj.optDouble("keyOpacity", 0.64).toFloat().coerceIn(0.15f, 1.0f),
                             darkBackdrop = obj.optBoolean("darkBackdrop", true),
                             fitCenter = obj.optBoolean("fitCenter", false),
+                            cropZoom = obj.optDouble("cropZoom", 1.0).toFloat().coerceIn(0.4f, 4.0f),
+                            cropPanX = obj.optDouble("cropPanX", 0.0).toFloat().coerceIn(-1.5f, 1.5f),
+                            cropPanY = obj.optDouble("cropPanY", 0.0).toFloat().coerceIn(-1.5f, 1.5f),
                             isBuiltIn = false,
                             createdAtMs = obj.optLong("createdAtMs", 0L),
                         ),

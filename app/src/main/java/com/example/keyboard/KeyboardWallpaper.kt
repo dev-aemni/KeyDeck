@@ -19,6 +19,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
@@ -30,6 +31,7 @@ import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.unit.dp
@@ -69,6 +71,9 @@ data class KeyboardWallpaper(
     val keyOpacity: Float = 0.64f,     // 0.20f..1.0f
     val darkBackdrop: Boolean = true,  // true = 90% dark black keyboard look
     val fitCenter: Boolean = false,    // false = Crop fill, true = Fit centered (great for logos)
+    val cropZoom: Float = 1.0f,        // 0.40f..4.0f zoom multiplier from interactive cropper
+    val cropPanX: Float = 0.0f,        // normalized horizontal pan fraction (-1.5f..1.5f)
+    val cropPanY: Float = 0.0f,        // normalized vertical pan fraction (-1.5f..1.5f)
     val isBuiltIn: Boolean = false,
     val createdAtMs: Long = 0L,
 )
@@ -336,7 +341,7 @@ fun KeyboardWallpaperBackdrop(
         )
     }
 
-    Box(modifier = modifier.background(baseColor)) {
+    Box(modifier = modifier.clipToBounds().background(baseColor)) {
         if (wallpaper.sourceType == WallpaperSourceType.CUSTOM_IMAGE && wallpaper.imagePath.isNotBlank()) {
             var loadedBitmap by remember(wallpaper.imagePath) {
                 mutableStateOf(WallpaperBitmapCache.getCached(wallpaper.imagePath))
@@ -361,13 +366,23 @@ fun KeyboardWallpaperBackdrop(
             }
             val bmp = loadedBitmap
             if (bmp != null) {
+                val zoom = wallpaper.cropZoom.coerceIn(0.4f, 4.0f)
+                val panX = wallpaper.cropPanX.coerceIn(-1.5f, 1.5f)
+                val panY = wallpaper.cropPanY.coerceIn(-1.5f, 1.5f)
                 Image(
                     bitmap = bmp,
                     contentDescription = wallpaper.name,
                     contentScale = if (wallpaper.fitCenter) ContentScale.Fit else ContentScale.Crop,
                     alpha = lightness * overlayAlpha,
                     colorFilter = ColorFilter.colorMatrix(colorMatrix),
-                    modifier = Modifier.fillMaxSize(),
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .graphicsLayer {
+                            scaleX = zoom
+                            scaleY = zoom
+                            translationX = panX * size.width
+                            translationY = panY * size.height
+                        },
                 )
             }
         } else {

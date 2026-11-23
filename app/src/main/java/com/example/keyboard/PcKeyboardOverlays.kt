@@ -54,6 +54,7 @@ import androidx.compose.ui.unit.sp
 import com.example.ui.theme.BodyFontFamily
 import com.example.ui.theme.DisplayFontFamily
 import com.example.ui.theme.neumorphicInset
+import com.example.ui.theme.neumorphicKeyCap
 import com.example.ui.theme.neumorphicRaised
 import com.example.ui.theme.rgbAnimatedBorder
 import kotlin.math.hypot
@@ -288,13 +289,11 @@ private fun TouchpadMouseButton(
                         borderColor = borderCol,
                     )
                 } else {
-                    Modifier.neumorphicRaised(
+                    Modifier.neumorphicKeyCap(
                         surfaceColor = btnColor,
                         shadowLight = palette.shadowLight,
                         shadowDark = palette.shadowDark,
                         cornerRadius = cornerRadius,
-                        shadowOffset = 2.5.dp,
-                        blurRadius = 5.dp,
                         borderColor = borderCol,
                     )
                 },
@@ -464,13 +463,11 @@ private fun MiniStepperBtn(
     Box(
         modifier = Modifier
             .size(width = 24.dp, height = 22.dp)
-            .neumorphicRaised(
+            .neumorphicKeyCap(
                 surfaceColor = palette.keyBg,
                 shadowLight = palette.shadowLight,
                 shadowDark = palette.shadowDark,
                 cornerRadius = 6.dp,
-                shadowOffset = 1.5.dp,
-                blurRadius = 3.dp,
                 borderColor = borderCol,
             )
             .clickable(onClick = onClick),
@@ -490,6 +487,7 @@ private fun MiniStepperBtn(
 fun DeckQuickSettingsPopup(
     settings: KeyDeckSettings,
     palette: ResolvedKeyboardPalette,
+    isOverlay: Boolean = false,
     onUpdateSettings: ((KeyDeckSettings) -> KeyDeckSettings) -> Unit,
     onDismiss: () -> Unit,
     modifier: Modifier = Modifier,
@@ -653,7 +651,19 @@ fun DeckQuickSettingsPopup(
             }
         }
 
-        // Compact Size & Touchpad Sensitivity Sliders
+        // Compact Size, Floating Transparency & Touchpad Sensitivity Sliders
+        if (isOverlay) {
+            val transparency = (1f - settings.overlayOpacity.coerceIn(0.25f, 1.0f)).coerceIn(0f, 0.75f)
+            QuickPopupSlider(
+                label = "Floating Transparency (${(transparency * 100).roundToInt()}%)",
+                value = transparency,
+                range = 0f..0.75f,
+                palette = palette,
+                onValueChange = { t ->
+                    onUpdateSettings { it.copy(overlayOpacity = (1f - t).coerceIn(0.25f, 1.0f)) }
+                },
+            )
+        }
         QuickPopupSlider(
             label = "Key Height (${settings.keyHeightDp}dp)",
             value = settings.keyHeightDp.toFloat(),

@@ -33,6 +33,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.input.pointer.positionChange
 import androidx.compose.ui.platform.ComposeView
@@ -456,8 +457,11 @@ class FloatingKeyboardService : Service() {
                             },
                             modifier = Modifier
                                 .fillMaxWidth(settings.keyboardWidthFraction.coerceIn(0.60f, 1.0f))
+                                .graphicsLayer {
+                                    alpha = settings.overlayOpacity.coerceIn(0.25f, 1.0f)
+                                }
                                 .neumorphicRaised(
-                                    surfaceColor = palette.deckBg.copy(alpha = settings.overlayOpacity),
+                                    surfaceColor = palette.deckBg.copy(alpha = settings.overlayOpacity.coerceIn(0.25f, 1.0f)),
                                     shadowLight = palette.shadowLight,
                                     shadowDark = palette.shadowDark,
                                     cornerRadius = outerCorner,

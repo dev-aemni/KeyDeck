@@ -93,6 +93,7 @@ import com.example.data.KeyDeckRuntimeState
 import com.example.ui.theme.BodyFontFamily
 import com.example.ui.theme.KeyDeckColors
 import com.example.ui.theme.neumorphicInset
+import com.example.ui.theme.neumorphicKeyCap
 import com.example.ui.theme.neumorphicRaised
 import com.example.ui.theme.rgbAnimatedBorder
 import kotlinx.coroutines.delay
@@ -382,7 +383,7 @@ fun PcKeyboardDeck(
         KeyboardWallpaperBackdrop(
             wallpaper = activeWallpaper,
             palette = palette,
-            overlayAlpha = if (isOverlay) settings.overlayOpacity else 1f,
+            overlayAlpha = if (isOverlay) settings.overlayOpacity.coerceIn(0.25f, 1.0f) else 1f,
             modifier = Modifier.matchParentSize(),
         )
         Column(
@@ -561,13 +562,11 @@ fun PcKeyboardDeck(
                     val accent = Color(hk.accentHex)
                     Row(
                         modifier = Modifier
-                            .neumorphicRaised(
+                            .neumorphicKeyCap(
                                 surfaceColor = if (isSpecial) palette.activeFill else palette.keyBg,
                                 shadowLight = palette.shadowLight,
                                 shadowDark = palette.shadowDark,
                                 cornerRadius = 8.dp,
-                                shadowOffset = 2.dp,
-                                blurRadius = 4.dp,
                                 borderColor = borderCol,
                             )
                             .clickable {
@@ -628,6 +627,7 @@ fun PcKeyboardDeck(
             DeckQuickSettingsPopup(
                 settings = settings,
                 palette = palette,
+                isOverlay = isOverlay,
                 onUpdateSettings = onUpdateSettings,
                 onDismiss = { showQuickSettingsPopup = false },
             )
@@ -1333,13 +1333,11 @@ private fun GamingHoldKeyCap(
                         borderColor = borderCol,
                     )
                 } else {
-                    Modifier.neumorphicRaised(
+                    Modifier.neumorphicKeyCap(
                         surfaceColor = keyBg,
                         shadowLight = palette.shadowLight,
                         shadowDark = palette.shadowDark,
                         cornerRadius = keyCorner,
-                        shadowOffset = 3.dp,
-                        blurRadius = 6.dp,
                         borderColor = borderCol,
                     )
                 },
@@ -1560,13 +1558,11 @@ private fun PcKeyCap(
             borderWidth = 1.15.dp,
         )
     } else {
-        Modifier.neumorphicRaised(
+        Modifier.neumorphicKeyCap(
             surfaceColor = keyBg,
             shadowLight = palette.shadowLight,
             shadowDark = palette.shadowDark,
             cornerRadius = keyCorner,
-            shadowOffset = shadowDepth,
-            blurRadius = blurRadius,
             borderColor = borderCol,
             borderWidth = 1.15.dp,
         )
@@ -1980,13 +1976,11 @@ private fun DeckModeChip(
             borderColor = borderColor,
         )
     } else {
-        Modifier.neumorphicRaised(
+        Modifier.neumorphicKeyCap(
             surfaceColor = palette.keyBg,
             shadowLight = palette.shadowLight,
             shadowDark = palette.shadowDark,
             cornerRadius = 9.dp,
-            shadowOffset = 2.dp,
-            blurRadius = 4.dp,
             borderColor = borderColor,
         )
     }
@@ -2030,13 +2024,11 @@ private fun TopActionIconChip(
             borderColor = borderColor,
         )
     } else {
-        Modifier.neumorphicRaised(
+        Modifier.neumorphicKeyCap(
             surfaceColor = palette.keyBg,
             shadowLight = palette.shadowLight,
             shadowDark = palette.shadowDark,
             cornerRadius = 9.dp,
-            shadowOffset = 2.dp,
-            blurRadius = 4.dp,
             borderColor = borderColor,
         )
     }

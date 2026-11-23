@@ -2,11 +2,18 @@ package com.example.ui.screens
 
 import android.annotation.SuppressLint
 import android.content.Context
+import android.net.Uri
+import android.os.Build
 import android.os.SystemClock
 import android.view.KeyEvent
+import android.view.View
+import android.view.ViewGroup
 import android.view.inputmethod.EditorInfo
 import android.view.inputmethod.InputConnection
 import android.view.inputmethod.InputMethodManager
+import android.webkit.RenderProcessGoneDetail
+import android.webkit.WebResourceError
+import android.webkit.WebResourceRequest
 import android.webkit.WebView
 import android.webkit.WebViewClient
 import androidx.compose.foundation.background
@@ -27,12 +34,16 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.OpenInNew
 import androidx.compose.material.icons.filled.Public
 import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.WarningAmber
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -42,17 +53,27 @@ import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import com.example.keyboard.KeyDispatcher
 import com.example.ui.theme.BodyFontFamily
 import com.example.ui.theme.KeyDeckColors
 import com.example.ui.theme.neumorphicInset
 import com.example.ui.theme.neumorphicRaised
 
+private const val PLAYGROUND_URL = "playground://shortcuts"
+private const val PLAYGROUND_BASE_URL = "https://keydeck.local/"
+private const val MAX_AUTO_RENDERER_RECOVERIES = 3
+
 private class SandboxWebView(context: Context) : WebView(context) {
     var suppressSystemKeyboard: Boolean = true
+    @Volatile
+    var isDisposed: Boolean = false
 
     override fun onCheckIsTextEditor(): Boolean {
         return if (suppressSystemKeyboard) false else super.onCheckIsTextEditor()
@@ -60,6 +81,19 @@ private class SandboxWebView(context: Context) : WebView(context) {
 
     override fun onCreateInputConnection(outAttrs: EditorInfo): InputConnection? {
         return if (suppressSystemKeyboard) null else super.onCreateInputConnection(outAttrs)
+    }
+
+    fun disposeSafely() {
+        if (isDisposed) return
+        isDisposed = true
+        runCatching {
+            stopLoading()
+            onPause()
+            (parent as? ViewGroup)?.removeView(this)
+            webViewClient = WebViewClient()
+            removeAllViews()
+            destroy()
+        }
     }
 }
 
@@ -72,14 +106,83 @@ fun WebSandboxScreen(
     modifier: Modifier = Modifier,
 ) {
     val colors = KeyDeckColors.current
-    var urlInput by remember { mutableStateOf("playground://shortcuts") }
+    val lifecycleOwner = LocalLifecycleOwner.current
+
+    var urlInput by remember { mutableStateOf(PLAYGROUND_URL) }
+    var activeTargetUrl by remember { mutableStateOf(PLAYGROUND_URL) }
     var webViewRef by remember { mutableStateOf<SandboxWebView?>(null) }
+    var webViewEpoch by remember { mutableIntStateOf(0) }
+    var consecutiveCrashes by remember { mutableIntStateOf(0) }
+    var useSoftwareLayerFallback by remember { mutableStateOf(false) }
+    var isPendingRecovery by remember { mutableStateOf(false) }
+    var isPageLoaded by remember { mutableStateOf(false) }
+    var lastLoadError by remember { mutableStateOf<String?>(null) }
+
+    fun loadTargetIntoWebView(wv: SandboxWebView, rawTarget: String, dark: Boolean) {
+        if (wv.isDisposed) return
+        lastLoadError = null
+        isPageLoaded = false
+        val target = rawTarget.trim()
+        if (target.startsWith("playground://") || target.isEmpty()) {
+            activeTargetUrl = PLAYGROUND_URL
+            wv.loadDataWithBaseURL(
+                PLAYGROUND_BASE_URL,
+                buildPlaygroundHtml(dark),
+                "text/html",
+                "UTF-8",
+                null,
+            )
+        } else {
+            val normalized = if (target.startsWith("http://") || target.startsWith("https://")) {
+                target
+            } else {
+                "https://$target"
+            }
+            val scheme = runCatching { Uri.parse(normalized).scheme?.lowercase() }.getOrNull()
+            if (scheme == "http" || scheme == "https") {
+                activeTargetUrl = normalized
+                wv.loadUrl(normalized)
+            } else {
+                lastLoadError = "Unsupported URL scheme"
+            }
+        }
+    }
+
+    DisposableEffect(lifecycleOwner) {
+        val observer = LifecycleEventObserver { _, event ->
+            when (event) {
+                Lifecycle.Event.ON_RESUME -> {
+                    if (isPendingRecovery) {
+                        isPendingRecovery = false
+                        if (consecutiveCrashes < MAX_AUTO_RENDERER_RECOVERIES) {
+                            webViewEpoch++
+                        }
+                    } else {
+                        webViewRef?.takeIf { !it.isDisposed }?.let { wv ->
+                            runCatching { wv.onResume() }
+                        }
+                    }
+                }
+                Lifecycle.Event.ON_PAUSE -> {
+                    webViewRef?.takeIf { !it.isDisposed }?.let { wv ->
+                        runCatching { wv.onPause() }
+                    }
+                }
+                else -> Unit
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose {
+            lifecycleOwner.lifecycle.removeObserver(observer)
+        }
+    }
 
     DisposableEffect(webViewRef) {
         val wv = webViewRef
-        if (wv != null) {
+        if (wv != null && !wv.isDisposed) {
             val target = object : KeyDispatcher.DirectKeyTarget {
                 override fun onDirectKeyEvent(keyCode: Int, metaState: Int, charToCommit: Char?): Boolean {
+                    if (wv.isDisposed || !wv.isAttachedToWindow) return false
                     wv.requestFocus()
                     val now = SystemClock.uptimeMillis()
                     val down = KeyEvent(now, now, KeyEvent.ACTION_DOWN, keyCode, 0, metaState)
@@ -90,6 +193,7 @@ fun WebSandboxScreen(
                 }
 
                 override fun onDirectKeyHold(keyCode: Int, metaState: Int, isDown: Boolean): Boolean {
+                    if (wv.isDisposed || !wv.isAttachedToWindow) return false
                     wv.requestFocus()
                     val now = SystemClock.uptimeMillis()
                     val action = if (isDown) KeyEvent.ACTION_DOWN else KeyEvent.ACTION_UP
@@ -99,23 +203,46 @@ fun WebSandboxScreen(
             }
             val mouseTarget = object : KeyDispatcher.DirectMouseTarget {
                 override fun onMouseDelta(dx: Float, dy: Float) {
+                    if (wv.isDisposed || !wv.isAttachedToWindow) return
                     wv.post {
-                        wv.evaluateJavascript("window.onKeyDeckMouseDelta && window.onKeyDeckMouseDelta($dx, $dy);", null)
+                        if (!wv.isDisposed && wv.isAttachedToWindow) {
+                            wv.evaluateJavascript(
+                                "window.onKeyDeckMouseDelta && window.onKeyDeckMouseDelta($dx, $dy);",
+                                null,
+                            )
+                        }
                     }
                 }
 
                 override fun onMouseClick(isRightClick: Boolean) {
+                    if (wv.isDisposed || !wv.isAttachedToWindow) return
                     wv.post {
-                        wv.evaluateJavascript("window.onKeyDeckMouseClick && window.onKeyDeckMouseClick($isRightClick);", null)
+                        if (!wv.isDisposed && wv.isAttachedToWindow) {
+                            wv.evaluateJavascript(
+                                "window.onKeyDeckMouseClick && window.onKeyDeckMouseClick($isRightClick);",
+                                null,
+                            )
+                        }
                     }
                 }
             }
             KeyDispatcher.setDirectTarget(target)
             KeyDispatcher.setDirectMouseTarget(mouseTarget)
+        } else {
+            KeyDispatcher.setDirectTarget(null)
+            KeyDispatcher.setDirectMouseTarget(null)
         }
         onDispose {
             KeyDispatcher.setDirectTarget(null)
             KeyDispatcher.setDirectMouseTarget(null)
+        }
+    }
+
+    val isDark = colors.isDark
+    LaunchedEffect(isDark, isPageLoaded, webViewRef) {
+        val wv = webViewRef
+        if (wv != null && isPageLoaded && !wv.isDisposed && wv.isAttachedToWindow) {
+            wv.evaluateJavascript("window.setKeyDeckDarkMode && window.setKeyDeckDarkMode($isDark);", null)
         }
     }
 
@@ -222,18 +349,14 @@ fun WebSandboxScreen(
                     .height(48.dp)
                     .neumorphicRaised(colors.bg, colors.shadowLight, colors.shadowDark, 14.dp, 4.dp, 7.dp, colors.keyBorder.copy(alpha = 0.45f))
                     .clickable {
-                        val wv = webViewRef ?: return@clickable
-                        val target = urlInput.trim()
-                        if (target.startsWith("playground://") || target.isEmpty()) {
-                            wv.loadDataWithBaseURL("https://keydeck.local/", buildPlaygroundHtml(colors.isDark), "text/html", "UTF-8", null)
-                        } else {
-                            val normalized = if (target.startsWith("http://") || target.startsWith("https://")) {
-                                target
-                            } else {
-                                "https://$target"
-                            }
-                            wv.loadUrl(normalized)
+                        if (consecutiveCrashes >= MAX_AUTO_RENDERER_RECOVERIES) {
+                            consecutiveCrashes = 0
+                            activeTargetUrl = urlInput.trim().ifEmpty { PLAYGROUND_URL }
+                            webViewEpoch++
+                            return@clickable
                         }
+                        val wv = webViewRef ?: return@clickable
+                        loadTargetIntoWebView(wv, urlInput, isDark)
                     }
                     .padding(horizontal = 16.dp)
                     .testTag("sandbox_go_button"),
@@ -247,14 +370,15 @@ fun WebSandboxScreen(
                     .size(48.dp)
                     .neumorphicRaised(colors.bg, colors.shadowLight, colors.shadowDark, 14.dp, 4.dp, 7.dp, colors.keyBorder.copy(alpha = 0.45f))
                     .clickable {
-                        urlInput = "playground://shortcuts"
-                        webViewRef?.loadDataWithBaseURL(
-                            "https://keydeck.local/",
-                            buildPlaygroundHtml(colors.isDark),
-                            "text/html",
-                            "UTF-8",
-                            null,
-                        )
+                        urlInput = PLAYGROUND_URL
+                        activeTargetUrl = PLAYGROUND_URL
+                        lastLoadError = null
+                        if (consecutiveCrashes >= MAX_AUTO_RENDERER_RECOVERIES || webViewRef == null) {
+                            consecutiveCrashes = 0
+                            webViewEpoch++
+                        } else {
+                            webViewRef?.let { loadTargetIntoWebView(it, PLAYGROUND_URL, isDark) }
+                        }
                     }
                     .testTag("sandbox_reset_button"),
                 contentAlignment = Alignment.Center,
@@ -263,9 +387,17 @@ fun WebSandboxScreen(
             }
         }
 
+        if (lastLoadError != null) {
+            Text(
+                text = lastLoadError ?: "",
+                color = colors.coral,
+                fontSize = 12.sp,
+                modifier = Modifier.padding(horizontal = 4.dp),
+            )
+        }
+
         // Embedded WebView inside a Soft UI Neumorphic frame
         val suppressIme = suppressSystemKeyboard
-        val isDark = colors.isDark
         Box(
             modifier = Modifier
                 .fillMaxWidth()
@@ -273,35 +405,178 @@ fun WebSandboxScreen(
                 .neumorphicRaised(colors.bg, colors.shadowLight, colors.shadowDark, 20.dp, 5.dp, 9.dp, colors.keyBorder.copy(alpha = 0.45f))
                 .padding(6.dp),
         ) {
-            AndroidView(
-                factory = { ctx ->
-                    SandboxWebView(ctx).apply {
-                        this.suppressSystemKeyboard = suppressIme
-                        isFocusable = true
-                        isFocusableInTouchMode = true
-                        settings.javaScriptEnabled = true
-                        settings.domStorageEnabled = true
-                        webViewClient = WebViewClient()
-                        loadDataWithBaseURL(
-                            "https://keydeck.local/",
-                            buildPlaygroundHtml(isDark),
-                            "text/html",
-                            "UTF-8",
-                            null,
+            if (consecutiveCrashes >= MAX_AUTO_RENDERER_RECOVERIES) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(24.dp),
+                    verticalArrangement = Arrangement.Center,
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.WarningAmber,
+                        contentDescription = null,
+                        tint = colors.coral,
+                        modifier = Modifier.size(36.dp),
+                    )
+                    Spacer(modifier = Modifier.height(10.dp))
+                    Text(
+                        text = "Web renderer stopped unexpectedly",
+                        style = MaterialTheme.typography.titleMedium,
+                        color = colors.textPrimary,
+                        textAlign = TextAlign.Center,
+                    )
+                    Spacer(modifier = Modifier.height(6.dp))
+                    Text(
+                        text = "KeyDeck caught the WebView renderer exit safely. Tap below to reload the playground.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = colors.textSecondary,
+                        textAlign = TextAlign.Center,
+                    )
+                    Spacer(modifier = Modifier.height(16.dp))
+                    Box(
+                        modifier = Modifier
+                            .height(48.dp)
+                            .neumorphicRaised(colors.bg, colors.shadowLight, colors.shadowDark, 14.dp, 4.dp, 7.dp, colors.keyBorder.copy(alpha = 0.45f))
+                            .clickable {
+                                urlInput = PLAYGROUND_URL
+                                activeTargetUrl = PLAYGROUND_URL
+                                consecutiveCrashes = 0
+                                useSoftwareLayerFallback = true
+                                lastLoadError = null
+                                webViewEpoch++
+                            }
+                            .padding(horizontal = 20.dp)
+                            .testTag("sandbox_recover_button"),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        Text(
+                            text = "Reload Web Lab",
+                            color = colors.indigo,
+                            fontWeight = FontWeight.Bold,
                         )
-                        webViewRef = this
                     }
-                },
-                update = { wv ->
-                    wv.suppressSystemKeyboard = suppressIme
-                    wv.evaluateJavascript("window.setKeyDeckDarkMode && window.setKeyDeckDarkMode($isDark);", null)
-                    if (suppressIme) {
-                        val imm = wv.context.getSystemService(Context.INPUT_METHOD_SERVICE) as? InputMethodManager
-                        imm?.hideSoftInputFromWindow(wv.windowToken, 0)
-                    }
-                },
-                modifier = Modifier.fillMaxSize(),
-            )
+                }
+            } else {
+                key(webViewEpoch) {
+                    AndroidView(
+                        factory = { ctx ->
+                            SandboxWebView(ctx).apply {
+                                this.suppressSystemKeyboard = suppressIme
+                                isFocusable = true
+                                isFocusableInTouchMode = true
+                                if (useSoftwareLayerFallback) {
+                                    setLayerType(View.LAYER_TYPE_SOFTWARE, null)
+                                }
+                                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                                    setRendererPriorityPolicy(WebView.RENDERER_PRIORITY_IMPORTANT, false)
+                                }
+                                settings.javaScriptEnabled = true
+                                settings.domStorageEnabled = true
+                                settings.allowFileAccess = false
+                                settings.allowContentAccess = false
+                                webViewClient = object : WebViewClient() {
+                                    override fun onPageStarted(
+                                        view: WebView?,
+                                        url: String?,
+                                        favicon: android.graphics.Bitmap?,
+                                    ) {
+                                        isPageLoaded = false
+                                        lastLoadError = null
+                                    }
+
+                                    override fun onPageFinished(view: WebView?, url: String?) {
+                                        val wv = view as? SandboxWebView ?: return
+                                        if (wv.isDisposed) return
+                                        isPageLoaded = true
+                                        consecutiveCrashes = 0
+                                        wv.evaluateJavascript(
+                                            "window.setKeyDeckDarkMode && window.setKeyDeckDarkMode($isDark);",
+                                            null,
+                                        )
+                                    }
+
+                                    override fun shouldOverrideUrlLoading(
+                                        view: WebView?,
+                                        request: WebResourceRequest?,
+                                    ): Boolean {
+                                        val scheme = request?.url?.scheme?.lowercase()
+                                        return scheme != "http" && scheme != "https"
+                                    }
+
+                                    override fun onReceivedError(
+                                        view: WebView?,
+                                        request: WebResourceRequest?,
+                                        error: WebResourceError?,
+                                    ) {
+                                        if (request?.isForMainFrame == true) {
+                                            lastLoadError = "Could not load page (${error?.description ?: "network error"})"
+                                        }
+                                    }
+
+                                    override fun onRenderProcessGone(
+                                        view: WebView?,
+                                        detail: RenderProcessGoneDetail?,
+                                    ): Boolean {
+                                        val crashed = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                                            detail?.didCrash() == true
+                                        } else {
+                                            true
+                                        }
+                                        val deadView = view as? SandboxWebView
+                                        if (deadView != null) {
+                                            deadView.disposeSafely()
+                                        } else if (view != null) {
+                                            runCatching {
+                                                (view.parent as? ViewGroup)?.removeView(view)
+                                                view.stopLoading()
+                                                view.destroy()
+                                            }
+                                        }
+                                        if (webViewRef === view) {
+                                            webViewRef = null
+                                        }
+                                        isPageLoaded = false
+                                        consecutiveCrashes++
+                                        if (crashed || consecutiveCrashes >= 1) {
+                                            useSoftwareLayerFallback = true
+                                        }
+                                        if (consecutiveCrashes >= 2 && activeTargetUrl != PLAYGROUND_URL) {
+                                            activeTargetUrl = PLAYGROUND_URL
+                                            urlInput = PLAYGROUND_URL
+                                        }
+                                        if (consecutiveCrashes < MAX_AUTO_RENDERER_RECOVERIES) {
+                                            if (lifecycleOwner.lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED)) {
+                                                webViewEpoch++
+                                            } else {
+                                                isPendingRecovery = true
+                                            }
+                                        }
+                                        return true
+                                    }
+                                }
+                                loadTargetIntoWebView(this, activeTargetUrl, isDark)
+                                webViewRef = this
+                            }
+                        },
+                        update = { wv ->
+                            if (wv.isDisposed) return@AndroidView
+                            wv.suppressSystemKeyboard = suppressIme
+                            if (suppressIme && wv.isAttachedToWindow) {
+                                val imm = wv.context.getSystemService(Context.INPUT_METHOD_SERVICE) as? InputMethodManager
+                                imm?.hideSoftInputFromWindow(wv.windowToken, 0)
+                            }
+                        },
+                        onRelease = { wv ->
+                            wv.disposeSafely()
+                            if (webViewRef === wv) {
+                                webViewRef = null
+                            }
+                        },
+                        modifier = Modifier.fillMaxSize(),
+                    )
+                }
+            }
         }
     }
 }
@@ -410,6 +685,18 @@ private fun buildPlaygroundHtml(isDark: Boolean): String = """
   const fillEl = document.getElementById('fill');
   const numVal = document.getElementById('numVal');
 
+  function appendLogEvent(label, detail) {
+    const row = document.createElement('div');
+    row.className = 'evt';
+    const span = document.createElement('span');
+    span.className = 'k';
+    span.textContent = label;
+    row.appendChild(span);
+    row.appendChild(document.createTextNode(detail));
+    log.prepend(row);
+    if (log.children.length > 14) log.removeChild(log.lastChild);
+  }
+
   window.setKeyDeckDarkMode = (dark) => {
     document.body.classList.toggle('dark', !!dark);
   };
@@ -424,11 +711,10 @@ private fun buildPlaygroundHtml(isDark: Boolean): String = """
   window.onKeyDeckMouseClick = (isRight) => {
     if (isRight) rmb++; else lmb++;
     clicksEl.textContent = 'LMB: ' + lmb + ' • RMB: ' + rmb;
-    const row = document.createElement('div');
-    row.className = 'evt';
-    row.innerHTML = '<span class="k">' + (isRight ? 'RMB (Use/Place)' : 'LMB (Attack/Click)') + '</span> at (' + Math.round(cx) + '%, ' + Math.round(cy) + '%)';
-    log.prepend(row);
-    if (log.children.length > 14) log.removeChild(log.lastChild);
+    appendLogEvent(
+      isRight ? 'RMB (Use/Place)' : 'LMB (Attack/Click)',
+      ' at (' + Math.round(cx) + '%, ' + Math.round(cy) + '%)'
+    );
   };
 
   function toggleKeyPill(key, active) {
@@ -445,11 +731,7 @@ private fun buildPlaygroundHtml(isDark: Boolean): String = """
       pos = parseInt(e.key, 10) * 10;
       fillEl.style.width = pos + '%';
     }
-    const row = document.createElement('div');
-    row.className = 'evt';
-    row.innerHTML = '<span class="k">DOWN ' + (e.key || e.code) + '</span> • keyCode=' + e.keyCode;
-    log.prepend(row);
-    if (log.children.length > 14) log.removeChild(log.lastChild);
+    appendLogEvent('DOWN ' + (e.key || e.code), ' • keyCode=' + e.keyCode);
   });
 
   window.addEventListener('keyup', (e) => {
