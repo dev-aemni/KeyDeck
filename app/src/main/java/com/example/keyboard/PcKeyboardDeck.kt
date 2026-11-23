@@ -77,6 +77,7 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.input.pointer.positionChange
 import androidx.compose.ui.layout.LayoutCoordinates
 import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.platform.testTag
@@ -129,8 +130,10 @@ fun PcKeyboardDeck(
     onSetupAccessibility: (() -> Unit)? = null,
     onSetupIme: (() -> Unit)? = null,
     activeWallpaper: KeyboardWallpaper? = null,
+    enableLiveSuggestions: Boolean = true,
     modifier: Modifier = Modifier,
 ) {
+    val context = LocalContext.current
     val isAppDark = KeyDeckColors.current.isDark
     val basePalette = remember(settings, isAppDark) { settings.resolvePalette(isAppDark) }
     val hasWallpaper = activeWallpaper != null && activeWallpaper.sourceType != WallpaperSourceType.NONE
@@ -178,6 +181,34 @@ fun PcKeyboardDeck(
     var activeHoldPopup by remember { mutableStateOf<ActiveHoldPopup?>(null) }
     val density = LocalDensity.current
     val haptic = LocalHapticFeedback.current
+
+    val typingController = remember { SimpleTypingController() }
+    var suggestionEval by remember {
+        mutableStateOf(typingController.currentEval(settings.simpleAutoCorrectEnabled))
+    }
+    val inputSessionGen by KeyDeckRuntimeState.inputSessionGeneration.collectAsStateWithLifecycle()
+
+    fun refreshSuggestionEval() {
+        suggestionEval = typingController.currentEval(settings.simpleAutoCorrectEnabled)
+    }
+
+    LaunchedEffect(
+        inputSessionGen,
+        settings.layoutMode,
+        settings.simpleSuggestionsEnabled,
+        settings.simpleAutoCorrectEnabled,
+        enableLiveSuggestions,
+    ) {
+        if (settings.layoutMode != KeyboardLayoutMode.SIMPLE || !settings.simpleSuggestionsEnabled || !enableLiveSuggestions) {
+            typingController.resetOnCursorOrBoundary(clearLastWord = true)
+        }
+        refreshSuggestionEval()
+    }
+
+    LaunchedEffect(inputSessionGen) {
+        typingController.resetOnCursorOrBoundary(clearLastWord = true)
+        refreshSuggestionEval()
+    }
 
     LaunchedEffect(settings.layoutMode) {
         if (settings.layoutMode != KeyboardLayoutMode.SIMPLE) {
@@ -340,9 +371,86 @@ fun PcKeyboardDeck(
             else -> spec.label
         }
 
+        val isSimpleSuggestionTracking =
+            enableLiveSuggestions &&
+                settings.layoutMode == KeyboardLayoutMode.SIMPLE &&
+                settings.simpleSuggestionsEnabled
+
+        val effectiveMeta = currentMetaState()
+        val hasCtrlAltMeta = (effectiveMeta and (KeyEvent.META_CTRL_ON or KeyEvent.META_ALT_ON or KeyEvent.META_META_ON)) != 0
+
+        if (isSimpleSuggestionTracking) {
+            if (hasCtrlAltMeta) {
+                typingController.resetOnCursorOrBoundary(clearLastWord = true)
+                refreshSuggestionEval()
+            } else if (effectiveKeyCode == KeyEvent.KEYCODE_DEL) {
+                val undo = typingController.onBackspace()
+                refreshSuggestionEval()
+                if (undo != null) {
+                    val reverted = KeyDispatcher.dispatchSuggestionReplace(
+                        context = context,
+                        expectedTail = undo.replacedTextWithSeparator,
+                        replacement = undo.originalWord,
+                        comboLabel = "Undo Auto → ${undo.originalWord}",
+                        hapticEnabled = settings.hapticFeedback,
+                    )
+                    if (reverted) {
+                        clearStickyModifiersIfNeeded()
+                        return
+                    }
+                    // Target did not match; clear state and fall through to normal Backspace
+                    typingController.resetOnCursorOrBoundary(clearLastWord = true)
+                    refreshSuggestionEval()
+                }
+            } else if (
+                effectiveKeyCode == KeyEvent.KEYCODE_ENTER ||
+                effectiveKeyCode == KeyEvent.KEYCODE_NUMPAD_ENTER ||
+                effectiveKeyCode == KeyEvent.KEYCODE_TAB ||
+                effectiveKeyCode == KeyEvent.KEYCODE_DPAD_LEFT ||
+                effectiveKeyCode == KeyEvent.KEYCODE_DPAD_RIGHT ||
+                effectiveKeyCode == KeyEvent.KEYCODE_DPAD_UP ||
+                effectiveKeyCode == KeyEvent.KEYCODE_DPAD_DOWN ||
+                effectiveKeyCode == KeyEvent.KEYCODE_MOVE_HOME ||
+                effectiveKeyCode == KeyEvent.KEYCODE_MOVE_END ||
+                effectiveKeyCode == KeyEvent.KEYCODE_FORWARD_DEL ||
+                effectiveKeyCode == KeyEvent.KEYCODE_ESCAPE
+            ) {
+                typingController.resetOnCursorOrBoundary(clearLastWord = true)
+                refreshSuggestionEval()
+            } else if (effectiveChar != null && !KeyDispatcher.shouldDisableSuggestions()) {
+                val cursorTouchingExistingWord = if (typingController.activeWord.isEmpty()) {
+                    KeyDispatcher.isCursorTouchingWord()
+                } else {
+                    false
+                }
+                val autoAction = typingController.onCharTyped(
+                    ch = effectiveChar,
+                    autoCorrectEnabled = settings.simpleAutoCorrectEnabled,
+                    isCursorTouchingExistingWord = cursorTouchingExistingWord,
+                )
+                refreshSuggestionEval()
+                if (autoAction != null) {
+                    val replaced = KeyDispatcher.dispatchSuggestionReplace(
+                        context = context,
+                        expectedTail = autoAction.originalWord,
+                        replacement = autoAction.replacementWithSeparator,
+                        comboLabel = "Auto: ${autoAction.replacementWithSeparator.trimEnd()}",
+                        hapticEnabled = settings.hapticFeedback,
+                    )
+                    if (replaced) {
+                        clearStickyModifiersIfNeeded()
+                        return
+                    }
+                }
+            } else if (effectiveChar == null) {
+                typingController.resetOnCursorOrBoundary(clearLastWord = true)
+                refreshSuggestionEval()
+            }
+        }
+
         onKeyDispatch(
             effectiveKeyCode,
-            currentMetaState(),
+            effectiveMeta,
             effectiveChar,
             formatComboLabel(displayLabel),
         )
@@ -351,6 +459,37 @@ fun PcKeyboardDeck(
 
     fun handleHoldCharCommit(chosen: String) {
         val ch = chosen.firstOrNull()
+        if (enableLiveSuggestions &&
+            settings.layoutMode == KeyboardLayoutMode.SIMPLE &&
+            settings.simpleSuggestionsEnabled &&
+            ch != null &&
+            !KeyDispatcher.shouldDisableSuggestions()
+        ) {
+            val touching = if (typingController.activeWord.isEmpty()) {
+                KeyDispatcher.isCursorTouchingWord()
+            } else {
+                false
+            }
+            val autoAction = typingController.onCharTyped(
+                ch = ch,
+                autoCorrectEnabled = settings.simpleAutoCorrectEnabled,
+                isCursorTouchingExistingWord = touching,
+            )
+            refreshSuggestionEval()
+            if (autoAction != null) {
+                val replaced = KeyDispatcher.dispatchSuggestionReplace(
+                    context = context,
+                    expectedTail = autoAction.originalWord,
+                    replacement = autoAction.replacementWithSeparator,
+                    comboLabel = "Auto: ${autoAction.replacementWithSeparator.trimEnd()}",
+                    hapticEnabled = settings.hapticFeedback,
+                )
+                if (replaced) {
+                    clearStickyModifiersIfNeeded()
+                    return
+                }
+            }
+        }
         onKeyDispatch(
             KeyEvent.KEYCODE_UNKNOWN,
             0,
@@ -361,6 +500,10 @@ fun PcKeyboardDeck(
     }
 
     fun handleSpaceCursorSlide(direction: Int) {
+        if (settings.layoutMode == KeyboardLayoutMode.SIMPLE) {
+            typingController.resetOnCursorOrBoundary(clearLastWord = true)
+            refreshSuggestionEval()
+        }
         val code = if (direction < 0) KeyEvent.KEYCODE_DPAD_LEFT else KeyEvent.KEYCODE_DPAD_RIGHT
         val label = if (direction < 0) "◀ Cursor" else "Cursor ▶"
         onKeyDispatch(
@@ -369,6 +512,32 @@ fun PcKeyboardDeck(
             null,
             formatComboLabel(label),
         )
+    }
+
+    fun handleSuggestionSlotTap(slot: SuggestionSlot) {
+        if (!enableLiveSuggestions || KeyDispatcher.shouldDisableSuggestions()) return
+        val (prior, baseCommit) = typingController.acceptSuggestion(slot)
+        val surroundingBefore = if (prior.isEmpty()) KeyDispatcher.getSurroundingChars(1, 0)?.first.orEmpty() else ""
+        val finalCommit = if (prior.isEmpty() && surroundingBefore.lastOrNull()?.isLetterOrDigit() == true) {
+            " $baseCommit"
+        } else {
+            baseCommit
+        }
+        val replaced = KeyDispatcher.dispatchSuggestionReplace(
+            context = context,
+            expectedTail = prior,
+            replacement = finalCommit,
+            comboLabel = "Suggestion: ${slot.text}",
+            hapticEnabled = settings.hapticFeedback,
+        )
+        if (!replaced && prior.isEmpty()) {
+            finalCommit.forEach { ch ->
+                val kc = if (ch == ' ') KeyEvent.KEYCODE_SPACE else KeyEvent.KEYCODE_UNKNOWN
+                onKeyDispatch(kc, 0, ch, slot.text)
+            }
+        }
+        refreshSuggestionEval()
+        clearStickyModifiersIfNeeded()
     }
 
     val isTightDeck = settings.keyHeightDp <= 32
@@ -730,6 +899,8 @@ fun PcKeyboardDeck(
                         fnActive = false,
                         isModifierLit = spec.id == "num_toggle_top" && settings.layoutMode != KeyboardLayoutMode.PC_STANDARD,
                         compact = true,
+                        hGap = hGap,
+                        vGap = vGap,
                         showKeyBorder = borderVisible,
                         keyOpacity = keyOpacity,
                         rgbActive = rgbActive,
@@ -824,42 +995,68 @@ fun PcKeyboardDeck(
                     simpleSymbolLayer -> PcKeyboardLayoutData.simpleSymbolRows
                     else -> PcKeyboardLayoutData.simpleAlphaRows
                 }
-                KeyGridBlock(
-                    rows = simpleRows,
-                    palette = palette,
-                    keyHeight = simpleKeyHeight,
-                    hGap = hGap.coerceIn(3.dp, 5.dp),
-                    vGap = (vGap + 2.dp).coerceIn(5.dp, 8.dp),
-                    keyCorner = keyCorner.coerceIn(8.dp, 12.dp),
-                    fontScale = (fontScale * 1.08f).coerceAtMost(1.24f),
-                    upperCaseLetters = effectiveUpperCase,
-                    ctrlActive = ctrlActive,
-                    altActive = altActive,
-                    shiftActive = shiftActive,
-                    capsActive = capsActive,
-                    metaActive = metaActive,
-                    fnActive = fnActive,
-                    compact = false,
-                    centerShortRows = !simpleSymbolLayer,
-                    showKeyBorder = borderVisible,
-                    keyOpacity = keyOpacity,
-                    rgbActive = rgbActive,
-                    rgbPhaseDeg = rgbPhaseDeg,
-                    rootCoordsProvider = { rootCoords },
-                    onPopupChanged = { popup ->
-                        if (popup != null && activeHoldPopup == null && settings.hapticFeedback) {
-                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                        }
-                        activeHoldPopup = popup
-                    },
-                    onPopupCommit = { chosen ->
-                        activeHoldPopup = null
-                        handleHoldCharCommit(chosen)
-                    },
-                    onSpaceCursorSlide = { dir -> handleSpaceCursorSlide(dir) },
-                    modifier = Modifier.testTag("simple_mode_deck"),
-                    onKeyTap = { handleKeyTap(it, isFromNumpad = false) },
-                )
+                val simpleHGap = hGap.coerceIn(3.dp, 5.dp)
+                val simpleVGap = (vGap + 2.dp).coerceIn(5.dp, 8.dp)
+                val inputSuppressed = remember(inputSessionGen, lastDispatched?.timestampMs, enableLiveSuggestions) {
+                    enableLiveSuggestions && KeyDispatcher.shouldDisableSuggestions()
+                }
+                Column(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalArrangement = Arrangement.spacedBy(simpleVGap),
+                ) {
+                    if (settings.simpleSuggestionsEnabled) {
+                        SimpleSuggestionBar(
+                            slots = suggestionEval.slots,
+                            suppressed = inputSuppressed,
+                            palette = palette,
+                            barHeight = (keyHeight * 0.78f).coerceIn(28.dp, 36.dp),
+                            hGap = simpleHGap,
+                            cornerRadius = keyCorner.coerceIn(7.dp, 11.dp),
+                            fontScale = fontScale,
+                            showKeyBorder = borderVisible,
+                            keyOpacity = keyOpacity,
+                            rgbActive = rgbActive,
+                            rgbPhaseDeg = rgbPhaseDeg,
+                            onSelectSlot = { slot -> handleSuggestionSlotTap(slot) },
+                        )
+                    }
+                    KeyGridBlock(
+                        rows = simpleRows,
+                        palette = palette,
+                        keyHeight = simpleKeyHeight,
+                        hGap = simpleHGap,
+                        vGap = simpleVGap,
+                        keyCorner = keyCorner.coerceIn(8.dp, 12.dp),
+                        fontScale = (fontScale * 1.08f).coerceAtMost(1.24f),
+                        upperCaseLetters = effectiveUpperCase,
+                        ctrlActive = ctrlActive,
+                        altActive = altActive,
+                        shiftActive = shiftActive,
+                        capsActive = capsActive,
+                        metaActive = metaActive,
+                        fnActive = fnActive,
+                        compact = false,
+                        centerShortRows = !simpleSymbolLayer,
+                        showKeyBorder = borderVisible,
+                        keyOpacity = keyOpacity,
+                        rgbActive = rgbActive,
+                        rgbPhaseDeg = rgbPhaseDeg,
+                        rootCoordsProvider = { rootCoords },
+                        onPopupChanged = { popup ->
+                            if (popup != null && activeHoldPopup == null && settings.hapticFeedback) {
+                                haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                            }
+                            activeHoldPopup = popup
+                        },
+                        onPopupCommit = { chosen ->
+                            activeHoldPopup = null
+                            handleHoldCharCommit(chosen)
+                        },
+                        onSpaceCursorSlide = { dir -> handleSpaceCursorSlide(dir) },
+                        modifier = Modifier.testTag("simple_mode_deck"),
+                        onKeyTap = { handleKeyTap(it, isFromNumpad = false) },
+                    )
+                }
             }
 
             KeyboardLayoutMode.NUMPAD_ONLY -> {
@@ -1215,6 +1412,8 @@ private fun KeyGridBlock(
                         fnActive = fnActive,
                         isModifierLit = isLit,
                         compact = compact,
+                        hGap = hGap,
+                        vGap = vGap,
                         showKeyBorder = showKeyBorder,
                         keyOpacity = keyOpacity,
                         rgbActive = rgbActive,
@@ -1267,6 +1466,8 @@ private fun GamingKeysBlock(
                         keyHeight = keyHeight,
                         keyCorner = keyCorner,
                         fontScale = fontScale,
+                        hGap = hGap,
+                        vGap = vGap,
                         showKeyBorder = showKeyBorder,
                         keyOpacity = keyOpacity,
                         rgbActive = rgbActive,
@@ -1287,6 +1488,8 @@ private fun GamingHoldKeyCap(
     keyHeight: Dp,
     keyCorner: Dp,
     fontScale: Float,
+    hGap: Dp = 3.dp,
+    vGap: Dp = 4.dp,
     showKeyBorder: Boolean,
     keyOpacity: Float = 1f,
     rgbActive: Boolean,
@@ -1317,6 +1520,8 @@ private fun GamingHoldKeyCap(
         held || spec.isAccent -> palette.accentBg
         else -> palette.primaryText
     }
+    val spreadX = (hGap * 0.45f).coerceIn(0.5.dp, 2.2.dp)
+    val spreadY = (vGap * 0.45f).coerceIn(0.5.dp, 2.6.dp)
 
     Box(
         modifier = modifier
@@ -1338,6 +1543,10 @@ private fun GamingHoldKeyCap(
                         shadowLight = palette.shadowLight,
                         shadowDark = palette.shadowDark,
                         cornerRadius = keyCorner,
+                        shadowOffset = 1.6.dp,
+                        blurRadius = 2.5.dp,
+                        maxSpreadX = spreadX,
+                        maxSpreadY = spreadY,
                         borderColor = borderCol,
                     )
                 },
@@ -1441,6 +1650,8 @@ private fun NumpadBlock(
                         fnActive = false,
                         isModifierLit = isNumLockKey && numLockOn,
                         compact = compact,
+                        hGap = hGap,
+                        vGap = vGap,
                         showKeyBorder = showKeyBorder,
                         keyOpacity = keyOpacity,
                         rgbActive = rgbActive,
@@ -1466,6 +1677,8 @@ private fun PcKeyCap(
     fnActive: Boolean,
     isModifierLit: Boolean,
     compact: Boolean,
+    hGap: Dp = 3.dp,
+    vGap: Dp = 4.dp,
     showKeyBorder: Boolean,
     keyOpacity: Float = 1f,
     rgbActive: Boolean,
@@ -1543,8 +1756,10 @@ private fun PcKeyCap(
     }
 
     val borderCol = if (showKeyBorder && !rgbActive) palette.keyBorder.copy(alpha = 0.90f) else null
-    val shadowDepth = if (compact) 2.dp else 3.dp
-    val blurRadius = if (compact) 4.dp else 6.dp
+    val shadowDepth = if (compact) 1.3.dp else 1.7.dp
+    val blurRadius = if (compact) 2.0.dp else 2.6.dp
+    val spreadX = (hGap * 0.45f).coerceIn(0.5.dp, 2.2.dp)
+    val spreadY = (vGap * 0.45f).coerceIn(0.5.dp, 2.6.dp)
     val iconSize = (keyHeight * 0.38f).coerceIn(11.dp, 17.dp)
 
     val neumorphicModifier = if (isEngaged) {
@@ -1563,6 +1778,10 @@ private fun PcKeyCap(
             shadowLight = palette.shadowLight,
             shadowDark = palette.shadowDark,
             cornerRadius = keyCorner,
+            shadowOffset = shadowDepth,
+            blurRadius = blurRadius,
+            maxSpreadX = spreadX,
+            maxSpreadY = spreadY,
             borderColor = borderCol,
             borderWidth = 1.15.dp,
         )
@@ -2045,5 +2264,158 @@ private fun TopActionIconChip(
             tint = if (active) palette.accentBg else palette.primaryText,
             modifier = Modifier.size(14.dp),
         )
+    }
+}
+
+@Composable
+private fun SimpleSuggestionBar(
+    slots: List<SuggestionSlot>,
+    suppressed: Boolean,
+    palette: ResolvedKeyboardPalette,
+    barHeight: Dp,
+    hGap: Dp,
+    cornerRadius: Dp,
+    fontScale: Float,
+    showKeyBorder: Boolean,
+    keyOpacity: Float,
+    rgbActive: Boolean,
+    rgbPhaseDeg: Float,
+    onSelectSlot: (SuggestionSlot) -> Unit,
+) {
+    val borderCol = if (showKeyBorder && !rgbActive) palette.keyBorder.copy(alpha = 0.85f) else null
+    if (suppressed) {
+        val modBg = if (keyOpacity < 0.99f) {
+            palette.modifierBg.copy(alpha = (palette.modifierBg.alpha * keyOpacity).coerceIn(0.14f, 1f))
+        } else {
+            palette.modifierBg
+        }
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(barHeight)
+                .neumorphicInset(
+                    surfaceColor = modBg,
+                    shadowLight = palette.shadowLight,
+                    shadowDark = palette.shadowDark,
+                    cornerRadius = cornerRadius,
+                    depth = 2.dp,
+                    borderColor = borderCol,
+                )
+                .padding(horizontal = 10.dp)
+                .testTag("simple_suggestion_paused"),
+            contentAlignment = Alignment.Center,
+        ) {
+            Text(
+                text = "Suggestions paused for protected input",
+                fontFamily = BodyFontFamily,
+                fontSize = (10.5f * fontScale).coerceIn(9f, 12f).sp,
+                fontWeight = FontWeight.Medium,
+                color = palette.secondaryText,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+        }
+        return
+    }
+
+    val paddedSlots = remember(slots) {
+        if (slots.size >= 3) {
+            slots.take(3)
+        } else {
+            val out = slots.toMutableList()
+            val defaults = listOf("I", "The", "Hello")
+            for (d in defaults) {
+                if (out.size >= 3) break
+                if (out.none { it.text.equals(d, ignoreCase = true) }) {
+                    out.add(SuggestionSlot(text = d, commitTextValue = d))
+                }
+            }
+            out
+        }
+    }
+
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .testTag("simple_suggestion_bar"),
+        horizontalArrangement = Arrangement.spacedBy(hGap),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        paddedSlots.forEachIndexed { idx, slot ->
+            val rawBg = when {
+                slot.isAutoCorrectHighlight -> palette.activeFill
+                else -> palette.keyBg
+            }
+            val bg = if (keyOpacity < 0.99f) {
+                val targetAlpha = if (slot.isAutoCorrectHighlight) (keyOpacity + 0.16f).coerceAtMost(0.95f) else keyOpacity
+                rawBg.copy(alpha = (rawBg.alpha * targetAlpha).coerceIn(0.14f, 1f))
+            } else {
+                rawBg
+            }
+            val displayText = if (slot.isLiteralTyped && !SimpleSuggestionEngine.isKnownWord(slot.text)) {
+                "\"${slot.text}\""
+            } else {
+                slot.text
+            }
+            val textColor = when {
+                slot.isAutoCorrectHighlight -> palette.accentBg
+                slot.isLiteralTyped -> palette.secondaryText
+                else -> palette.primaryText
+            }
+            val pillModifier = if (slot.isAutoCorrectHighlight) {
+                Modifier.neumorphicInset(
+                    surfaceColor = bg,
+                    shadowLight = palette.shadowLight,
+                    shadowDark = palette.shadowDark,
+                    cornerRadius = cornerRadius,
+                    depth = 2.dp,
+                    borderColor = borderCol,
+                )
+            } else {
+                Modifier.neumorphicKeyCap(
+                    surfaceColor = bg,
+                    shadowLight = palette.shadowLight,
+                    shadowDark = palette.shadowDark,
+                    cornerRadius = cornerRadius,
+                    shadowOffset = 1.4.dp,
+                    blurRadius = 2.2.dp,
+                    maxSpreadX = (hGap * 0.45f).coerceIn(0.5.dp, 2.0.dp),
+                    maxSpreadY = 1.8.dp,
+                    borderColor = borderCol,
+                )
+            }
+            Box(
+                modifier = Modifier
+                    .weight(1f)
+                    .height(barHeight)
+                    .then(pillModifier)
+                    .then(
+                        if (rgbActive && slot.isAutoCorrectHighlight) {
+                            Modifier.rgbAnimatedBorder(
+                                phaseDegrees = rgbPhaseDeg,
+                                cornerRadius = cornerRadius,
+                                strokeWidth = 1.3.dp,
+                                alpha = 0.85f,
+                            )
+                        } else {
+                            Modifier
+                        },
+                    )
+                    .clickable { onSelectSlot(slot) }
+                    .padding(horizontal = 8.dp)
+                    .testTag("simple_suggestion_slot_$idx"),
+                contentAlignment = Alignment.Center,
+            ) {
+                Text(
+                    text = displayText,
+                    fontFamily = BodyFontFamily,
+                    fontSize = (12.sp.value * fontScale).coerceIn(10f, 15f).sp,
+                    fontWeight = if (slot.isAutoCorrectHighlight) FontWeight.Bold else FontWeight.Medium,
+                    color = textColor,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
+        }
     }
 }

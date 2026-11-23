@@ -473,6 +473,8 @@ data class KeyDeckSettings(
     val stickyModifiers: Boolean = true,
     val hapticFeedback: Boolean = true,
     val suppressAutoImeOnInput: Boolean = true,
+    val simpleSuggestionsEnabled: Boolean = true,
+    val simpleAutoCorrectEnabled: Boolean = true,
     // Granular size & tightness customization
     val keyHeightDp: Int = 38,
     val keyboardWidthFraction: Float = 1.0f,

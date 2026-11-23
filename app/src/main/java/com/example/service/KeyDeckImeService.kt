@@ -101,11 +101,15 @@ class KeyDeckImeService : InputMethodService() {
     override fun onStartInput(attribute: EditorInfo?, restarting: Boolean) {
         super.onStartInput(attribute, restarting)
         KeyDeckRuntimeState.setImeSessionActive(currentInputConnection != null)
+        if (!restarting) {
+            KeyDeckRuntimeState.notifyInputSessionReset()
+        }
     }
 
     override fun onFinishInput() {
         super.onFinishInput()
         KeyDeckRuntimeState.setImeSessionActive(false)
+        KeyDeckRuntimeState.notifyInputSessionReset()
     }
 
     override fun onCreateInputView(): View {
@@ -340,5 +344,46 @@ class KeyDeckImeService : InputMethodService() {
                 InputDevice.SOURCE_KEYBOARD,
             ),
         )
+    }
+
+    fun isSuggestionsSuppressedInput(): Boolean {
+        val info = currentInputEditorInfo ?: return false
+        val inputType = info.inputType
+        if (inputType == InputType.TYPE_NULL) return true
+        val cls = inputType and InputType.TYPE_MASK_CLASS
+        val variation = inputType and InputType.TYPE_MASK_VARIATION
+        val isPassword = (cls == InputType.TYPE_CLASS_TEXT && (
+            variation == InputType.TYPE_TEXT_VARIATION_PASSWORD ||
+                variation == InputType.TYPE_TEXT_VARIATION_VISIBLE_PASSWORD ||
+                variation == InputType.TYPE_TEXT_VARIATION_WEB_PASSWORD
+            )) || (cls == InputType.TYPE_CLASS_NUMBER && variation == InputType.TYPE_NUMBER_VARIATION_PASSWORD)
+        val noSuggestionsFlag = (inputType and InputType.TYPE_TEXT_FLAG_NO_SUGGESTIONS) != 0
+        return isPassword || noSuggestionsFlag
+    }
+
+    fun getSurroundingChars(beforeLen: Int, afterLen: Int): Pair<String, String>? {
+        val ic = currentInputConnection ?: return null
+        val before = ic.getTextBeforeCursor(beforeLen, 0)?.toString() ?: ""
+        val after = ic.getTextAfterCursor(afterLen, 0)?.toString() ?: ""
+        return before to after
+    }
+
+    fun replaceTailText(expectedTail: String, replacement: String): Boolean {
+        val ic = currentInputConnection ?: return false
+        if (isSuggestionsSuppressedInput()) return false
+        if (expectedTail.isNotEmpty()) {
+            val before = ic.getTextBeforeCursor(expectedTail.length, 0)?.toString() ?: return false
+            if (before != expectedTail) return false
+        }
+        ic.beginBatchEdit()
+        try {
+            if (expectedTail.isNotEmpty()) {
+                ic.deleteSurroundingText(expectedTail.length, 0)
+            }
+            ic.commitText(replacement, 1)
+        } finally {
+            ic.endBatchEdit()
+        }
+        return true
     }
 }

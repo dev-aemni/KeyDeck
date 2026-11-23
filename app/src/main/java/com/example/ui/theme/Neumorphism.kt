@@ -13,14 +13,15 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.RoundRect
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.ClipOp
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Paint
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.ShaderBrush
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.clipPath
+import androidx.compose.ui.graphics.drawscope.clipRect
 import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
-import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
@@ -36,16 +37,20 @@ private val RgbSpectrumColors = listOf(
 )
 
 /**
- * Soft, pillowy 3D Neumorphic keycap for tightly spaced keyboard grids.
- * Uses a tight dark-only bottom-right ambient grounding shadow (no outward bright light bleed)
- * combined with a strictly clipped diagonal pillow gradient and sculpted top-left inner highlight
- * so keys look genuinely soft and tactile without ever overlapping or clipping adjacent keys.
+ * Classic soft matte Neumorphic keycap tailored for tightly spaced keyboard grids.
+ * Keeps the original clean solid matte surface and dual-sided soft shadow + light rim,
+ * while clamping exterior blur spread inside half the inter-key gap and excluding the key
+ * interior so adjacent keys never overlap or muddy translucent glass keycaps.
  */
 fun Modifier.neumorphicKeyCap(
     surfaceColor: Color = NeuBg,
     shadowLight: Color = NeuShadowLight,
     shadowDark: Color = NeuShadowDark,
     cornerRadius: Dp = 10.dp,
+    shadowOffset: Dp = 1.6.dp,
+    blurRadius: Dp = 2.4.dp,
+    maxSpreadX: Dp = 1.4.dp,
+    maxSpreadY: Dp = 1.8.dp,
     borderColor: Color? = null,
     borderWidth: Dp = 1.dp,
 ): Modifier = composed {
@@ -54,32 +59,12 @@ fun Modifier.neumorphicKeyCap(
             val radiusPx = cornerRadius.toPx()
             val cr = CornerRadius(radiusPx, radiusPx)
             val surfaceAlpha = surfaceColor.alpha.coerceIn(0f, 1f)
+            val spreadXPx = maxSpreadX.toPx().coerceAtLeast(0.4f)
+            val spreadYPx = maxSpreadY.toPx().coerceAtLeast(0.4f)
+            val darkOffsetPx = shadowOffset.toPx().coerceAtMost(spreadXPx.coerceAtLeast(spreadYPx))
+            val lightOffsetPx = darkOffsetPx * 0.78f
+            val blurPx = blurRadius.toPx().coerceIn(0.8f, 8f)
 
-            // 1. Tight dark-only bottom-right ambient shadow for soft keycap lift without eating neighbors
-            val dropOffset = 1.1.dp.toPx()
-            val dropBlur = 2.0.dp.toPx().coerceAtLeast(1f)
-            if (surfaceAlpha > 0.08f) {
-                drawIntoCanvas { canvas ->
-                    val dropPaint = Paint().apply {
-                        asFrameworkPaint().apply {
-                            isAntiAlias = true
-                            color = shadowDark.copy(alpha = (0.34f * surfaceAlpha).coerceIn(0.05f, 0.42f)).toArgb()
-                            maskFilter = BlurMaskFilter(dropBlur, BlurMaskFilter.Blur.NORMAL)
-                        }
-                    }
-                    canvas.drawRoundRect(
-                        left = dropOffset * 0.45f,
-                        top = dropOffset * 0.65f,
-                        right = size.width + dropOffset,
-                        bottom = size.height + dropOffset,
-                        radiusX = radiusPx,
-                        radiusY = radiusPx,
-                        paint = dropPaint,
-                    )
-                }
-            }
-
-            // 2. Strictly clipped soft pillow surface & sculpted inner bevels
             val keyPath = Path().apply {
                 addRoundRect(
                     RoundRect(
@@ -92,88 +77,102 @@ fun Modifier.neumorphicKeyCap(
                 )
             }
 
-            clipPath(keyPath) {
-                // Soft diagonal pillow gradient (light top-left -> pure base -> soft shaded bottom-right)
-                val topTint = lerp(surfaceColor, shadowLight, 0.24f).copy(alpha = surfaceAlpha)
-                val bottomTint = lerp(surfaceColor, shadowDark, 0.16f).copy(alpha = surfaceAlpha)
-                drawRoundRect(
-                    brush = Brush.linearGradient(
-                        0.0f to topTint,
-                        0.48f to surfaceColor,
-                        1.0f to bottomTint,
-                        start = Offset.Zero,
-                        end = Offset(size.width, size.height),
-                    ),
-                    cornerRadius = cr,
-                )
+            if (surfaceAlpha > 0.06f) {
+                clipRect(
+                    left = -spreadXPx,
+                    top = -spreadYPx,
+                    right = size.width + spreadXPx,
+                    bottom = size.height + spreadYPx,
+                ) {
+                    clipPath(keyPath, clipOp = ClipOp.Difference) {
+                        drawIntoCanvas { canvas ->
+                            val darkPaint = Paint().apply {
+                                asFrameworkPaint().apply {
+                                    isAntiAlias = true
+                                    color = shadowDark.copy(alpha = (0.58f * surfaceAlpha).coerceIn(0.06f, 0.64f)).toArgb()
+                                    maskFilter = BlurMaskFilter(blurPx, BlurMaskFilter.Blur.NORMAL)
+                                }
+                            }
+                            val lightPaint = Paint().apply {
+                                asFrameworkPaint().apply {
+                                    isAntiAlias = true
+                                    color = shadowLight.copy(alpha = (0.42f * surfaceAlpha).coerceIn(0.05f, 0.48f)).toArgb()
+                                    maskFilter = BlurMaskFilter((blurPx * 0.85f).coerceAtLeast(0.8f), BlurMaskFilter.Blur.NORMAL)
+                                }
+                            }
 
-                // Soft cushion top sheen
-                drawRoundRect(
-                    brush = Brush.verticalGradient(
-                        colors = listOf(
-                            shadowLight.copy(alpha = (0.30f * surfaceAlpha).coerceIn(0.04f, 0.36f)),
-                            Color.Transparent,
-                        ),
-                        startY = 0f,
-                        endY = (size.height * 0.36f).coerceAtLeast(3f),
-                    ),
-                    cornerRadius = cr,
-                )
+                            // Bottom-right soft shadow within gutter fence
+                            canvas.drawRoundRect(
+                                left = darkOffsetPx,
+                                top = darkOffsetPx,
+                                right = size.width + darkOffsetPx,
+                                bottom = size.height + darkOffsetPx,
+                                radiusX = radiusPx,
+                                radiusY = radiusPx,
+                                paint = darkPaint,
+                            )
 
-                // Soft lower 3D keycap skirt
-                drawRoundRect(
-                    brush = Brush.verticalGradient(
-                        colors = listOf(
-                            Color.Transparent,
-                            shadowDark.copy(alpha = (0.28f * surfaceAlpha).coerceIn(0.04f, 0.34f)),
-                        ),
-                        startY = (size.height * 0.68f).coerceAtLeast(1f),
-                        endY = size.height,
-                    ),
-                    cornerRadius = cr,
-                )
-
-                // Sculpted soft inner bevel rim (top-left light arc -> bottom-right shadow arc)
-                val rimStroke = 1.4.dp.toPx()
-                drawRoundRect(
-                    brush = Brush.linearGradient(
-                        colors = listOf(
-                            shadowLight.copy(alpha = (0.45f * surfaceAlpha).coerceIn(0.06f, 0.50f)),
-                            Color.Transparent,
-                            shadowDark.copy(alpha = (0.22f * surfaceAlpha).coerceIn(0.03f, 0.28f)),
-                        ),
-                        start = Offset.Zero,
-                        end = Offset(size.width, size.height),
-                    ),
-                    topLeft = Offset(rimStroke * 0.5f, rimStroke * 0.5f),
-                    size = Size(
-                        (size.width - rimStroke).coerceAtLeast(1f),
-                        (size.height - rimStroke).coerceAtLeast(1f),
-                    ),
-                    cornerRadius = cr,
-                    style = Stroke(width = rimStroke),
-                )
-
-                if (borderColor != null && borderWidth > 0.dp) {
-                    val bPx = borderWidth.toPx()
-                    drawRoundRect(
-                        color = borderColor,
-                        topLeft = Offset(bPx * 0.5f, bPx * 0.5f),
-                        size = Size(
-                            (size.width - bPx).coerceAtLeast(1f),
-                            (size.height - bPx).coerceAtLeast(1f),
-                        ),
-                        cornerRadius = cr,
-                        style = Stroke(width = bPx),
-                    )
+                            // Top-left muted soft light rim within gutter fence
+                            canvas.drawRoundRect(
+                                left = -lightOffsetPx,
+                                top = -lightOffsetPx,
+                                right = size.width - lightOffsetPx,
+                                bottom = size.height - lightOffsetPx,
+                                radiusX = radiusPx,
+                                radiusY = radiusPx,
+                                paint = lightPaint,
+                            )
+                        }
+                    }
                 }
+            }
+
+            // Clean velvety matte surface (same solid Soft UI feel as original neumorphicRaised)
+            drawRoundRect(
+                color = surfaceColor,
+                cornerRadius = cr,
+            )
+
+            // Whisper-soft edge contour so key corners look cushioned rather than flat-cut
+            val rimStroke = 0.85.dp.toPx()
+            drawRoundRect(
+                brush = Brush.linearGradient(
+                    colors = listOf(
+                        shadowLight.copy(alpha = (0.22f * surfaceAlpha).coerceIn(0.03f, 0.26f)),
+                        Color.Transparent,
+                        shadowDark.copy(alpha = (0.12f * surfaceAlpha).coerceIn(0.02f, 0.16f)),
+                    ),
+                    start = Offset.Zero,
+                    end = Offset(size.width, size.height),
+                ),
+                topLeft = Offset(rimStroke * 0.5f, rimStroke * 0.5f),
+                size = Size(
+                    (size.width - rimStroke).coerceAtLeast(1f),
+                    (size.height - rimStroke).coerceAtLeast(1f),
+                ),
+                cornerRadius = cr,
+                style = Stroke(width = rimStroke),
+            )
+
+            if (borderColor != null && borderWidth > 0.dp) {
+                val bPx = borderWidth.toPx()
+                drawRoundRect(
+                    color = borderColor,
+                    topLeft = Offset(bPx * 0.5f, bPx * 0.5f),
+                    size = Size(
+                        (size.width - bPx).coerceAtLeast(1f),
+                        (size.height - bPx).coerceAtLeast(1f),
+                    ),
+                    cornerRadius = cr,
+                    style = Stroke(width = bPx),
+                )
             }
         }
         .clip(RoundedCornerShape(cornerRadius))
 }
 
 /**
- * Draws balanced extruded Neumorphism with restrained shadow spread for standalone cards/panels.
+ * Draws balanced extruded Neumorphism with soft light glare and an optional soft border.
  */
 fun Modifier.neumorphicRaised(
     surfaceColor: Color = NeuBg,
@@ -188,51 +187,67 @@ fun Modifier.neumorphicRaised(
     this
         .drawBehind {
             val radiusPx = cornerRadius.toPx()
-            val offsetPx = shadowOffset.toPx().coerceAtMost(10f)
-            val blurPx = blurRadius.toPx().coerceIn(1f, 14f)
+            val cr = CornerRadius(radiusPx, radiusPx)
+            val offsetPx = shadowOffset.toPx()
+            val blurPx = blurRadius.toPx().coerceAtLeast(1f)
+            val surfaceAlpha = surfaceColor.alpha.coerceIn(0f, 1f)
 
-            drawIntoCanvas { canvas ->
-                val darkPaint = Paint().apply {
-                    asFrameworkPaint().apply {
-                        isAntiAlias = true
-                        color = shadowDark.copy(alpha = 0.48f).toArgb()
-                        maskFilter = BlurMaskFilter(blurPx, BlurMaskFilter.Blur.NORMAL)
-                    }
-                }
-                val lightPaint = Paint().apply {
-                    asFrameworkPaint().apply {
-                        isAntiAlias = true
-                        color = shadowLight.copy(alpha = 0.32f).toArgb()
-                        maskFilter = BlurMaskFilter(blurPx * 0.8f, BlurMaskFilter.Blur.NORMAL)
-                    }
-                }
-
-                // Bottom-right soft shadow
-                canvas.drawRoundRect(
-                    left = offsetPx * 0.65f,
-                    top = offsetPx * 0.65f,
-                    right = size.width + offsetPx * 0.65f,
-                    bottom = size.height + offsetPx * 0.65f,
-                    radiusX = radiusPx,
-                    radiusY = radiusPx,
-                    paint = darkPaint,
+            val cardPath = Path().apply {
+                addRoundRect(
+                    RoundRect(
+                        left = 0f,
+                        top = 0f,
+                        right = size.width,
+                        bottom = size.height,
+                        cornerRadius = cr,
+                    ),
                 )
+            }
 
-                // Top-left gentle light rim
-                canvas.drawRoundRect(
-                    left = -offsetPx * 0.45f,
-                    top = -offsetPx * 0.45f,
-                    right = size.width - offsetPx * 0.45f,
-                    bottom = size.height - offsetPx * 0.45f,
-                    radiusX = radiusPx,
-                    radiusY = radiusPx,
-                    paint = lightPaint,
-                )
+            clipPath(cardPath, clipOp = ClipOp.Difference) {
+                drawIntoCanvas { canvas ->
+                    val darkPaint = Paint().apply {
+                        asFrameworkPaint().apply {
+                            isAntiAlias = true
+                            color = shadowDark.copy(alpha = (0.64f * surfaceAlpha).coerceIn(0.08f, 0.68f)).toArgb()
+                            maskFilter = BlurMaskFilter(blurPx, BlurMaskFilter.Blur.NORMAL)
+                        }
+                    }
+                    val lightPaint = Paint().apply {
+                        asFrameworkPaint().apply {
+                            isAntiAlias = true
+                            color = shadowLight.copy(alpha = (0.50f * surfaceAlpha).coerceIn(0.06f, 0.54f)).toArgb()
+                            maskFilter = BlurMaskFilter(blurPx, BlurMaskFilter.Blur.NORMAL)
+                        }
+                    }
+
+                    // Bottom-right soft shadow
+                    canvas.drawRoundRect(
+                        left = offsetPx,
+                        top = offsetPx,
+                        right = size.width + offsetPx,
+                        bottom = size.height + offsetPx,
+                        radiusX = radiusPx,
+                        radiusY = radiusPx,
+                        paint = darkPaint,
+                    )
+
+                    // Top-left muted light rim
+                    canvas.drawRoundRect(
+                        left = -offsetPx * 0.80f,
+                        top = -offsetPx * 0.80f,
+                        right = size.width - offsetPx * 0.80f,
+                        bottom = size.height - offsetPx * 0.80f,
+                        radiusX = radiusPx,
+                        radiusY = radiusPx,
+                        paint = lightPaint,
+                    )
+                }
             }
 
             drawRoundRect(
                 color = surfaceColor,
-                cornerRadius = CornerRadius(radiusPx, radiusPx),
+                cornerRadius = cr,
             )
 
             if (borderColor != null && borderWidth > 0.dp) {
@@ -244,7 +259,7 @@ fun Modifier.neumorphicRaised(
                         (size.width - bPx).coerceAtLeast(1f),
                         (size.height - bPx).coerceAtLeast(1f),
                     ),
-                    cornerRadius = CornerRadius(radiusPx, radiusPx),
+                    cornerRadius = cr,
                     style = Stroke(width = bPx),
                 )
             }
@@ -274,36 +289,36 @@ fun Modifier.neumorphicInset(
 
             drawRoundRect(
                 brush = Brush.verticalGradient(
-                    colors = listOf(shadowDark.copy(alpha = 0.45f), Color.Transparent),
+                    colors = listOf(shadowDark.copy(alpha = 0.48f), Color.Transparent),
                     startY = 0f,
-                    endY = depthPx * 2.0f,
+                    endY = depthPx * 2.1f,
                 ),
                 cornerRadius = CornerRadius(radiusPx, radiusPx),
-                size = Size(size.width, (depthPx * 2.1f).coerceAtMost(size.height)),
+                size = Size(size.width, (depthPx * 2.2f).coerceAtMost(size.height)),
             )
 
             drawRoundRect(
                 brush = Brush.horizontalGradient(
-                    colors = listOf(shadowDark.copy(alpha = 0.36f), Color.Transparent),
+                    colors = listOf(shadowDark.copy(alpha = 0.40f), Color.Transparent),
                     startX = 0f,
-                    endX = depthPx * 2.0f,
+                    endX = depthPx * 2.1f,
                 ),
                 cornerRadius = CornerRadius(radiusPx, radiusPx),
-                size = Size((depthPx * 2.1f).coerceAtMost(size.width), size.height),
+                size = Size((depthPx * 2.2f).coerceAtMost(size.width), size.height),
             )
 
             drawRoundRect(
                 brush = Brush.linearGradient(
                     colors = listOf(
-                        shadowDark.copy(alpha = 0.28f),
+                        shadowDark.copy(alpha = 0.34f),
                         Color.Transparent,
-                        shadowLight.copy(alpha = 0.38f),
+                        shadowLight.copy(alpha = 0.48f),
                     ),
                     start = Offset.Zero,
                     end = Offset(size.width, size.height),
                 ),
                 cornerRadius = CornerRadius(radiusPx, radiusPx),
-                style = Stroke(width = 1.dp.toPx()),
+                style = Stroke(width = 1.1.dp.toPx()),
             )
 
             if (borderColor != null && borderWidth > 0.dp) {

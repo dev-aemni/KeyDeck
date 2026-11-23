@@ -55,6 +55,9 @@ object KeyDeckRuntimeState {
     private val _recentKeyLog = MutableStateFlow<List<DispatchedKeyRecord>>(emptyList())
     val recentKeyLog: StateFlow<List<DispatchedKeyRecord>> = _recentKeyLog.asStateFlow()
 
+    private val _inputSessionGeneration = MutableStateFlow(0L)
+    val inputSessionGeneration: StateFlow<Long> = _inputSessionGeneration.asStateFlow()
+
     fun setAppInForeground(foreground: Boolean) {
         _isAppInForeground.value = foreground
     }
@@ -82,6 +85,10 @@ object KeyDeckRuntimeState {
         _isImeSessionActive.value = active
     }
 
+    fun notifyInputSessionReset() {
+        _inputSessionGeneration.value = _inputSessionGeneration.value + 1L
+    }
+
     fun recordDispatchedKey(record: DispatchedKeyRecord) {
         _lastDispatchedKey.value = record
         _recentKeyLog.value = (listOf(record) + _recentKeyLog.value).take(25)
@@ -102,6 +109,8 @@ class KeyDeckRepository(private val context: Context) {
         val STICKY_MODIFIERS = booleanPreferencesKey("sticky_modifiers")
         val HAPTIC_FEEDBACK = booleanPreferencesKey("haptic_feedback")
         val SUPPRESS_AUTO_IME_ON_INPUT = booleanPreferencesKey("suppress_auto_ime_on_input")
+        val SIMPLE_SUGGESTIONS_ENABLED = booleanPreferencesKey("simple_suggestions_enabled")
+        val SIMPLE_AUTO_CORRECT_ENABLED = booleanPreferencesKey("simple_auto_correct_enabled")
         val KEY_HEIGHT_DP = intPreferencesKey("key_height_dp")
         val WIDTH_FRACTION = floatPreferencesKey("width_fraction")
         val DOCK_ALIGNMENT = stringPreferencesKey("dock_alignment")
@@ -197,6 +206,8 @@ class KeyDeckRepository(private val context: Context) {
             prefs[Keys.STICKY_MODIFIERS] = updated.stickyModifiers
             prefs[Keys.HAPTIC_FEEDBACK] = updated.hapticFeedback
             prefs[Keys.SUPPRESS_AUTO_IME_ON_INPUT] = updated.suppressAutoImeOnInput
+            prefs[Keys.SIMPLE_SUGGESTIONS_ENABLED] = updated.simpleSuggestionsEnabled
+            prefs[Keys.SIMPLE_AUTO_CORRECT_ENABLED] = updated.simpleAutoCorrectEnabled
             prefs[Keys.KEY_HEIGHT_DP] = updated.keyHeightDp
             prefs[Keys.WIDTH_FRACTION] = updated.keyboardWidthFraction
             prefs[Keys.DOCK_ALIGNMENT] = updated.dockAlignment.name
@@ -254,6 +265,8 @@ class KeyDeckRepository(private val context: Context) {
             stickyModifiers = prefs[Keys.STICKY_MODIFIERS] ?: true,
             hapticFeedback = prefs[Keys.HAPTIC_FEEDBACK] ?: true,
             suppressAutoImeOnInput = prefs[Keys.SUPPRESS_AUTO_IME_ON_INPUT] ?: true,
+            simpleSuggestionsEnabled = prefs[Keys.SIMPLE_SUGGESTIONS_ENABLED] ?: true,
+            simpleAutoCorrectEnabled = prefs[Keys.SIMPLE_AUTO_CORRECT_ENABLED] ?: true,
             keyHeightDp = (prefs[Keys.KEY_HEIGHT_DP] ?: 38).coerceIn(26, 54),
             keyboardWidthFraction = (prefs[Keys.WIDTH_FRACTION] ?: 1.0f).coerceIn(0.60f, 1.0f),
             dockAlignment = runCatching { KeyboardDockAlignment.valueOf(dockName) }

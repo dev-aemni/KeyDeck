@@ -897,6 +897,22 @@ fun SettingsSheet(
             )
 
             SettingsSwitchRow(
+                title = "Simple Mode 3-Suggestion Bar",
+                subtitle = "Show 3 offline word & next-word chips above keys in Simple mode",
+                checked = settings.simpleSuggestionsEnabled,
+                testTag = "switch_simple_suggestions",
+                onCheckedChange = { checked -> onUpdateSettings { it.copy(simpleSuggestionsEnabled = checked) } },
+            )
+
+            SettingsSwitchRow(
+                title = "One-Time Auto-Correct (Simple Mode)",
+                subtitle = "Fixes clear typos once on Space; Backspace reverts & remembers your custom word forever",
+                checked = settings.simpleAutoCorrectEnabled,
+                testTag = "switch_simple_autocorrect",
+                onCheckedChange = { checked -> onUpdateSettings { it.copy(simpleAutoCorrectEnabled = checked) } },
+            )
+
+            SettingsSwitchRow(
                 title = "Tactile Haptic Feedback",
                 subtitle = "Subtle mechanical pulse on every keycap & hotkey press",
                 checked = settings.hapticFeedback,

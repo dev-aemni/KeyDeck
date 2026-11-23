@@ -755,6 +755,22 @@ fun DeckQuickSettingsPopup(
             palette = palette,
             onCheckedChange = { c -> onUpdateSettings { it.copy(suppressAutoImeOnInput = c) } },
         )
+        if (settings.layoutMode == KeyboardLayoutMode.SIMPLE) {
+            QuickPopupToggle(
+                label = "Simple 3-Suggestion Bar",
+                checked = settings.simpleSuggestionsEnabled,
+                palette = palette,
+                onCheckedChange = { c -> onUpdateSettings { it.copy(simpleSuggestionsEnabled = c) } },
+            )
+            if (settings.simpleSuggestionsEnabled) {
+                QuickPopupToggle(
+                    label = "One-Time Auto-Correct",
+                    checked = settings.simpleAutoCorrectEnabled,
+                    palette = palette,
+                    onCheckedChange = { c -> onUpdateSettings { it.copy(simpleAutoCorrectEnabled = c) } },
+                )
+            }
+        }
         QuickPopupToggle(
             label = "Black Key Borders",
             checked = settings.showKeyBorder,

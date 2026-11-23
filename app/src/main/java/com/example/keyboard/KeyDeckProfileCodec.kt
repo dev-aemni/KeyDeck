@@ -20,11 +20,17 @@ data class ParsedKeyDeckProfile(
 
 object KeyDeckProfileCodec {
     const val FORMAT_HEADER = "@keydeck.aemni"
-    const val CURRENT_FORMAT_VERSION = 112
+    const val PROFILE_EXTENSION = ".kdb"
+    const val CURRENT_FORMAT_VERSION = 113
 
     fun sanitizeProfileBaseName(rawName: String): String {
-        val cleaned = rawName.trim()
-            .removeSuffix(".keydeck")
+        val trimmed = rawName.trim()
+        val withoutExt = when {
+            trimmed.endsWith(".kdb", ignoreCase = true) -> trimmed.dropLast(4)
+            trimmed.endsWith(".keydeck", ignoreCase = true) -> trimmed.dropLast(8)
+            else -> trimmed
+        }
+        val cleaned = withoutExt
             .replace(Regex("[\\\\/:*?\"<>|]"), "_")
             .replace(Regex("\\s+"), "_")
             .trim('_')
@@ -32,7 +38,7 @@ object KeyDeckProfileCodec {
     }
 
     fun buildFileName(rawName: String): String {
-        return "${sanitizeProfileBaseName(rawName)}.keydeck"
+        return "${sanitizeProfileBaseName(rawName)}$PROFILE_EXTENSION"
     }
 
     fun serialize(
@@ -108,6 +114,8 @@ object KeyDeckProfileCodec {
         sb.appendLine("@kdb.sticky:${settings.stickyModifiers}")
         sb.appendLine("@kdb.haptic:${settings.hapticFeedback}")
         sb.appendLine("@kdb.suppressime:${settings.suppressAutoImeOnInput}")
+        sb.appendLine("@kdb.suggestions:${settings.simpleSuggestionsEnabled}")
+        sb.appendLine("@kdb.autocorrect:${settings.simpleAutoCorrectEnabled}")
         sb.appendLine("@kdb.sync_dark:${settings.syncKeyboardWithDarkMode}")
         sb.appendLine("@kdb.borders:${settings.showKeyBorder}")
         sb.appendLine("@kdb.theme_borders:${settings.themeAdaptiveBorder}")
@@ -279,6 +287,12 @@ object KeyDeckProfileCodec {
         }
         props["@kdb.suppressime"]?.toBooleanStrictOrNull()?.let {
             resolvedSettings = resolvedSettings.copy(suppressAutoImeOnInput = it)
+        }
+        props["@kdb.suggestions"]?.toBooleanStrictOrNull()?.let {
+            resolvedSettings = resolvedSettings.copy(simpleSuggestionsEnabled = it)
+        }
+        props["@kdb.autocorrect"]?.toBooleanStrictOrNull()?.let {
+            resolvedSettings = resolvedSettings.copy(simpleAutoCorrectEnabled = it)
         }
         props["@kdb.sync_dark"]?.toBooleanStrictOrNull()?.let {
             resolvedSettings = resolvedSettings.copy(syncKeyboardWithDarkMode = it)

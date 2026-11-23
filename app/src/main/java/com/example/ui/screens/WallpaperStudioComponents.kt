@@ -161,6 +161,7 @@ fun FullKeyboardPreviewCard(
             routeLabel = "Preview",
             isOverlay = false,
             activeWallpaper = wallpaper,
+            enableLiveSuggestions = false,
             onKeyDispatch = { _, _, _, _ -> },
             onChangeLayoutMode = {},
             onToggleNumLock = {},

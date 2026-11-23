@@ -21,6 +21,8 @@ object KeyDispatcher {
     interface DirectKeyTarget {
         fun onDirectKeyEvent(keyCode: Int, metaState: Int, charToCommit: Char?): Boolean
         fun onDirectKeyHold(keyCode: Int, metaState: Int, isDown: Boolean): Boolean = false
+        fun getSurroundingChars(beforeLen: Int, afterLen: Int): Pair<String, String>? = null
+        fun replaceTailText(expectedTail: String, replacement: String): Boolean = false
     }
 
     interface DirectMouseTarget {
@@ -50,6 +52,99 @@ object KeyDispatcher {
             hasA11y -> "A11y"
             else -> "Setup"
         }
+    }
+
+    fun shouldDisableSuggestions(): Boolean {
+        val direct = if (KeyDeckRuntimeState.isAppInForeground.value) directTargetRef?.get() else null
+        if (direct != null) return false
+        val ime = KeyDeckImeService.activeInstance
+        if (ime != null && KeyDeckImeService.hasActiveInputConnection()) {
+            return ime.isSuggestionsSuppressedInput()
+        }
+        val a11y = KeyDeckAccessibilityService.activeInstance
+        if (a11y != null) {
+            return a11y.isSuggestionsSuppressedInput()
+        }
+        return false
+    }
+
+    fun getSurroundingChars(beforeLen: Int = 2, afterLen: Int = 2): Pair<String, String>? {
+        val direct = if (KeyDeckRuntimeState.isAppInForeground.value) directTargetRef?.get() else null
+        if (direct != null) {
+            return direct.getSurroundingChars(beforeLen, afterLen)
+        }
+        val ime = KeyDeckImeService.activeInstance
+        if (ime != null && KeyDeckImeService.hasActiveInputConnection()) {
+            return ime.getSurroundingChars(beforeLen, afterLen)
+        }
+        val a11y = KeyDeckAccessibilityService.activeInstance
+        if (a11y != null) {
+            return a11y.getSurroundingChars(beforeLen, afterLen)
+        }
+        return null
+    }
+
+    fun isCursorTouchingWord(): Boolean {
+        val (before, after) = getSurroundingChars(beforeLen = 1, afterLen = 1) ?: return false
+        val beforeTouches = before.lastOrNull()?.let { it.isLetterOrDigit() || it == '\'' } == true
+        val afterTouches = after.firstOrNull()?.let { it.isLetterOrDigit() || it == '\'' } == true
+        return beforeTouches || afterTouches
+    }
+
+    fun dispatchSuggestionReplace(
+        context: Context,
+        expectedTail: String,
+        replacement: String,
+        comboLabel: String,
+        hapticEnabled: Boolean = true,
+    ): Boolean {
+        if (hapticEnabled) {
+            triggerHaptic(context)
+        }
+        if (shouldDisableSuggestions()) return false
+
+        val direct = if (KeyDeckRuntimeState.isAppInForeground.value) directTargetRef?.get() else null
+        if (direct != null && direct.replaceTailText(expectedTail, replacement)) {
+            KeyDeckRuntimeState.recordDispatchedKey(
+                DispatchedKeyRecord(
+                    timestampMs = System.currentTimeMillis(),
+                    comboLabel = comboLabel,
+                    keyCode = KeyEvent.KEYCODE_UNKNOWN,
+                    route = "In-App",
+                    detail = if (expectedTail.isNotEmpty()) "$expectedTail → ${replacement.trimEnd()}" else replacement.trimEnd(),
+                ),
+            )
+            return true
+        }
+
+        val ime = KeyDeckImeService.activeInstance
+        if (ime != null && KeyDeckImeService.hasActiveInputConnection() && ime.replaceTailText(expectedTail, replacement)) {
+            KeyDeckRuntimeState.recordDispatchedKey(
+                DispatchedKeyRecord(
+                    timestampMs = System.currentTimeMillis(),
+                    comboLabel = comboLabel,
+                    keyCode = KeyEvent.KEYCODE_UNKNOWN,
+                    route = "IME",
+                    detail = if (expectedTail.isNotEmpty()) "$expectedTail → ${replacement.trimEnd()}" else replacement.trimEnd(),
+                ),
+            )
+            return true
+        }
+
+        val a11y = KeyDeckAccessibilityService.activeInstance
+        if (a11y != null && a11y.replaceTailText(expectedTail, replacement)) {
+            KeyDeckRuntimeState.recordDispatchedKey(
+                DispatchedKeyRecord(
+                    timestampMs = System.currentTimeMillis(),
+                    comboLabel = comboLabel,
+                    keyCode = KeyEvent.KEYCODE_UNKNOWN,
+                    route = "A11y",
+                    detail = if (expectedTail.isNotEmpty()) "$expectedTail → ${replacement.trimEnd()}" else replacement.trimEnd(),
+                ),
+            )
+            return true
+        }
+        return false
     }
 
     fun dispatchKey(

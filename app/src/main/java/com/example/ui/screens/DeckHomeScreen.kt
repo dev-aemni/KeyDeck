@@ -240,6 +240,33 @@ fun DeckHomeScreen(
                     inlineMouseInfo = if (isDown) "Holding ${KeyEvent.keyCodeToString(keyCode).removePrefix("KEYCODE_")}" else null
                     return true
                 }
+
+                override fun getSurroundingChars(beforeLen: Int, afterLen: Int): Pair<String, String>? {
+                    val cur = testFieldValue
+                    if (!cur.selection.collapsed) return "" to ""
+                    val cursor = cur.selection.start.coerceIn(0, cur.text.length)
+                    val before = cur.text.substring(0, cursor).takeLast(beforeLen)
+                    val after = cur.text.substring(cursor).take(afterLen)
+                    return before to after
+                }
+
+                override fun replaceTailText(expectedTail: String, replacement: String): Boolean {
+                    if (!isTestInputFocused && showInlinePreview) {
+                        runCatching { testInputFocusRequester.requestFocus() }
+                    }
+                    val cur = testFieldValue
+                    if (!cur.selection.collapsed) return false
+                    val cursor = cur.selection.start.coerceIn(0, cur.text.length)
+                    val before = cur.text.substring(0, cursor)
+                    if (expectedTail.isNotEmpty() && !before.endsWith(expectedTail)) {
+                        return false
+                    }
+                    val startReplace = cursor - expectedTail.length
+                    val newText = cur.text.substring(0, startReplace) + replacement + cur.text.substring(cursor)
+                    val newCursor = startReplace + replacement.length
+                    testFieldValue = TextFieldValue(newText, TextRange(newCursor))
+                    return true
+                }
             }
             val mouseTarget = object : KeyDispatcher.DirectMouseTarget {
                 override fun onMouseDelta(dx: Float, dy: Float) {
@@ -929,6 +956,7 @@ fun DeckHomeScreen(
                                 .clip(CircleShape)
                                 .clickable {
                                     testFieldValue = TextFieldValue("")
+                                    com.example.data.KeyDeckRuntimeState.notifyInputSessionReset()
                                 }
                                 .testTag("try_keyboard_clear"),
                             contentAlignment = Alignment.Center,
@@ -1070,7 +1098,8 @@ fun DeckHomeScreen(
                 )
             }
         } else {
-            val fallbackHeightDp = (settings.keyHeightDp * 5 + settings.keyVerticalGapDp * 4 + settings.deckPaddingDp * 2 + 42).dp
+            val suggestionBarExtra = if (settings.layoutMode == KeyboardLayoutMode.SIMPLE && settings.simpleSuggestionsEnabled) 36 else 0
+            val fallbackHeightDp = (settings.keyHeightDp * 5 + settings.keyVerticalGapDp * 4 + settings.deckPaddingDp * 2 + 42 + suggestionBarExtra).dp
             val exactReservedHeightDp = if (measuredDeckHeightPx > 0) {
                 with(density) { measuredDeckHeightPx.toDp() }
             } else {

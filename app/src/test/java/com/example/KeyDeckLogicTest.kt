@@ -15,6 +15,8 @@ import com.example.keyboard.KeyboardThemeId
 import com.example.keyboard.KeyboardWallpaper
 import com.example.keyboard.PcKeyboardLayoutData
 import com.example.keyboard.RgbBorderMode
+import com.example.keyboard.SimpleSuggestionEngine
+import com.example.keyboard.SimpleTypingController
 import com.example.keyboard.WallpaperSourceType
 import com.example.keyboard.buildWallpaperColorMatrix
 import java.util.Base64
@@ -205,9 +207,10 @@ class KeyDeckLogicTest {
     }
 
     @Test
-    fun `keydeck profile codec exports and imports layouts, shortcuts, and animated gif wallpapers`() {
-        assertEquals("My_Gaming_Deck.keydeck", KeyDeckProfileCodec.buildFileName("My Gaming Deck"))
-        assertEquals("Test_Deck.keydeck", KeyDeckProfileCodec.buildFileName("Test/Deck.keydeck"))
+    fun `keydeck profile codec exports and imports kdb layouts, shortcuts, and animated gif wallpapers`() {
+        assertEquals("My_Gaming_Deck.kdb", KeyDeckProfileCodec.buildFileName("My Gaming Deck"))
+        assertEquals("Test_Deck.kdb", KeyDeckProfileCodec.buildFileName("Test/Deck.kdb"))
+        assertEquals("Legacy_Deck.kdb", KeyDeckProfileCodec.buildFileName("Legacy Deck.keydeck"))
 
         val fakeGifBytes = "GIF89a\u0001\u0000\u0001\u0000".toByteArray(Charsets.ISO_8859_1)
         val gifWallpaper = KeyboardWallpaper(
@@ -232,6 +235,8 @@ class KeyDeckLogicTest {
             keyboardWidthFraction = 0.90f,
             overlayOpacity = 0.75f,
             showKeyBorder = true,
+            simpleSuggestionsEnabled = true,
+            simpleAutoCorrectEnabled = false,
         )
         val hotkeys = listOf(
             CustomHotkey(
@@ -262,7 +267,7 @@ class KeyDeckLogicTest {
         )
 
         assertTrue(serialized.startsWith("@keydeck.aemni"))
-        assertTrue(serialized.contains("@version:112"))
+        assertTrue(serialized.contains("@version:113"))
         assertTrue(serialized.contains("@kdb.name:Pro Setup"))
         assertTrue(serialized.contains("@kdb.hight:42"))
         assertTrue(serialized.contains("@kdb.width:0.90"))
@@ -271,13 +276,15 @@ class KeyDeckLogicTest {
         assertTrue(serialized.contains("@kdb.tranceparency:25%"))
         assertTrue(serialized.contains("@kdb.appearane:dark"))
         assertTrue(serialized.contains("@kdb.contrast:1.32"))
+        assertTrue(serialized.contains("@kdb.suggestions:true"))
+        assertTrue(serialized.contains("@kdb.autocorrect:false"))
 
         val parsed = KeyDeckProfileCodec.parse(
             content = serialized,
             base64Decoder = { Base64.getDecoder().decode(it) },
         )!!
         assertEquals("Pro Setup", parsed.profileName)
-        assertEquals(112, parsed.formatVersion)
+        assertEquals(113, parsed.formatVersion)
         assertTrue(parsed.isAnimatedGif)
         assertEquals(42, parsed.settings.keyHeightDp)
         assertEquals(0.90f, parsed.settings.keyboardWidthFraction, 0.01f)
@@ -286,10 +293,63 @@ class KeyDeckLogicTest {
         assertEquals(KeyboardThemeId.PURE_BLACK, parsed.settings.themeId)
         assertEquals(KeyboardLayoutMode.GAMING, parsed.settings.layoutMode)
         assertTrue(parsed.settings.showKeyBorder)
+        assertTrue(parsed.settings.simpleSuggestionsEnabled)
+        assertFalse(parsed.settings.simpleAutoCorrectEnabled)
         assertEquals(2, parsed.hotkeys?.size)
         assertEquals("Ctrl+C", parsed.hotkeys?.first()?.comboText())
         assertEquals(HotkeyActionType.TOGGLE_FLOATING, parsed.hotkeys?.get(1)?.actionType)
         assertTrue(parsed.embeddedImageBytes?.contentEquals(fakeGifBytes) == true)
         assertEquals(1.32f, parsed.wallpaperConfig?.contrast ?: 0f, 0.01f)
+    }
+
+    @Test
+    fun `simple mode returns 3 suggestions and applies strict one-time autocorrect without disturbing edits`() {
+        val initialEval = SimpleSuggestionEngine.evaluate(activeWord = "")
+        assertEquals(3, initialEval.slots.size)
+        assertNull(initialEval.autoCorrectReplacement)
+
+        val prefixEval = SimpleSuggestionEngine.evaluate(activeWord = "keyb")
+        assertEquals(3, prefixEval.slots.size)
+        assertTrue(prefixEval.slots.any { it.text == "keyboard" })
+
+        val controller = SimpleTypingController()
+
+        // 1. Freshly typed clear typo -> autocorrected ONCE on Space
+        "teh".forEach { ch ->
+            assertNull(controller.onCharTyped(ch, autoCorrectEnabled = true, isCursorTouchingExistingWord = false))
+        }
+        val evalBeforeSpace = controller.currentEval(autoCorrectEnabled = true)
+        assertEquals(3, evalBeforeSpace.slots.size)
+        assertEquals("teh", evalBeforeSpace.slots[0].text)
+        assertEquals("the", evalBeforeSpace.autoCorrectReplacement)
+
+        val autoResult = controller.onCharTyped(' ', autoCorrectEnabled = true, isCursorTouchingExistingWord = false)
+        assertEquals("teh", autoResult?.originalWord)
+        assertEquals("the ", autoResult?.replacementWithSeparator)
+
+        // 2. Immediate Backspace reverts to user word "teh" and remembers it so Space NEVER re-corrects it
+        val undo = controller.onBackspace()
+        assertEquals("teh", undo?.originalWord)
+        assertEquals("the ", undo?.replacedTextWithSeparator)
+        assertTrue("teh" in controller.learnedCustomWords)
+
+        val secondSpace = controller.onCharTyped(' ', autoCorrectEnabled = true, isCursorTouchingExistingWord = false)
+        assertNull(secondSpace)
+
+        // 3. Any manual Backspace while typing disarms autocorrect for the edited word
+        "htea".forEach { ch -> controller.onCharTyped(ch, autoCorrectEnabled = true) }
+        assertNull(controller.onBackspace()) // User edited back to "hte"
+        assertFalse(controller.wordEligibleForAutoCorrect)
+        assertNull(controller.onCharTyped(' ', autoCorrectEnabled = true))
+
+        // 4. Editing an existing/previous word (cursor touching letters or cursor moved) NEVER autocorrects
+        controller.resetOnCursorOrBoundary()
+        assertNull(controller.onCharTyped('x', autoCorrectEnabled = true, isCursorTouchingExistingWord = true))
+        assertFalse(controller.wordEligibleForAutoCorrect)
+        assertNull(controller.onCharTyped(' ', autoCorrectEnabled = true))
+
+        // 5. Known dictionary word is never rewritten
+        "hello".forEach { ch -> controller.onCharTyped(ch, autoCorrectEnabled = true, isCursorTouchingExistingWord = false) }
+        assertNull(controller.onCharTyped(' ', autoCorrectEnabled = true))
     }
 }

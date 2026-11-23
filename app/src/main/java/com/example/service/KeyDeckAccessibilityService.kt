@@ -991,8 +991,132 @@ class KeyDeckAccessibilityService : AccessibilityService() {
         return false
     }
 
+    fun isSuggestionsSuppressedInput(): Boolean {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            A11yInputBridge.isSuggestionsSuppressed(this)?.let { return it }
+        }
+        val (activeRoot, focusedNode) = findTargetWindowAndFocus()
+        val editableNode = focusedNode?.takeIf { isNodeEditableInput(it) && it.isVisibleToUser }
+            ?: findEditableAncestorOrCached(focusedNode, activeRoot)
+        return editableNode?.isPassword == true
+    }
+
+    fun getSurroundingChars(beforeLen: Int, afterLen: Int): Pair<String, String>? {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            A11yInputBridge.getSurroundingChars(this, beforeLen, afterLen)?.let { return it }
+        }
+        val (activeRoot, focusedNode) = findTargetWindowAndFocus()
+        val editableNode = focusedNode?.takeIf { isNodeEditableInput(it) && it.isVisibleToUser }
+            ?: findEditableAncestorOrCached(focusedNode, activeRoot)
+            ?: return null
+        if (editableNode.isPassword) return null
+        runCatching { editableNode.refresh() }
+        val existing = realNodeText(editableNode)
+        val (start, end) = selectionRange(editableNode, existing.length)
+        if (start != end) return "" to ""
+        val before = existing.substring(0, start).takeLast(beforeLen)
+        val after = existing.substring(end).take(afterLen)
+        return before to after
+    }
+
+    fun replaceTailText(expectedTail: String, replacement: String): Boolean {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            A11yInputBridge.replaceTailText(this, expectedTail, replacement)?.let { ok ->
+                if (ok) return true
+            }
+        }
+        val (activeRoot, focusedNode) = findTargetWindowAndFocus()
+        val editableNode = focusedNode?.takeIf { isNodeEditableInput(it) && it.isVisibleToUser }
+            ?: findEditableAncestorOrCached(focusedNode, activeRoot)
+            ?: return false
+        if (editableNode.isPassword) return false
+        runCatching { editableNode.refresh() }
+        val supportsSetText = editableNode.actionList.any { it.id == AccessibilityNodeInfo.ACTION_SET_TEXT }
+        if (!supportsSetText) return false
+        val existing = realNodeText(editableNode)
+        val (start, end) = selectionRange(editableNode, existing.length)
+        if (start != end) return false
+        if (expectedTail.isNotEmpty() && !existing.substring(0, start).endsWith(expectedTail)) {
+            return false
+        }
+        val replaceStart = start - expectedTail.length
+        val newText = existing.substring(0, replaceStart) + replacement + existing.substring(end)
+        val newCursor = replaceStart + replacement.length
+        pushUndoSnapshot(editableNode, existing)
+        return if (setNodeTextAndCursor(editableNode, newText, newCursor)) {
+            lastExternalEditableNode = editableNode
+            true
+        } else {
+            false
+        }
+    }
+
     @RequiresApi(Build.VERSION_CODES.TIRAMISU)
     private object A11yInputBridge {
+        fun isSuggestionsSuppressed(service: AccessibilityService): Boolean? {
+            val im: InputMethod = runCatching { service.inputMethod }.getOrNull() ?: return null
+            if (!im.currentInputStarted) return null
+            val info = im.currentInputEditorInfo ?: return null
+            val inputType = info.inputType
+            if (inputType == InputType.TYPE_NULL) return true
+            val cls = inputType and InputType.TYPE_MASK_CLASS
+            val variation = inputType and InputType.TYPE_MASK_VARIATION
+            val isPassword = (cls == InputType.TYPE_CLASS_TEXT && (
+                variation == InputType.TYPE_TEXT_VARIATION_PASSWORD ||
+                    variation == InputType.TYPE_TEXT_VARIATION_VISIBLE_PASSWORD ||
+                    variation == InputType.TYPE_TEXT_VARIATION_WEB_PASSWORD
+                )) || (cls == InputType.TYPE_CLASS_NUMBER && variation == InputType.TYPE_NUMBER_VARIATION_PASSWORD)
+            val noSuggestionsFlag = (inputType and InputType.TYPE_TEXT_FLAG_NO_SUGGESTIONS) != 0
+            return isPassword || noSuggestionsFlag
+        }
+
+        fun getSurroundingChars(
+            service: AccessibilityService,
+            beforeLen: Int,
+            afterLen: Int,
+        ): Pair<String, String>? {
+            val im: InputMethod = runCatching { service.inputMethod }.getOrNull() ?: return null
+            if (!im.currentInputStarted) return null
+            val ic = im.currentInputConnection ?: return null
+            val info = im.currentInputEditorInfo
+            if (info == null || info.inputType == InputType.TYPE_NULL) return null
+            val surrounding = runCatching { ic.getSurroundingText(beforeLen, afterLen, 0) }.getOrNull() ?: return null
+            val fullText = surrounding.text?.toString() ?: return null
+            val selStart = surrounding.selectionStart.coerceIn(0, fullText.length)
+            val selEnd = surrounding.selectionEnd.coerceIn(0, fullText.length)
+            val before = fullText.substring(0, selStart).takeLast(beforeLen)
+            val after = fullText.substring(selEnd).take(afterLen)
+            return before to after
+        }
+
+        fun replaceTailText(
+            service: AccessibilityService,
+            expectedTail: String,
+            replacement: String,
+        ): Boolean? {
+            val im: InputMethod = runCatching { service.inputMethod }.getOrNull() ?: return null
+            if (!im.currentInputStarted) return null
+            val ic = im.currentInputConnection ?: return null
+            val info = im.currentInputEditorInfo
+            if (!KeyDeckRuntimeState.isAppInForeground.value && info?.packageName == service.packageName) {
+                return null
+            }
+            if (isSuggestionsSuppressed(service) == true) return false
+            if (expectedTail.isNotEmpty()) {
+                val surrounding = runCatching { ic.getSurroundingText(expectedTail.length, 0, 0) }.getOrNull()
+                    ?: return false
+                val text = surrounding.text?.toString() ?: return false
+                val selStart = surrounding.selectionStart.coerceIn(0, text.length)
+                val selEnd = surrounding.selectionEnd.coerceIn(0, text.length)
+                if (selStart != selEnd) return false
+                val before = text.substring(0, selStart)
+                if (!before.endsWith(expectedTail)) return false
+                ic.deleteSurroundingText(expectedTail.length, 0)
+            }
+            ic.commitText(replacement, 1, null)
+            return true
+        }
+
         fun dispatchHoldKeyEvent(
             service: AccessibilityService,
             keyCode: Int,

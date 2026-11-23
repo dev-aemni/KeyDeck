@@ -446,7 +446,7 @@ class KeyDeckViewModel(application: Application) : AndroidViewModel(application)
             if (ok) {
                 onResult(true, "Saved profile $fileName")
             } else {
-                onResult(false, "Could not save .keydeck file to selected location.")
+                onResult(false, "Could not save .kdb file to selected location.")
             }
         }
     }
@@ -465,7 +465,7 @@ class KeyDeckViewModel(application: Application) : AndroidViewModel(application)
                 }.getOrNull()
             }
             if (rawText.isNullOrBlank()) {
-                onResult(false, "Could not read selected .keydeck file.")
+                onResult(false, "Could not read selected .kdb file.")
                 return@launch
             }
             val parsed = KeyDeckProfileCodec.parse(rawText)
