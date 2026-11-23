@@ -346,7 +346,7 @@ class FloatingKeyboardService : Service() {
                                 KeyDispatcher.dispatchHotkey(
                                     context = this@FloatingKeyboardService,
                                     hotkey = hk,
-                                    hapticEnabled = settings.hapticFeedback,
+                                    hapticEnabled = false,
                                 )
                             },
                             onKeyDispatch = { keyCode, metaState, charToCommit, comboLabel ->
@@ -356,7 +356,7 @@ class FloatingKeyboardService : Service() {
                                     metaState = metaState,
                                     charToCommit = charToCommit,
                                     comboLabel = comboLabel,
-                                    hapticEnabled = settings.hapticFeedback,
+                                    hapticEnabled = settings.isHapticActiveForCurrentMode(),
                                     hotkeys = hotkeys,
                                 )
                             },
@@ -378,7 +378,7 @@ class FloatingKeyboardService : Service() {
                                     metaState = metaState,
                                     isDown = isDown,
                                     comboLabel = comboLabel,
-                                    hapticEnabled = settings.hapticFeedback,
+                                    hapticEnabled = false,
                                 )
                             },
                             onMouseMove = { dx, dy ->
@@ -394,7 +394,7 @@ class FloatingKeyboardService : Service() {
                                     context = this@FloatingKeyboardService,
                                     isRightClick = isRight,
                                     mcpeLookMode = settings.gamingMcpeLookMode,
-                                    hapticEnabled = settings.hapticFeedback,
+                                    hapticEnabled = false,
                                 )
                             },
                             onChangeLayoutMode = { newMode ->

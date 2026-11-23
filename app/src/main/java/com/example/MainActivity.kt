@@ -302,7 +302,6 @@ private fun KeyDeckApp(viewModel: KeyDeckViewModel) {
 
             KeyDeckTab.HOTKEYS -> HotkeysScreen(
                 hotkeys = hotkeys,
-                hapticEnabled = settings.hapticFeedback,
                 onSaveHotkey = { viewModel.saveHotkey(it) },
                 onDeleteHotkey = { viewModel.deleteHotkey(it) },
                 onMoveHotkeyUp = { viewModel.moveHotkeyUp(it) },

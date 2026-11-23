@@ -163,7 +163,7 @@ class KeyDeckImeService : InputMethodService() {
                                 KeyDispatcher.dispatchHotkey(
                                     context = this@KeyDeckImeService,
                                     hotkey = hk,
-                                    hapticEnabled = settings.hapticFeedback,
+                                    hapticEnabled = false,
                                 )
                             },
                             onKeyDispatch = { keyCode, metaState, charToCommit, comboLabel ->
@@ -173,7 +173,7 @@ class KeyDeckImeService : InputMethodService() {
                                     metaState = metaState,
                                     charToCommit = charToCommit,
                                     comboLabel = comboLabel,
-                                    hapticEnabled = settings.hapticFeedback,
+                                    hapticEnabled = settings.isHapticActiveForCurrentMode(),
                                     hotkeys = hotkeys,
                                 )
                             },
@@ -195,7 +195,7 @@ class KeyDeckImeService : InputMethodService() {
                                     metaState = metaState,
                                     isDown = isDown,
                                     comboLabel = comboLabel,
-                                    hapticEnabled = settings.hapticFeedback,
+                                    hapticEnabled = false,
                                 )
                             },
                             onMouseMove = { dx, dy ->
@@ -211,7 +211,7 @@ class KeyDeckImeService : InputMethodService() {
                                     context = this@KeyDeckImeService,
                                     isRightClick = isRight,
                                     mcpeLookMode = settings.gamingMcpeLookMode,
-                                    hapticEnabled = settings.hapticFeedback,
+                                    hapticEnabled = false,
                                 )
                             },
                             onChangeLayoutMode = { newMode ->

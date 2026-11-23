@@ -921,8 +921,8 @@ fun SettingsSheet(
             )
 
             SettingsSwitchRow(
-                title = "Tactile Haptic Feedback",
-                subtitle = "Subtle mechanical pulse on every keycap & hotkey press",
+                title = "Haptic Feedback (Simple Mode)",
+                subtitle = "Tap vibration in Simple mode only (on by default). PC, Numpad & Gaming modes stay completely silent.",
                 checked = settings.hapticFeedback,
                 testTag = "switch_haptics",
                 onCheckedChange = { checked -> onUpdateSettings { it.copy(hapticFeedback = checked) } },

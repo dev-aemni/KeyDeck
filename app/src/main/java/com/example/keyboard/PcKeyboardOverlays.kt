@@ -783,6 +783,12 @@ fun DeckQuickSettingsPopup(
             )
         }
         QuickPopupToggle(
+            label = "Haptic Feedback (Simple Mode)",
+            checked = settings.hapticFeedback,
+            palette = palette,
+            onCheckedChange = { c -> onUpdateSettings { it.copy(hapticFeedback = c) } },
+        )
+        QuickPopupToggle(
             label = "Black Key Borders",
             checked = settings.showKeyBorder,
             palette = palette,

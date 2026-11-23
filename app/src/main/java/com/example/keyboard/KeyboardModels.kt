@@ -506,6 +506,9 @@ data class KeyDeckSettings(
 ) {
     fun isKeyBorderVisible(): Boolean = showKeyBorder || themeAdaptiveBorder
 
+    fun isHapticActiveForCurrentMode(): Boolean =
+        hapticFeedback && layoutMode == KeyboardLayoutMode.SIMPLE
+
     fun isRgbActiveForCurrentMode(): Boolean = when (rgbBorderMode) {
         RgbBorderMode.GAMING_ONLY -> layoutMode == KeyboardLayoutMode.GAMING
         RgbBorderMode.ALL -> true

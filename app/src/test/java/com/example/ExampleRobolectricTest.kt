@@ -71,7 +71,7 @@ class ExampleRobolectricTest {
     @Test
     fun `soft ui default theme, black border, gaming-only rgb, and manual trigger resolve accurately`() {
         val defaultSettings = KeyDeckSettings()
-        assertTrue(defaultSettings.showKeyBorder)
+        assertFalse(defaultSettings.showKeyBorder)
         assertTrue(defaultSettings.suppressAutoImeOnInput)
         assertEquals(AppThemeMode.SYSTEM, defaultSettings.appThemeMode)
         assertTrue(defaultSettings.syncKeyboardWithDarkMode)
@@ -120,8 +120,8 @@ class ExampleRobolectricTest {
     }
 
     @Test
-    fun `simple mobile mode has 4-row qwerty and 123 symbol layer`() {
-        assertEquals(4, PcKeyboardLayoutData.simpleAlphaRows.size)
+    fun `simple mobile mode has 5-row qwerty and 123 symbol layer`() {
+        assertEquals(5, PcKeyboardLayoutData.simpleAlphaRows.size)
         assertEquals(4, PcKeyboardLayoutData.simpleSymbolRows.size)
 
         val alphaBottom = PcKeyboardLayoutData.simpleAlphaRows.last()
@@ -198,5 +198,23 @@ class ExampleRobolectricTest {
         KeyDeckRuntimeState.setOverlayServiceRunning(false)
         assertTrue(ime.onShowInputRequested(0, false))
         controller.destroy()
+    }
+
+    @Test
+    fun `accessibility service config does not request floating accessibility human button`() {
+        val context = ApplicationProvider.getApplicationContext<Context>()
+        val parser = context.resources.getXml(R.xml.accessibility_service_config)
+        var flagsAttr: String? = null
+        var event = parser.eventType
+        while (event != org.xmlpull.v1.XmlPullParser.END_DOCUMENT) {
+            if (event == org.xmlpull.v1.XmlPullParser.START_TAG && parser.name == "accessibility-service") {
+                flagsAttr = parser.getAttributeValue("http://schemas.android.com/apk/res/android", "accessibilityFlags")
+                break
+            }
+            event = parser.next()
+        }
+        parser.close()
+        assertTrue(flagsAttr != null)
+        assertFalse(flagsAttr!!.contains("flagRequestAccessibilityButton"))
     }
 }

@@ -295,7 +295,7 @@ fun WebSandboxScreen(
                     )
                 }
                 Text(
-                    text = "v113",
+                    text = "v114",
                     fontSize = 10.5.sp,
                     fontWeight = FontWeight.Bold,
                     color = colors.indigo,
@@ -742,7 +742,7 @@ fun WebSandboxScreen(
                             color = colors.indigo,
                         )
                         Text(
-                            text = "@version:113 • Height ${settings.keyHeightDp}dp • Width ${(settings.keyboardWidthFraction * 100).roundToInt()}%",
+                            text = "@version:114 • Height ${settings.keyHeightDp}dp • Width ${(settings.keyboardWidthFraction * 100).roundToInt()}%",
                             fontSize = 11.sp,
                             color = colors.textSecondary,
                         )

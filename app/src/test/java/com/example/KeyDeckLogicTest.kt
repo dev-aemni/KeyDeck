@@ -269,7 +269,7 @@ class KeyDeckLogicTest {
         )
 
         assertTrue(serialized.startsWith("@keydeck.aemni"))
-        assertTrue(serialized.contains("@version:113"))
+        assertTrue(serialized.contains("@version:114"))
         assertTrue(serialized.contains("@kdb.name:Pro Setup"))
         assertTrue(serialized.contains("@kdb.hight:42"))
         assertTrue(serialized.contains("@kdb.width:0.90"))
@@ -287,7 +287,7 @@ class KeyDeckLogicTest {
             base64Decoder = { Base64.getDecoder().decode(it) },
         )!!
         assertEquals("Pro Setup", parsed.profileName)
-        assertEquals(113, parsed.formatVersion)
+        assertEquals(114, parsed.formatVersion)
         assertTrue(parsed.isAnimatedGif)
         assertEquals(42, parsed.settings.keyHeightDp)
         assertEquals(0.90f, parsed.settings.keyboardWidthFraction, 0.01f)
@@ -380,5 +380,22 @@ class KeyDeckLogicTest {
         // Sentence boundary resets back to sentence starters
         synced.syncContextFromSurroundingText("I love you. ")
         assertEquals(listOf("I", "The", "Hello"), synced.currentEval(true).slots.map { it.text })
+    }
+
+    @Test
+    fun `haptic feedback defaults on and activates strictly in simple mode only`() {
+        val defaults = KeyDeckSettings()
+        assertTrue(defaults.hapticFeedback)
+        assertFalse(defaults.isHapticActiveForCurrentMode())
+
+        KeyboardLayoutMode.entries.forEach { mode ->
+            val withHapticOn = defaults.copy(layoutMode = mode, hapticFeedback = true)
+            if (mode == KeyboardLayoutMode.SIMPLE) {
+                assertTrue(withHapticOn.isHapticActiveForCurrentMode())
+            } else {
+                assertFalse(withHapticOn.isHapticActiveForCurrentMode())
+            }
+            assertFalse(defaults.copy(layoutMode = mode, hapticFeedback = false).isHapticActiveForCurrentMode())
+        }
     }
 }

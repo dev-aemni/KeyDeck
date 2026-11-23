@@ -67,7 +67,7 @@
                 android:resource="@xml/method" />
         </service>
 
-        <!-- Accessibility Service providing floating Accessibility Trigger Button and global shortcut actions -->
+        <!-- Accessibility Service for Mouse Mode pointer gestures, cross-app typing, and global shortcuts (no on-screen accessibility button) -->
         <service
             android:name=".service.KeyDeckAccessibilityService"
             android:exported="true"

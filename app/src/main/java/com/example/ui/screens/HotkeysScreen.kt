@@ -86,7 +86,6 @@ private data class LaunchableAppItem(
 @Composable
 fun HotkeysScreen(
     hotkeys: List<CustomHotkey>,
-    hapticEnabled: Boolean,
     onSaveHotkey: (CustomHotkey) -> Unit,
     onDeleteHotkey: (String) -> Unit,
     onMoveHotkeyUp: (String) -> Unit,
@@ -334,7 +333,7 @@ fun HotkeysScreen(
                                 Row(verticalAlignment = Alignment.CenterVertically) {
                                     IconButton(
                                         onClick = {
-                                            KeyDispatcher.dispatchHotkey(context, hk, hapticEnabled)
+                                            KeyDispatcher.dispatchHotkey(context, hk, hapticEnabled = false)
                                         },
                                         modifier = Modifier.testTag("hotkey_test_${hk.id}"),
                                     ) {

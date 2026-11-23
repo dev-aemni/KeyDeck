@@ -441,7 +441,7 @@ fun PcKeyboardDeck(
                         expectedTail = undo.replacedTextWithSeparator,
                         replacement = undo.originalWord,
                         comboLabel = "Undo Auto → ${undo.originalWord}",
-                        hapticEnabled = settings.hapticFeedback,
+                        hapticEnabled = settings.isHapticActiveForCurrentMode(),
                     )
                     if (reverted) {
                         clearStickyModifiersIfNeeded()
@@ -484,7 +484,7 @@ fun PcKeyboardDeck(
                         expectedTail = autoAction.originalWord,
                         replacement = autoAction.replacementWithSeparator,
                         comboLabel = "Auto: ${autoAction.replacementWithSeparator.trimEnd()}",
-                        hapticEnabled = settings.hapticFeedback,
+                        hapticEnabled = settings.isHapticActiveForCurrentMode(),
                     )
                     if (replaced) {
                         clearStickyModifiersIfNeeded()
@@ -532,7 +532,7 @@ fun PcKeyboardDeck(
                     expectedTail = autoAction.originalWord,
                     replacement = autoAction.replacementWithSeparator,
                     comboLabel = "Auto: ${autoAction.replacementWithSeparator.trimEnd()}",
-                    hapticEnabled = settings.hapticFeedback,
+                    hapticEnabled = settings.isHapticActiveForCurrentMode(),
                 )
                 if (replaced) {
                     clearStickyModifiersIfNeeded()
@@ -578,7 +578,7 @@ fun PcKeyboardDeck(
             expectedTail = prior,
             replacement = finalCommit,
             comboLabel = "Suggestion: ${slot.text}",
-            hapticEnabled = settings.hapticFeedback,
+            hapticEnabled = settings.isHapticActiveForCurrentMode(),
         )
         if (!replaced && prior.isEmpty()) {
             finalCommit.forEach { ch ->
@@ -1107,7 +1107,7 @@ fun PcKeyboardDeck(
                         rootCoordsProvider = { rootCoords },
                         onKeyPreviewChanged = { preview -> activeKeyPreview = preview },
                         onPopupChanged = { popup ->
-                            if (popup != null && activeHoldPopup == null && settings.hapticFeedback) {
+                            if (popup != null && activeHoldPopup == null && settings.isHapticActiveForCurrentMode()) {
                                 haptic.performHapticFeedback(HapticFeedbackType.LongPress)
                             }
                             if (popup != null) {

@@ -1035,7 +1035,7 @@ fun DeckHomeScreen(
                         KeyDispatcher.dispatchHotkey(
                             context = context,
                             hotkey = hk,
-                            hapticEnabled = settings.hapticFeedback,
+                            hapticEnabled = false,
                         )
                     },
                     onKeyDispatch = { keyCode, metaState, charToCommit, comboLabel ->
@@ -1045,7 +1045,7 @@ fun DeckHomeScreen(
                             metaState = metaState,
                             charToCommit = charToCommit,
                             comboLabel = comboLabel,
-                            hapticEnabled = settings.hapticFeedback,
+                            hapticEnabled = settings.isHapticActiveForCurrentMode(),
                             hotkeys = hotkeys,
                         )
                     },
@@ -1067,7 +1067,7 @@ fun DeckHomeScreen(
                             metaState = metaState,
                             isDown = isDown,
                             comboLabel = comboLabel,
-                            hapticEnabled = settings.hapticFeedback,
+                            hapticEnabled = false,
                         )
                     },
                     onMouseMove = { dx, dy ->
@@ -1083,7 +1083,7 @@ fun DeckHomeScreen(
                             context = context,
                             isRightClick = isRight,
                             mcpeLookMode = settings.gamingMcpeLookMode,
-                            hapticEnabled = settings.hapticFeedback,
+                            hapticEnabled = false,
                         )
                     },
                     onChangeLayoutMode = onChangeLayoutMode,

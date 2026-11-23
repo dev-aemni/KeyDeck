@@ -1,6 +1,5 @@
 package com.example.service
 
-import android.accessibilityservice.AccessibilityButtonController
 import android.accessibilityservice.AccessibilityService
 import android.accessibilityservice.AccessibilityServiceInfo
 import android.accessibilityservice.GestureDescription
@@ -44,7 +43,6 @@ class KeyDeckAccessibilityService : AccessibilityService() {
 
     private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
     private val mainHandler = Handler(Looper.getMainLooper())
-    private var accessibilityButtonCallback: AccessibilityButtonController.AccessibilityButtonCallback? = null
 
     private var cursorX = -1f
     private var cursorY = -1f
@@ -75,28 +73,24 @@ class KeyDeckAccessibilityService : AccessibilityService() {
         cursorX = dm.widthPixels * 0.5f
         cursorY = dm.heightPixels * 0.42f
 
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            runCatching {
-                val info = serviceInfo
-                if (info != null && (info.flags and AccessibilityServiceInfo.FLAG_INPUT_METHOD_EDITOR) == 0) {
-                    info.flags = info.flags or
+        runCatching {
+            val info = serviceInfo
+            if (info != null) {
+                var updatedFlags = info.flags
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                    updatedFlags = updatedFlags and AccessibilityServiceInfo.FLAG_REQUEST_ACCESSIBILITY_BUTTON.inv()
+                }
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                    updatedFlags = updatedFlags or
                         AccessibilityServiceInfo.FLAG_INPUT_METHOD_EDITOR or
                         AccessibilityServiceInfo.FLAG_INCLUDE_NOT_IMPORTANT_VIEWS or
                         AccessibilityServiceInfo.FLAG_REPORT_VIEW_IDS
+                }
+                if (updatedFlags != info.flags) {
+                    info.flags = updatedFlags
                     serviceInfo = info
                 }
             }
-        }
-
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            val controller = accessibilityButtonController
-            val callback = object : AccessibilityButtonController.AccessibilityButtonCallback() {
-                override fun onClicked(controller: AccessibilityButtonController) {
-                    handleAccessibilityButtonClick()
-                }
-            }
-            accessibilityButtonCallback = callback
-            controller.registerAccessibilityButtonCallback(callback)
         }
 
         val repo = KeyDeckRepository(applicationContext)
@@ -129,24 +123,6 @@ class KeyDeckAccessibilityService : AccessibilityService() {
                 if (softKeyboardController.showMode != desired) {
                     softKeyboardController.showMode = desired
                 }
-            }
-        }
-    }
-
-    private fun handleAccessibilityButtonClick() {
-        if (KeyDeckRuntimeState.isOverlayServiceRunning.value) {
-            val toggleIntent = Intent(this, FloatingKeyboardService::class.java).apply {
-                action = FloatingKeyboardService.ACTION_TOGGLE_KEYBOARD
-            }
-            startService(toggleIntent)
-        } else if (Settings.canDrawOverlays(this)) {
-            val startIntent = Intent(this, FloatingKeyboardService::class.java).apply {
-                action = FloatingKeyboardService.ACTION_START_AND_EXPAND
-            }
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                startForegroundService(startIntent)
-            } else {
-                startService(startIntent)
             }
         }
     }
@@ -225,11 +201,6 @@ class KeyDeckAccessibilityService : AccessibilityService() {
     override fun onDestroy() {
         syncSoftKeyboardPolicy(false)
         serviceScope.cancel()
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            accessibilityButtonCallback?.let {
-                accessibilityButtonController.unregisterAccessibilityButtonCallback(it)
-            }
-        }
         KeyDeckRuntimeState.setAccessibilityRunning(false)
         if (activeInstance === this) {
             activeInstance = null
