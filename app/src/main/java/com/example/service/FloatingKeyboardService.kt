@@ -16,10 +16,12 @@ import android.view.Gravity
 import android.view.View
 import android.view.WindowManager
 import androidx.compose.animation.AnimatedContent
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -33,6 +35,12 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.StrokeJoin
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.input.pointer.positionChange
@@ -54,6 +62,7 @@ import com.example.keyboard.BuiltInWallpapers
 import com.example.keyboard.KeyDeckSettings
 import com.example.keyboard.KeyDispatcher
 import com.example.keyboard.KeyboardDockAlignment
+import com.example.keyboard.KeyboardLayoutMode
 import com.example.keyboard.PcKeyboardDeck
 import com.example.keyboard.ResolvedKeyboardPalette
 import com.example.ui.theme.KeyDeckColors
@@ -66,6 +75,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.launch
 import kotlin.math.hypot
 import kotlin.math.roundToInt
@@ -93,6 +103,9 @@ class FloatingKeyboardService : Service() {
     private var keyboardLifecycleOwner: OverlayLifecycleOwner? = null
     private var keyboardView: View? = null
     private var keyboardParams: WindowManager.LayoutParams? = null
+    private var cursorLifecycleOwner: OverlayLifecycleOwner? = null
+    private var cursorView: View? = null
+    private var cursorParams: WindowManager.LayoutParams? = null
     private var dragResizeAccumX = 0f
     private var dragResizeAccumY = 0f
 
@@ -126,6 +139,7 @@ class FloatingKeyboardService : Service() {
         serviceScope.launch { repository.migrateSchemaIfNeeded() }
         attachBubbleOverlay()
         observeExpansionState()
+        observeCursorState()
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -173,7 +187,39 @@ class FloatingKeyboardService : Service() {
                 if (expanded) {
                     attachKeyboardOverlay()
                 } else {
+                    KeyDispatcher.dispatchMouseEnd(true)
                     removeKeyboardOverlay()
+                }
+            }
+        }
+    }
+
+    private fun observeCursorState() {
+        serviceScope.launch {
+            combine(
+                KeyDeckRuntimeState.isKeyboardOverlayExpanded,
+                repository.settingsFlow,
+                KeyDeckRuntimeState.mouseCursorState,
+            ) { expanded, settings, cursor ->
+                Triple(expanded, settings, cursor)
+            }.collectLatest { (expanded, settings, cursor) ->
+                val mousePointerActive = expanded &&
+                    settings.layoutMode == KeyboardLayoutMode.GAMING &&
+                    !settings.gamingMcpeLookMode
+                if (!mousePointerActive) {
+                    if (cursor.visible) {
+                        KeyDeckRuntimeState.updateMouseCursor(cursor.xPx, cursor.yPx, visible = false)
+                    }
+                    removeCursorOverlay()
+                    return@collectLatest
+                }
+                if (!cursor.visible || cursor.xPx < 0f || cursor.yPx < 0f) {
+                    val dm = resources.displayMetrics
+                    val initX = if (cursor.xPx >= 0f) cursor.xPx else dm.widthPixels * 0.5f
+                    val initY = if (cursor.yPx >= 0f) cursor.yPx else dm.heightPixels * 0.42f
+                    KeyDeckRuntimeState.updateMouseCursor(initX, initY, visible = true)
+                } else {
+                    attachOrMoveCursorOverlay(cursor.xPx, cursor.yPx)
                 }
             }
         }
@@ -397,6 +443,9 @@ class FloatingKeyboardService : Service() {
                                     hapticEnabled = false,
                                 )
                             },
+                            onMouseEnd = {
+                                KeyDispatcher.dispatchMouseEnd(settings.gamingMcpeLookMode)
+                            },
                             onChangeLayoutMode = { newMode ->
                                 serviceScope.launch {
                                     repository.updateSettings { it.copy(layoutMode = newMode) }
@@ -496,10 +545,80 @@ class FloatingKeyboardService : Service() {
     }
 
     private fun removeKeyboardOverlay() {
+        removeCursorOverlay()
         val owner = keyboardLifecycleOwner
         keyboardLifecycleOwner = null
         val view = keyboardView
         keyboardView = null
+        owner?.onPause()
+        owner?.onDestroy()
+        view?.let { v ->
+            runCatching { (v as? ComposeView)?.disposeComposition() }
+            runCatching { windowManager.removeViewImmediate(v) }
+        }
+    }
+
+    private fun attachOrMoveCursorOverlay(xPx: Float, yPx: Float) {
+        if (!Settings.canDrawOverlays(this)) return
+        val existingView = cursorView
+        val existingParams = cursorParams
+        if (existingView != null && existingParams != null) {
+            existingParams.x = xPx.roundToInt()
+            existingParams.y = yPx.roundToInt()
+            runCatching { windowManager.updateViewLayout(existingView, existingParams) }
+            return
+        }
+
+        val params = WindowManager.LayoutParams(
+            WindowManager.LayoutParams.WRAP_CONTENT,
+            WindowManager.LayoutParams.WRAP_CONTENT,
+            overlayType(),
+            WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
+                WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE or
+                WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN or
+                WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS or
+                WindowManager.LayoutParams.FLAG_HARDWARE_ACCELERATED,
+            PixelFormat.TRANSLUCENT,
+        ).apply {
+            gravity = Gravity.TOP or Gravity.START
+            x = xPx.roundToInt()
+            y = yPx.roundToInt()
+        }
+        cursorParams = params
+
+        val owner = OverlayLifecycleOwner().apply {
+            onCreate()
+            onResume()
+        }
+        val view = ComposeView(this).apply {
+            setViewCompositionStrategy(ViewCompositionStrategy.DisposeOnViewTreeLifecycleDestroyed)
+            setViewTreeLifecycleOwner(owner)
+            setViewTreeSavedStateRegistryOwner(owner)
+            setViewTreeViewModelStoreOwner(owner)
+            setContent {
+                val settings by repository.settingsFlow.collectAsStateWithLifecycle(initialValue = KeyDeckSettings())
+                val isDark = resolveIsAppDark(settings.appThemeMode)
+                val palette = settings.resolvePalette(isDark)
+                FloatingMousePointer(accentColor = palette.accentBg)
+            }
+        }
+        val added = runCatching { windowManager.addView(view, params) }.isSuccess
+        if (added) {
+            cursorLifecycleOwner = owner
+            cursorView = view
+        } else {
+            runCatching { view.disposeComposition() }
+            owner.onDestroy()
+            cursorParams = null
+        }
+    }
+
+    private fun removeCursorOverlay() {
+        val owner = cursorLifecycleOwner
+        cursorLifecycleOwner = null
+        val view = cursorView
+        cursorView = null
+        cursorParams = null
         owner?.onPause()
         owner?.onDestroy()
         view?.let { v ->
@@ -632,6 +751,38 @@ private fun FloatingTriggerBubble(
                 .size(7.dp)
                 .clip(CircleShape)
                 .background(if (expanded) palette.accentBg else KeyDeckColors.current.emerald),
+        )
+    }
+}
+
+@Composable
+private fun FloatingMousePointer(accentColor: Color) {
+    Canvas(modifier = Modifier.size(26.dp)) {
+        val tipX = 1.dp.toPx()
+        val tipY = 1.dp.toPx()
+        val arrowPath = Path().apply {
+            moveTo(tipX, tipY)
+            lineTo(tipX, tipY + 18.dp.toPx())
+            lineTo(tipX + 4.8.dp.toPx(), tipY + 13.8.dp.toPx())
+            lineTo(tipX + 8.6.dp.toPx(), tipY + 21.dp.toPx())
+            lineTo(tipX + 11.4.dp.toPx(), tipY + 19.6.dp.toPx())
+            lineTo(tipX + 7.6.dp.toPx(), tipY + 12.6.dp.toPx())
+            lineTo(tipX + 13.8.dp.toPx(), tipY + 12.6.dp.toPx())
+            close()
+        }
+        drawPath(
+            path = arrowPath,
+            color = Color(0xFF0B0F19),
+            style = Stroke(width = 2.6.dp.toPx(), cap = StrokeCap.Round, join = StrokeJoin.Round),
+        )
+        drawPath(
+            path = arrowPath,
+            color = Color.White,
+        )
+        drawCircle(
+            color = accentColor,
+            radius = 2.2.dp.toPx(),
+            center = Offset(tipX + 4.5.dp.toPx(), tipY + 9.2.dp.toPx()),
         )
     }
 }

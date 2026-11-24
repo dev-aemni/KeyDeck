@@ -46,9 +46,14 @@ class KeyDeckAccessibilityService : AccessibilityService() {
 
     private var cursorX = -1f
     private var cursorY = -1f
+    private var lookAnchorX = -1f
+    private var lookAnchorY = -1f
+    private var lookPendingDx = 0f
+    private var lookPendingDy = 0f
+    private var isLookGestureInFlight = false
+    private var lookWantsRelease = false
+    private var activeLookStroke: GestureDescription.StrokeDescription? = null
     private var lastGestureAtMs = 0L
-    private var pendingDx = 0f
-    private var pendingDy = 0f
 
     private var lastExternalEditableNode: AccessibilityNodeInfo? = null
     private var lastEditedNodeKey: String = ""
@@ -81,10 +86,7 @@ class KeyDeckAccessibilityService : AccessibilityService() {
                     updatedFlags = updatedFlags and AccessibilityServiceInfo.FLAG_REQUEST_ACCESSIBILITY_BUTTON.inv()
                 }
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-                    updatedFlags = updatedFlags or
-                        AccessibilityServiceInfo.FLAG_INPUT_METHOD_EDITOR or
-                        AccessibilityServiceInfo.FLAG_INCLUDE_NOT_IMPORTANT_VIEWS or
-                        AccessibilityServiceInfo.FLAG_REPORT_VIEW_IDS
+                    updatedFlags = updatedFlags or AccessibilityServiceInfo.FLAG_INPUT_METHOD_EDITOR
                 }
                 if (updatedFlags != info.flags) {
                     info.flags = updatedFlags
@@ -131,12 +133,8 @@ class KeyDeckAccessibilityService : AccessibilityService() {
         if (event == null) return
         val type = event.eventType
         val isDirectInputEvent = type == AccessibilityEvent.TYPE_VIEW_FOCUSED ||
-            type == AccessibilityEvent.TYPE_VIEW_CLICKED ||
-            type == AccessibilityEvent.TYPE_VIEW_TEXT_SELECTION_CHANGED ||
-            type == AccessibilityEvent.TYPE_VIEW_TEXT_CHANGED
-        val isWindowRefreshEvent = type == AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED ||
-            type == AccessibilityEvent.TYPE_WINDOWS_CHANGED ||
-            type == AccessibilityEvent.TYPE_WINDOW_CONTENT_CHANGED
+            type == AccessibilityEvent.TYPE_VIEW_CLICKED
+        val isWindowRefreshEvent = type == AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED
         if (!isDirectInputEvent && !isWindowRefreshEvent) {
             return
         }
@@ -145,6 +143,10 @@ class KeyDeckAccessibilityService : AccessibilityService() {
             if (src != null) {
                 val srcPkg = src.packageName?.toString()
                 if (srcPkg == packageName && !KeyDeckRuntimeState.isAppInForeground.value) {
+                    return
+                }
+                if (src.isPassword) {
+                    lastExternalEditableNode = null
                     return
                 }
                 if (isDirectInputEvent) {
@@ -174,15 +176,14 @@ class KeyDeckAccessibilityService : AccessibilityService() {
                 } == true
                 if (!existingValid) {
                     val now = SystemClock.uptimeMillis()
-                    if (type == AccessibilityEvent.TYPE_WINDOW_CONTENT_CHANGED && now - lastContentRefreshMs < 220L) {
-                        return
-                    }
                     lastContentRefreshMs = now
                     val (root, focused) = findTargetWindowAndFocus()
                     val resolved = focused?.takeIf { isNodeEditableInput(it) }
                         ?: findEditableAncestorOrCached(focused, root)
                     if (resolved != null && isNodeEditableInput(resolved)) {
                         lastExternalEditableNode = resolved
+                    } else {
+                        lastExternalEditableNode = null
                     }
                 }
             }
@@ -219,45 +220,231 @@ class KeyDeckAccessibilityService : AccessibilityService() {
             cursorY = h * 0.42f
         }
 
-        pendingDx += dx
-        pendingDy += dy
-
-        val now = SystemClock.uptimeMillis()
-        if (now - lastGestureAtMs < 65L) return
-        val dist = hypot(pendingDx.toDouble(), pendingDy.toDouble())
-        if (dist < 4.0) return
-
-        lastGestureAtMs = now
-        val moveX = pendingDx.coerceIn(-w * 0.35f, w * 0.35f)
-        val moveY = pendingDy.coerceIn(-h * 0.30f, h * 0.30f)
-        pendingDx = 0f
-        pendingDy = 0f
-
-        val startX: Float
-        val startY: Float
-        val endX: Float
-        val endY: Float
-
-        if (mcpeLookMode) {
-            startX = w * 0.65f
-            startY = h * 0.36f
-            endX = (startX + moveX).coerceIn(20f, w - 20f)
-            endY = (startY + moveY).coerceIn(40f, h * 0.65f)
-        } else {
-            startX = cursorX.coerceIn(16f, w - 16f)
-            startY = cursorY.coerceIn(32f, h - 32f)
-            cursorX = (startX + moveX).coerceIn(16f, w - 16f)
-            cursorY = (startY + moveY).coerceIn(32f, h - 32f)
-            endX = cursorX
-            endY = cursorY
+        if (!mcpeLookMode) {
+            // Desktop Mouse Pointer Mode: move visible cursor smoothly without fake screen-dragging swipes
+            cursorX = (cursorX + dx).coerceIn(12f, w - 12f)
+            cursorY = (cursorY + dy).coerceIn(24f, h - 24f)
+            KeyDeckRuntimeState.updateMouseCursor(cursorX, cursorY, visible = true)
+            return
         }
 
+        KeyDeckRuntimeState.updateMouseCursor(cursorX, cursorY, visible = false)
+        lookPendingDx += dx
+        lookPendingDy += dy
+        lookWantsRelease = false
+
+        if (!isLookGestureInFlight) {
+            flushNextLookStroke()
+        }
+    }
+
+    fun dispatchMouseEnd(mcpeLookMode: Boolean) {
+        if (!mcpeLookMode || Build.VERSION.SDK_INT < Build.VERSION_CODES.N) return
+        lookWantsRelease = true
+        if (!isLookGestureInFlight && activeLookStroke != null) {
+            flushNextLookStroke()
+        }
+    }
+
+    private fun flushNextLookStroke() {
+        val dm = resources.displayMetrics
+        val w = dm.widthPixels.toFloat().coerceAtLeast(320f)
+        val h = dm.heightPixels.toFloat().coerceAtLeast(480f)
+        val minX = w * 0.14f
+        val maxX = w * 0.92f
+        val minY = h * 0.16f
+        val maxY = h * 0.70f
+        val resetX = w * 0.65f
+        val resetY = h * 0.38f
+
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) {
+            if (lookWantsRelease) {
+                lookPendingDx = 0f
+                lookPendingDy = 0f
+                return
+            }
+            val moveX = lookPendingDx.coerceIn(-w * 0.35f, w * 0.35f)
+            val moveY = lookPendingDy.coerceIn(-h * 0.30f, h * 0.30f)
+            lookPendingDx = 0f
+            lookPendingDy = 0f
+            if (hypot(moveX.toDouble(), moveY.toDouble()) < 2.0) return
+
+            val endX = (resetX + moveX).coerceIn(minX, maxX)
+            val endY = (resetY + moveY).coerceIn(minY, maxY)
+            val path = Path().apply {
+                moveTo(resetX, resetY)
+                lineTo(endX, endY)
+            }
+            val stroke = GestureDescription.StrokeDescription(path, 0L, 40L)
+            isLookGestureInFlight = true
+            val started = dispatchGesture(
+                GestureDescription.Builder().addStroke(stroke).build(),
+                object : GestureResultCallback() {
+                    override fun onCompleted(gestureDescription: GestureDescription?) {
+                        isLookGestureInFlight = false
+                        if (!lookWantsRelease && hypot(lookPendingDx.toDouble(), lookPendingDy.toDouble()) >= 2.0) {
+                            flushNextLookStroke()
+                        }
+                    }
+
+                    override fun onCancelled(gestureDescription: GestureDescription?) {
+                        isLookGestureInFlight = false
+                    }
+                },
+                mainHandler,
+            )
+            if (!started) isLookGestureInFlight = false
+            return
+        }
+
+        val existingStroke = activeLookStroke
+        if (lookWantsRelease) {
+            lookPendingDx = 0f
+            lookPendingDy = 0f
+            if (existingStroke == null) return
+            val liftPath = Path().apply {
+                moveTo(lookAnchorX, lookAnchorY)
+                lineTo(lookAnchorX, lookAnchorY)
+            }
+            val endStroke = existingStroke.continueStroke(liftPath, 0L, 16L, false)
+            activeLookStroke = null
+            isLookGestureInFlight = true
+            val started = dispatchGesture(
+                GestureDescription.Builder().addStroke(endStroke).build(),
+                object : GestureResultCallback() {
+                    override fun onCompleted(gestureDescription: GestureDescription?) {
+                        isLookGestureInFlight = false
+                    }
+
+                    override fun onCancelled(gestureDescription: GestureDescription?) {
+                        isLookGestureInFlight = false
+                    }
+                },
+                mainHandler,
+            )
+            if (!started) isLookGestureInFlight = false
+            return
+        }
+
+        val stepDx = lookPendingDx.coerceIn(-w * 0.25f, w * 0.25f)
+        val stepDy = lookPendingDy.coerceIn(-h * 0.22f, h * 0.22f)
+        val dist = hypot(stepDx.toDouble(), stepDy.toDouble())
+
+        if (existingStroke == null && dist < 1.5) {
+            return
+        }
+
+        if (existingStroke == null) {
+            lookAnchorX = resetX
+            lookAnchorY = resetY
+            val endX = (lookAnchorX + stepDx).coerceIn(minX, maxX)
+            val endY = (lookAnchorY + stepDy).coerceIn(minY, maxY)
+            lookPendingDx = 0f
+            lookPendingDy = 0f
+            val path = Path().apply {
+                moveTo(lookAnchorX, lookAnchorY)
+                lineTo(endX, endY)
+            }
+            lookAnchorX = endX
+            lookAnchorY = endY
+            val nextStroke = GestureDescription.StrokeDescription(path, 0L, 28L, true)
+            isLookGestureInFlight = true
+            val started = dispatchGesture(
+                GestureDescription.Builder().addStroke(nextStroke).build(),
+                object : GestureResultCallback() {
+                    override fun onCompleted(gestureDescription: GestureDescription?) {
+                        isLookGestureInFlight = false
+                        activeLookStroke = nextStroke
+                        if (lookWantsRelease || hypot(lookPendingDx.toDouble(), lookPendingDy.toDouble()) >= 1.5) {
+                            flushNextLookStroke()
+                        }
+                    }
+
+                    override fun onCancelled(gestureDescription: GestureDescription?) {
+                        isLookGestureInFlight = false
+                        activeLookStroke = null
+                    }
+                },
+                mainHandler,
+            )
+            if (!started) {
+                isLookGestureInFlight = false
+                activeLookStroke = null
+            }
+            return
+        }
+
+        // If continuous stroke hits safe edge of look zone, lift cleanly and re-center on next tick
+        val candidateX = lookAnchorX + stepDx
+        val candidateY = lookAnchorY + stepDy
+        val hitEdge = candidateX <= minX || candidateX >= maxX || candidateY <= minY || candidateY >= maxY
+        if (hitEdge) {
+            val liftPath = Path().apply {
+                moveTo(lookAnchorX, lookAnchorY)
+                lineTo(candidateX.coerceIn(minX, maxX), candidateY.coerceIn(minY, maxY))
+            }
+            lookPendingDx = 0f
+            lookPendingDy = 0f
+            val finishEdgeStroke = existingStroke.continueStroke(liftPath, 0L, 20L, false)
+            activeLookStroke = null
+            isLookGestureInFlight = true
+            val started = dispatchGesture(
+                GestureDescription.Builder().addStroke(finishEdgeStroke).build(),
+                object : GestureResultCallback() {
+                    override fun onCompleted(gestureDescription: GestureDescription?) {
+                        isLookGestureInFlight = false
+                        if (!lookWantsRelease && hypot(lookPendingDx.toDouble(), lookPendingDy.toDouble()) >= 1.5) {
+                            flushNextLookStroke()
+                        }
+                    }
+
+                    override fun onCancelled(gestureDescription: GestureDescription?) {
+                        isLookGestureInFlight = false
+                    }
+                },
+                mainHandler,
+            )
+            if (!started) isLookGestureInFlight = false
+            return
+        }
+
+        if (dist < 1.0) {
+            // Finger paused on joystick: keep gesture alive briefly only when actively moving
+            return
+        }
+
+        lookPendingDx = 0f
+        lookPendingDy = 0f
         val path = Path().apply {
-            moveTo(startX, startY)
-            lineTo(endX, endY)
+            moveTo(lookAnchorX, lookAnchorY)
+            lineTo(candidateX, candidateY)
         }
-        val stroke = GestureDescription.StrokeDescription(path, 0L, 45L)
-        dispatchGesture(GestureDescription.Builder().addStroke(stroke).build(), null, null)
+        lookAnchorX = candidateX
+        lookAnchorY = candidateY
+        val contStroke = existingStroke.continueStroke(path, 0L, 24L, true)
+        isLookGestureInFlight = true
+        val started = dispatchGesture(
+            GestureDescription.Builder().addStroke(contStroke).build(),
+            object : GestureResultCallback() {
+                override fun onCompleted(gestureDescription: GestureDescription?) {
+                    isLookGestureInFlight = false
+                    activeLookStroke = contStroke
+                    if (lookWantsRelease || hypot(lookPendingDx.toDouble(), lookPendingDy.toDouble()) >= 1.2) {
+                        flushNextLookStroke()
+                    }
+                }
+
+                override fun onCancelled(gestureDescription: GestureDescription?) {
+                    isLookGestureInFlight = false
+                    activeLookStroke = null
+                }
+            },
+            mainHandler,
+        )
+        if (!started) {
+            isLookGestureInFlight = false
+            activeLookStroke = null
+        }
     }
 
     fun dispatchMouseTap(isRightClick: Boolean, mcpeLookMode: Boolean): String {
@@ -266,13 +453,13 @@ class KeyDeckAccessibilityService : AccessibilityService() {
         val w = dm.widthPixels.toFloat().coerceAtLeast(320f)
         val h = dm.heightPixels.toFloat().coerceAtLeast(480f)
 
-        val tapX = if (mcpeLookMode) w * 0.5f else cursorX.coerceIn(16f, w - 16f)
-        val tapY = if (mcpeLookMode) h * 0.42f else cursorY.coerceIn(32f, h - 32f)
-        val duration = if (isRightClick) 420L else 40L
+        val tapX = if (mcpeLookMode) w * 0.5f else cursorX.coerceIn(12f, w - 12f)
+        val tapY = if (mcpeLookMode) h * 0.42f else cursorY.coerceIn(24f, h - 24f)
+        val duration = if (isRightClick) 440L else 42L
 
         val path = Path().apply { moveTo(tapX, tapY) }
         val stroke = GestureDescription.StrokeDescription(path, 0L, duration)
-        dispatchGesture(GestureDescription.Builder().addStroke(stroke).build(), null, null)
+        dispatchGesture(GestureDescription.Builder().addStroke(stroke).build(), null, mainHandler)
         return if (isRightClick) "RMB → Hold/Use Tap" else "LMB → Attack/Click Tap"
     }
 
@@ -510,7 +697,7 @@ class KeyDeckAccessibilityService : AccessibilityService() {
     }
 
     private fun isNodeEditableInput(node: AccessibilityNodeInfo): Boolean {
-        if (!node.isEnabled) return false
+        if (!node.isEnabled || node.isPassword) return false
         if (node.isEditable) return true
         return node.actionList.any {
             it.id == AccessibilityNodeInfo.ACTION_SET_TEXT ||

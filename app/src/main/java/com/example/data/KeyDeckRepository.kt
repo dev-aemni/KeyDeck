@@ -58,6 +58,17 @@ object KeyDeckRuntimeState {
     private val _inputSessionGeneration = MutableStateFlow(0L)
     val inputSessionGeneration: StateFlow<Long> = _inputSessionGeneration.asStateFlow()
 
+    private val _mouseCursorState = MutableStateFlow(com.example.keyboard.MouseCursorState())
+    val mouseCursorState: StateFlow<com.example.keyboard.MouseCursorState> = _mouseCursorState.asStateFlow()
+
+    fun updateMouseCursor(xPx: Float, yPx: Float, visible: Boolean) {
+        _mouseCursorState.value = com.example.keyboard.MouseCursorState(
+            xPx = xPx,
+            yPx = yPx,
+            visible = visible,
+        )
+    }
+
     fun setAppInForeground(foreground: Boolean) {
         _isAppInForeground.value = foreground
     }

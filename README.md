@@ -1,4 +1,4 @@
-# KeyDeck (v1.1.4)
+# KeyDeck (v1.1.5)
 
 **KeyDeck** is a full PC-grade mechanical-style keyboard, persistent floating deck, gaming controller/touchpad, and macro launcher for Android (`com.aemni.keydeck`). Unlike ordinary mobile keyboards that only commit plain text—or physical keyboards tied to wires and desks—KeyDeck combines **hardware-level Android `KeyEvent` synthesis**, **multi-mode desktop/mobile/gaming layouts**, and **deep visual customization** in one keyboard.
 
@@ -26,11 +26,11 @@ Switch layouts on the fly right from the top mode strip:
   - **Non-intrusive one-time Auto-Correct** (fixes clear typos once on Space; Backspace reverts and remembers your custom word permanently without fighting edits)
   - Dedicated **Haptic Feedback (Simple Mode only)** toggle so PC, Numpad, and Gaming modes remain silent while mobile typing stays tactile.
 - **Num**: Dedicated oversized 4×5 numeric & navigation keypad.
-- **Game**: Left-hand `WASD` + `Q/R/E/F/G/C/Shift/Space` gaming cluster (true hold-down key states) paired with a live right-hand **Mouse Touchpad**.
+- **Game**: Left-hand `WASD` + `Q/R/E/F/G/C/Shift/Space` gaming cluster (true hold-down key states) paired with a live right-hand **Mouse Joystick**.
 
-### 3. Built-In Mouse Touchpad & MCPE Camera Look Mode
-- Integrated multi-gesture touchpad in **Game** mode with adjustable **Touchpad Speed** (`0.6x–3.5x`) and **Split Width** (`30%–55%`).
-- **MCPE Camera Look Mode** for smooth 3D camera panning + left/right click gesture mapping (`LMB` tap / `RMB` hold-use).
+### 3. Built-In Hybrid Mouse Joystick & MCPE Camera Look Mode
+- Integrated circular **Mouse Joystick + Trackpad** in **Game** mode with adjustable **Touchpad Speed** (`0.6x–3.5x`) and **Split Width** (`30%–55%`), combining 1:1 drag precision with continuous 60Hz analog panning when deflected near the rim.
+- **MCPE Camera Look Mode** uses continuous Android 8+ chained accessibility gestures for smooth 3D camera rotation + `LMB` tap / `RMB` hold-use, plus a live floating **Mouse Cursor Pointer** overlay in desktop Mouse Joystick mode.
 - **Clean Accessibility Setup**: Accessibility permission powers Mouse Mode, cross-app shortcuts, and non-IME typing **without** spawning an intrusive floating Accessibility human icon on Android 11 navigation bars.
 
 ### 4. Dual Delivery: System IME + Persistent Floating Overlay

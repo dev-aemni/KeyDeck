@@ -580,3 +580,56 @@ data class DispatchedKeyRecord(
     val route: String,
     val detail: String,
 )
+
+data class MouseCursorState(
+    val xPx: Float = -1f,
+    val yPx: Float = -1f,
+    val visible: Boolean = false,
+)
+
+object MouseJoystickMath {
+    const val DEFAULT_DEADZONE = 0.14f
+    const val MAX_FRAME_STEP_PX = 12.5f
+
+    /**
+     * Maps raw normalized stick offset (-1..1 on each axis from center) into:
+     * 1) Circularly clamped stick knob coordinates (-1..1)
+     * 2) Smooth analog velocity step (px per ~16ms tick) with deadzone + power curve.
+     */
+    fun computeStickOutput(
+        rawOffsetX: Float,
+        rawOffsetY: Float,
+        deadzone: Float = DEFAULT_DEADZONE,
+        maxStepPx: Float = MAX_FRAME_STEP_PX,
+    ): StickOutput {
+        val mag = kotlin.math.hypot(rawOffsetX.toDouble(), rawOffsetY.toDouble()).toFloat()
+        if (mag <= 1e-4f) {
+            return StickOutput(knobX = 0f, knobY = 0f, stepDx = 0f, stepDy = 0f)
+        }
+        val clampedMag = mag.coerceAtMost(1f)
+        val dirX = rawOffsetX / mag
+        val dirY = rawOffsetY / mag
+        val knobX = dirX * clampedMag
+        val knobY = dirY * clampedMag
+
+        if (clampedMag <= deadzone) {
+            return StickOutput(knobX = knobX, knobY = knobY, stepDx = 0f, stepDy = 0f)
+        }
+
+        val activeFraction = ((clampedMag - deadzone) / (1f - deadzone)).coerceIn(0f, 1f)
+        val curvedSpeed = java.lang.Math.pow(activeFraction.toDouble(), 1.55).toFloat() * maxStepPx
+        return StickOutput(
+            knobX = knobX,
+            knobY = knobY,
+            stepDx = dirX * curvedSpeed,
+            stepDy = dirY * curvedSpeed,
+        )
+    }
+
+    data class StickOutput(
+        val knobX: Float,
+        val knobY: Float,
+        val stepDx: Float,
+        val stepDy: Float,
+    )
+}

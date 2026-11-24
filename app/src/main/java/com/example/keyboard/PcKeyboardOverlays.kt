@@ -1,5 +1,6 @@
 package com.example.keyboard
 
+import android.os.SystemClock
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -33,16 +34,20 @@ import androidx.compose.material3.Switch
 import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.input.pointer.positionChange
 import androidx.compose.ui.platform.LocalViewConfiguration
@@ -57,7 +62,9 @@ import com.example.ui.theme.neumorphicInset
 import com.example.ui.theme.neumorphicKeyCap
 import com.example.ui.theme.neumorphicRaised
 import com.example.ui.theme.rgbAnimatedBorder
+import kotlinx.coroutines.delay
 import kotlin.math.hypot
+import kotlin.math.min
 import kotlin.math.roundToInt
 
 @Composable
@@ -71,15 +78,39 @@ fun GamingMouseTouchpad(
     cornerRadius: Dp,
     onMouseMove: (dx: Float, dy: Float) -> Unit,
     onMouseClick: (isRightClick: Boolean) -> Unit,
+    onMouseEnd: () -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     val touchSlop = LocalViewConfiguration.current.touchSlop
+    val currentOnMouseMove by rememberUpdatedState(onMouseMove)
+    val currentOnMouseClick by rememberUpdatedState(onMouseClick)
+    val currentOnMouseEnd by rememberUpdatedState(onMouseEnd)
+
     var fingerActive by remember { mutableStateOf(false) }
-    var normX by remember { mutableFloatStateOf(0.5f) }
-    var normY by remember { mutableFloatStateOf(0.5f) }
+    var isDragged by remember { mutableStateOf(false) }
+    var analogMoved by remember { mutableStateOf(false) }
+    var downAtMs by remember { mutableLongStateOf(0L) }
+    var rawOffsetX by remember { mutableFloatStateOf(0f) }
+    var rawOffsetY by remember { mutableFloatStateOf(0f) }
 
     val borderVisible = settings.isKeyBorderVisible()
     val borderCol = if (borderVisible && !rgbEnabled) palette.keyBorder.copy(alpha = 0.85f) else null
+
+    // Continuous 60Hz analog stick velocity when dragged or held outside deadzone
+    LaunchedEffect(fingerActive) {
+        if (!fingerActive) return@LaunchedEffect
+        while (fingerActive) {
+            delay(16L)
+            val heldPastTapMs = (SystemClock.uptimeMillis() - downAtMs) > 110L
+            if (isDragged || heldPastTapMs) {
+                val stick = MouseJoystickMath.computeStickOutput(rawOffsetX, rawOffsetY)
+                if (stick.stepDx != 0f || stick.stepDy != 0f) {
+                    analogMoved = true
+                    currentOnMouseMove(stick.stepDx, stick.stepDy)
+                }
+            }
+        }
+    }
 
     Column(
         modifier = modifier
@@ -87,7 +118,7 @@ fun GamingMouseTouchpad(
             .testTag("gaming_mouse_touchpad"),
         verticalArrangement = Arrangement.spacedBy(4.dp),
     ) {
-        // Recessed Mouse / Look Touchpad Area
+        // Recessed Hybrid Trackpad + Analog Mouse Joystick
         val padBaseColor = if (fingerActive) palette.activeFill else palette.modifierBg
         val padSurface = if (keyOpacity < 0.99f) {
             padBaseColor.copy(alpha = (padBaseColor.alpha * keyOpacity).coerceIn(0.16f, 1f))
@@ -122,71 +153,137 @@ fun GamingMouseTouchpad(
                 .pointerInput(touchSlop) {
                     awaitEachGesture {
                         val down = awaitFirstDown(requireUnconsumed = false)
+                        val w = size.width.toFloat().coerceAtLeast(1f)
+                        val h = size.height.toFloat().coerceAtLeast(1f)
+                        val cx = w * 0.5f
+                        val cy = h * 0.5f
+                        val radius = (min(w, h) * 0.38f).coerceAtLeast(18f)
+
                         fingerActive = true
-                        var dragged = false
+                        isDragged = false
+                        analogMoved = false
+                        downAtMs = SystemClock.uptimeMillis()
+                        rawOffsetX = (down.position.x - cx) / radius
+                        rawOffsetY = (down.position.y - cy) / radius
+
                         var totalDist = 0f
-                        normX = (down.position.x / size.width.coerceAtLeast(1)).coerceIn(0f, 1f)
-                        normY = (down.position.y / size.height.coerceAtLeast(1)).coerceIn(0f, 1f)
                         try {
                             while (true) {
                                 val event = awaitPointerEvent()
                                 val change = event.changes.firstOrNull { it.id == down.id } ?: break
                                 if (!change.pressed) {
-                                    if (!dragged) {
-                                        onMouseClick(false)
+                                    if (!isDragged && !analogMoved) {
+                                        currentOnMouseClick(false)
                                     }
                                     break
                                 }
                                 val delta = change.positionChange()
                                 totalDist += hypot(delta.x.toDouble(), delta.y.toDouble()).toFloat()
                                 if (totalDist > touchSlop) {
-                                    dragged = true
+                                    isDragged = true
                                 }
-                                normX = (change.position.x / size.width.coerceAtLeast(1)).coerceIn(0f, 1f)
-                                normY = (change.position.y / size.height.coerceAtLeast(1)).coerceIn(0f, 1f)
-                                if (delta.x != 0f || delta.y != 0f) {
+                                rawOffsetX = (change.position.x - cx) / radius
+                                rawOffsetY = (change.position.y - cy) / radius
+                                if (isDragged && (delta.x != 0f || delta.y != 0f)) {
                                     change.consume()
-                                    onMouseMove(delta.x, delta.y)
+                                    currentOnMouseMove(delta.x, delta.y)
                                 }
                             }
                         } finally {
                             fingerActive = false
+                            isDragged = false
+                            analogMoved = false
+                            rawOffsetX = 0f
+                            rawOffsetY = 0f
+                            currentOnMouseEnd()
                         }
                     }
                 }
                 .padding(6.dp),
         ) {
-            // Subtle dot grid + active reticle
+            val stickVisual = MouseJoystickMath.computeStickOutput(rawOffsetX, rawOffsetY)
+
+            // Circular analog joystick ring, deadzone, crosshairs, directional tether & thumbstick puck
             Canvas(modifier = Modifier.fillMaxSize()) {
-                val cols = 4
-                val rows = 3
-                val dotColor = palette.secondaryText.copy(alpha = 0.25f)
-                for (c in 1..cols) {
-                    for (r in 1..rows) {
-                        drawCircle(
-                            color = dotColor,
-                            radius = 1.5.dp.toPx(),
-                            center = Offset(
-                                x = size.width * (c / (cols + 1f)),
-                                y = size.height * (r / (rows + 1f)),
-                            ),
-                        )
-                    }
+                val center = Offset(size.width * 0.5f, size.height * 0.5f)
+                val ringRadius = (min(size.width, size.height) * 0.40f).coerceAtLeast(14f)
+                val deadzoneRadius = ringRadius * MouseJoystickMath.DEFAULT_DEADZONE
+
+                val guideColor = palette.secondaryText.copy(alpha = if (fingerActive) 0.36f else 0.24f)
+                val ringBorderColor = if (fingerActive) palette.accentBg.copy(alpha = 0.55f) else guideColor
+
+                // Outer circular joystick well
+                drawCircle(
+                    color = palette.deckBg.copy(alpha = 0.28f),
+                    radius = ringRadius,
+                    center = center,
+                )
+                drawCircle(
+                    color = ringBorderColor,
+                    radius = ringRadius,
+                    center = center,
+                    style = Stroke(width = 1.4.dp.toPx()),
+                )
+
+                // Subtle center crosshair + deadzone circle
+                drawLine(
+                    color = guideColor,
+                    start = Offset(center.x - ringRadius * 0.72f, center.y),
+                    end = Offset(center.x + ringRadius * 0.72f, center.y),
+                    strokeWidth = 1.dp.toPx(),
+                )
+                drawLine(
+                    color = guideColor,
+                    start = Offset(center.x, center.y - ringRadius * 0.72f),
+                    end = Offset(center.x, center.y + ringRadius * 0.72f),
+                    strokeWidth = 1.dp.toPx(),
+                )
+                drawCircle(
+                    color = guideColor,
+                    radius = deadzoneRadius,
+                    center = center,
+                    style = Stroke(width = 1.dp.toPx()),
+                )
+
+                val knobCenter = Offset(
+                    x = center.x + stickVisual.knobX * ringRadius,
+                    y = center.y + stickVisual.knobY * ringRadius,
+                )
+
+                if (fingerActive && hypot(stickVisual.knobX.toDouble(), stickVisual.knobY.toDouble()) > 0.05) {
+                    drawLine(
+                        color = palette.accentBg.copy(alpha = 0.65f),
+                        start = center,
+                        end = knobCenter,
+                        strokeWidth = 2.dp.toPx(),
+                    )
                 }
+
+                // Thumbstick puck (stays centered cleanly when idle, tracks stick deflection when active)
+                val puckColor = if (fingerActive) palette.accentBg else palette.secondaryText.copy(alpha = 0.65f)
                 if (fingerActive) {
-                    val cx = size.width * normX
-                    val cy = size.height * normY
                     drawCircle(
-                        color = palette.accentBg.copy(alpha = 0.28f),
-                        radius = 18.dp.toPx(),
-                        center = Offset(cx, cy),
-                    )
-                    drawCircle(
-                        color = palette.accentBg,
-                        radius = 5.dp.toPx(),
-                        center = Offset(cx, cy),
+                        color = palette.accentBg.copy(alpha = 0.24f),
+                        radius = 16.dp.toPx(),
+                        center = knobCenter,
                     )
                 }
+                drawCircle(
+                    color = puckColor.copy(alpha = if (fingerActive) 0.38f else 0.20f),
+                    radius = 10.dp.toPx(),
+                    center = knobCenter,
+                )
+                drawCircle(
+                    color = puckColor,
+                    radius = 9.5.dp.toPx(),
+                    center = knobCenter,
+                    style = Stroke(width = 1.6.dp.toPx()),
+                )
+                drawCircle(
+                    color = puckColor,
+                    radius = 4.dp.toPx(),
+                    center = knobCenter,
+                )
             }
 
             Row(
@@ -196,12 +293,12 @@ fun GamingMouseTouchpad(
             ) {
                 Icon(
                     imageVector = Icons.Default.Mouse,
-                    contentDescription = "Mouse Touchpad",
+                    contentDescription = "Mouse Joystick",
                     tint = if (fingerActive) palette.accentBg else palette.secondaryText,
                     modifier = Modifier.size(12.dp),
                 )
                 Text(
-                    text = if (settings.gamingMcpeLookMode) "Look Pad" else "Mouse Pad",
+                    text = if (settings.gamingMcpeLookMode) "Look Joystick" else "Mouse Joystick",
                     fontFamily = BodyFontFamily,
                     fontSize = 10.sp,
                     fontWeight = FontWeight.SemiBold,
@@ -210,7 +307,7 @@ fun GamingMouseTouchpad(
             }
 
             Text(
-                text = "Drag to look • Tap LMB",
+                text = "Drag/hold stick • Tap LMB",
                 fontFamily = BodyFontFamily,
                 fontSize = 8.5.sp,
                 color = palette.secondaryText.copy(alpha = 0.72f),
@@ -237,7 +334,7 @@ fun GamingMouseTouchpad(
                 modifier = Modifier
                     .weight(1f)
                     .fillMaxHeight(),
-                onClick = { onMouseClick(false) },
+                onClick = { currentOnMouseClick(false) },
             )
             TouchpadMouseButton(
                 label = "RMB",
@@ -251,7 +348,7 @@ fun GamingMouseTouchpad(
                 modifier = Modifier
                     .weight(1f)
                     .fillMaxHeight(),
-                onClick = { onMouseClick(true) },
+                onClick = { currentOnMouseClick(true) },
             )
         }
     }

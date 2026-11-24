@@ -201,14 +201,23 @@ class ExampleRobolectricTest {
     }
 
     @Test
-    fun `accessibility service config does not request floating accessibility human button`() {
+    fun `accessibility service config does not request floating accessibility human button or live text snooping`() {
         val context = ApplicationProvider.getApplicationContext<Context>()
+        val pmInfo = context.packageManager.getPackageInfo(
+            context.packageName,
+            android.content.pm.PackageManager.GET_PERMISSIONS,
+        )
+        val perms = pmInfo.requestedPermissions?.toList().orEmpty()
+        assertFalse(perms.contains(android.Manifest.permission.INTERNET))
+
         val parser = context.resources.getXml(R.xml.accessibility_service_config)
         var flagsAttr: String? = null
+        var eventsAttr: String? = null
         var event = parser.eventType
         while (event != org.xmlpull.v1.XmlPullParser.END_DOCUMENT) {
             if (event == org.xmlpull.v1.XmlPullParser.START_TAG && parser.name == "accessibility-service") {
                 flagsAttr = parser.getAttributeValue("http://schemas.android.com/apk/res/android", "accessibilityFlags")
+                eventsAttr = parser.getAttributeValue("http://schemas.android.com/apk/res/android", "accessibilityEventTypes")
                 break
             }
             event = parser.next()
@@ -216,5 +225,7 @@ class ExampleRobolectricTest {
         parser.close()
         assertTrue(flagsAttr != null)
         assertFalse(flagsAttr!!.contains("flagRequestAccessibilityButton"))
+        assertTrue(eventsAttr != null)
+        assertFalse(eventsAttr!!.contains("typeViewTextChanged"))
     }
 }

@@ -1086,6 +1086,9 @@ fun DeckHomeScreen(
                             hapticEnabled = false,
                         )
                     },
+                    onMouseEnd = {
+                        KeyDispatcher.dispatchMouseEnd(settings.gamingMcpeLookMode)
+                    },
                     onChangeLayoutMode = onChangeLayoutMode,
                     onToggleNumLock = onToggleNumLock,
                     onToggleFunctionRow = onToggleFunctionRow,

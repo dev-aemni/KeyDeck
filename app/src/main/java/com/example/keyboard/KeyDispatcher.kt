@@ -361,6 +361,11 @@ object KeyDispatcher {
         a11y?.dispatchMouseLookOrMove(scaledDx, scaledDy, mcpeLookMode)
     }
 
+    fun dispatchMouseEnd(mcpeLookMode: Boolean) {
+        val a11y = KeyDeckAccessibilityService.activeInstance
+        a11y?.dispatchMouseEnd(mcpeLookMode)
+    }
+
     fun dispatchMouseClick(
         context: Context,
         isRightClick: Boolean,

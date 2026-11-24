@@ -129,6 +129,7 @@ fun PcKeyboardDeck(
     onKeyHoldDispatch: ((keyCode: Int, metaState: Int, isDown: Boolean, comboLabel: String) -> Unit)? = null,
     onMouseMove: ((dx: Float, dy: Float) -> Unit)? = null,
     onMouseClick: ((isRightClick: Boolean) -> Unit)? = null,
+    onMouseEnd: (() -> Unit)? = null,
     onOverlayDrag: ((dx: Float, dy: Float) -> Unit)? = null,
     onResizeDragDelta: ((dx: Float, dy: Float) -> Unit)? = null,
     onMinimize: (() -> Unit)? = null,
@@ -1192,6 +1193,7 @@ fun PcKeyboardDeck(
                         modifier = Modifier.weight(padWeight),
                         onMouseMove = { dx, dy -> onMouseMove?.invoke(dx, dy) },
                         onMouseClick = { isRight -> onMouseClick?.invoke(isRight) },
+                        onMouseEnd = { onMouseEnd?.invoke() },
                     )
                 }
             }

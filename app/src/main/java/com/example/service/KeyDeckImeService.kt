@@ -214,6 +214,9 @@ class KeyDeckImeService : InputMethodService() {
                                     hapticEnabled = false,
                                 )
                             },
+                            onMouseEnd = {
+                                KeyDispatcher.dispatchMouseEnd(settings.gamingMcpeLookMode)
+                            },
                             onChangeLayoutMode = { newMode ->
                                 serviceScope.launch {
                                     repository.updateSettings { it.copy(layoutMode = newMode) }

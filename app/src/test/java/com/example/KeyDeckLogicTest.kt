@@ -13,6 +13,7 @@ import com.example.keyboard.KeyboardLayoutMode
 import com.example.keyboard.KeyboardSizePreset
 import com.example.keyboard.KeyboardThemeId
 import com.example.keyboard.KeyboardWallpaper
+import com.example.keyboard.MouseJoystickMath
 import com.example.keyboard.PcKeyboardLayoutData
 import com.example.keyboard.RgbBorderMode
 import com.example.keyboard.SimpleSuggestionEngine
@@ -269,7 +270,7 @@ class KeyDeckLogicTest {
         )
 
         assertTrue(serialized.startsWith("@keydeck.aemni"))
-        assertTrue(serialized.contains("@version:114"))
+        assertTrue(serialized.contains("@version:115"))
         assertTrue(serialized.contains("@kdb.name:Pro Setup"))
         assertTrue(serialized.contains("@kdb.hight:42"))
         assertTrue(serialized.contains("@kdb.width:0.90"))
@@ -287,7 +288,7 @@ class KeyDeckLogicTest {
             base64Decoder = { Base64.getDecoder().decode(it) },
         )!!
         assertEquals("Pro Setup", parsed.profileName)
-        assertEquals(114, parsed.formatVersion)
+        assertEquals(115, parsed.formatVersion)
         assertTrue(parsed.isAnimatedGif)
         assertEquals(42, parsed.settings.keyHeightDp)
         assertEquals(0.90f, parsed.settings.keyboardWidthFraction, 0.01f)
@@ -397,5 +398,41 @@ class KeyDeckLogicTest {
             }
             assertFalse(defaults.copy(layoutMode = mode, hapticFeedback = false).isHapticActiveForCurrentMode())
         }
+    }
+
+    @Test
+    fun `mouse joystick math applies deadzone, circular rim clamping, and monotonic analog curve`() {
+        val center = MouseJoystickMath.computeStickOutput(0f, 0f)
+        assertEquals(0f, center.knobX, 0.0001f)
+        assertEquals(0f, center.knobY, 0.0001f)
+        assertEquals(0f, center.stepDx, 0.0001f)
+        assertEquals(0f, center.stepDy, 0.0001f)
+
+        // Inside deadzone still updates visual puck slightly, outputs zero velocity
+        val insideDeadzone = MouseJoystickMath.computeStickOutput(0.08f, -0.06f)
+        assertEquals(0.08f, insideDeadzone.knobX, 0.001f)
+        assertEquals(-0.06f, insideDeadzone.knobY, 0.001f)
+        assertEquals(0f, insideDeadzone.stepDx, 0.0001f)
+        assertEquals(0f, insideDeadzone.stepDy, 0.0001f)
+
+        // Diagonal deflection beyond circle rim clamps circularly to magnitude <= 1.0
+        val diagonalRim = MouseJoystickMath.computeStickOutput(1.4f, 1.4f)
+        val rimRadius = kotlin.math.hypot(diagonalRim.knobX.toDouble(), diagonalRim.knobY.toDouble()).toFloat()
+        assertEquals(1.0f, rimRadius, 0.001f)
+        assertEquals(diagonalRim.knobX, diagonalRim.knobY, 0.001f)
+        assertEquals(diagonalRim.stepDx, diagonalRim.stepDy, 0.001f)
+        assertTrue(diagonalRim.stepDx > 0f)
+
+        // Speed increases monotonically from half deflection to full rim
+        val midPull = MouseJoystickMath.computeStickOutput(0.55f, 0f)
+        val fullPull = MouseJoystickMath.computeStickOutput(1.0f, 0f)
+        assertTrue(midPull.stepDx > 0f)
+        assertTrue(fullPull.stepDx > midPull.stepDx)
+        assertEquals(MouseJoystickMath.MAX_FRAME_STEP_PX, fullPull.stepDx, 0.001f)
+
+        // Opposite directions are symmetrical
+        val leftPull = MouseJoystickMath.computeStickOutput(-0.8f, 0f)
+        val rightPull = MouseJoystickMath.computeStickOutput(0.8f, 0f)
+        assertEquals(-rightPull.stepDx, leftPull.stepDx, 0.0001f)
     }
 }
