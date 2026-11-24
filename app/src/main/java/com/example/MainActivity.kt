@@ -39,6 +39,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -151,6 +152,7 @@ private fun KeyDeckApp(viewModel: KeyDeckViewModel) {
     val lastDispatchedKey by viewModel.lastDispatchedKey.collectAsStateWithLifecycle()
 
     var currentTab by remember { mutableStateOf(KeyDeckTab.DECK) }
+    var openDeckLabDocsSignal by remember { mutableIntStateOf(0) }
     var showThemesSheet by remember { mutableStateOf(false) }
     var themeSheetSection by remember { mutableStateOf(ThemeSheetSection.COLORS) }
     var showLayoutSheet by remember { mutableStateOf(false) }
@@ -297,6 +299,10 @@ private fun KeyDeckApp(viewModel: KeyDeckViewModel) {
                 onToggleNumLock = { viewModel.updateSettings { it.copy(numLockOn = !it.numLockOn) } },
                 onToggleFunctionRow = { viewModel.updateSettings { it.copy(showFunctionRow = !it.showFunctionRow) } },
                 onUpdateSettings = { viewModel.updateSettings(it) },
+                onOpenDeckLabDocs = {
+                    openDeckLabDocsSignal++
+                    currentTab = KeyDeckTab.DECK_LAB
+                },
                 modifier = Modifier.padding(innerPadding),
             )
 
@@ -331,6 +337,7 @@ private fun KeyDeckApp(viewModel: KeyDeckViewModel) {
                 onImportProfileFromUri = { uri, onResult ->
                     viewModel.importProfileFromUri(uri, onResult)
                 },
+                openDocsSignal = openDeckLabDocsSignal,
                 modifier = Modifier.padding(innerPadding),
             )
         }

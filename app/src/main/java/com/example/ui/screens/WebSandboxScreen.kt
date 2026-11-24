@@ -38,6 +38,7 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
@@ -53,6 +54,8 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.positionInParent
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.TextStyle
@@ -88,11 +91,20 @@ fun WebSandboxScreen(
     onExportProfileToDownloads: (profileName: String, onResult: (Boolean, String) -> Unit) -> Unit,
     onExportProfileToUri: (Uri, profileName: String, onResult: (Boolean, String) -> Unit) -> Unit,
     onImportProfileFromUri: (Uri, onResult: (Boolean, String) -> Unit) -> Unit,
+    openDocsSignal: Int = 0,
     modifier: Modifier = Modifier,
 ) {
     val colors = KeyDeckColors.current
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
+    val outerScrollState = rememberScrollState()
+    var docsSectionOffsetY by remember { mutableIntStateOf(0) }
+
+    LaunchedEffect(openDocsSignal, docsSectionOffsetY) {
+        if (openDocsSignal > 0 && docsSectionOffsetY > 0) {
+            outerScrollState.animateScrollTo(docsSectionOffsetY)
+        }
+    }
 
     var urlInput by remember { mutableStateOf(PLAYGROUND_URL) }
     var lastUrlNotice by remember { mutableStateOf<String?>(null) }
@@ -212,6 +224,7 @@ fun WebSandboxScreen(
         modifier = modifier
             .fillMaxSize()
             .background(colors.bg)
+            .verticalScroll(outerScrollState)
             .padding(horizontal = 16.dp, vertical = 12.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
@@ -494,9 +507,7 @@ fun WebSandboxScreen(
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .weight(1f)
                 .neumorphicRaised(colors.bg, colors.shadowLight, colors.shadowDark, 20.dp, 5.dp, 9.dp, colors.keyBorder.copy(alpha = 0.45f))
-                .verticalScroll(rememberScrollState())
                 .padding(14.dp)
                 .testTag("sandbox_native_playground"),
             verticalArrangement = Arrangement.spacedBy(12.dp),
@@ -653,7 +664,7 @@ fun WebSandboxScreen(
                     .padding(10.dp),
                 verticalArrangement = Arrangement.spacedBy(3.dp),
             ) {
-                eventLog.forEach { entry ->
+                eventLog.take(6).forEach { entry ->
                     Text(
                         text = entry,
                         fontFamily = FontFamily.Monospace,
@@ -665,6 +676,13 @@ fun WebSandboxScreen(
                 }
             }
         }
+
+        KeyDeckDocsSection(
+            forceExpandSignal = openDocsSignal,
+            modifier = Modifier.onGloballyPositioned { coords ->
+                docsSectionOffsetY = coords.positionInParent().y.roundToInt()
+            },
+        )
     }
 
     if (showExportDialog) {

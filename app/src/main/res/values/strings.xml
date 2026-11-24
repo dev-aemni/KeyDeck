@@ -14,4 +14,8 @@
     <string name="important_note_a11y_prefix">Enable Accessibility </string>
     <string name="important_note_a11y_emphasis">to use the keyboard\'s Game mode Mouse Pad / Joystick on screen.</string>
     <string name="important_note_audience">Built for Mobile Developers &amp; Mobile Gamers who want full mechanical-keyboard control in supported Games and Dev apps (e.g., Termux, code editors, SSH).</string>
+    <string name="home_checkout_full_docs">Checkout the full Docs. You must read it.</string>
+    <string name="deck_lab_issues_title">Suggest features or Inform about bugs</string>
+    <string name="deck_lab_issues_url">https://github.com/dev-aemni/KeyDeck/issues</string>
+    <string name="deck_lab_issues_cta">Open Issues on GitHub</string>
 </resources>

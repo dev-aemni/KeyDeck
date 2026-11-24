@@ -122,6 +122,7 @@ fun DeckHomeScreen(
     onToggleNumLock: () -> Unit,
     onToggleFunctionRow: () -> Unit,
     onUpdateSettings: ((KeyDeckSettings) -> KeyDeckSettings) -> Unit = {},
+    onOpenDeckLabDocs: () -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     val context = LocalContext.current
@@ -718,7 +719,7 @@ fun DeckHomeScreen(
                 )
             }
 
-            ImportantNoteCard()
+            ImportantNoteCard(onOpenFullDocs = onOpenDeckLabDocs)
 
             // Quick Actions 2x2 Neumorphic Cards
             Text(
@@ -1328,7 +1329,10 @@ private fun NeuReadinessChip(
 }
 
 @Composable
-private fun ImportantNoteCard(modifier: Modifier = Modifier) {
+private fun ImportantNoteCard(
+    onOpenFullDocs: () -> Unit = {},
+    modifier: Modifier = Modifier,
+) {
     val colors = KeyDeckColors.current
     val imeBullet = buildAnnotatedString {
         withStyle(SpanStyle(fontWeight = FontWeight.SemiBold, color = colors.textPrimary)) {
@@ -1429,6 +1433,48 @@ private fun ImportantNoteCard(modifier: Modifier = Modifier) {
                     lineHeight = 16.sp,
                     color = colors.textPrimary,
                 )
+            }
+
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(48.dp)
+                    .neumorphicRaised(
+                        surfaceColor = colors.activeFill,
+                        shadowLight = colors.shadowLight,
+                        shadowDark = colors.shadowDark,
+                        cornerRadius = 14.dp,
+                        shadowOffset = 3.dp,
+                        blurRadius = 6.dp,
+                        borderColor = colors.indigo.copy(alpha = 0.45f),
+                    )
+                    .clickable(onClick = onOpenFullDocs)
+                    .padding(horizontal = 14.dp)
+                    .testTag("home_open_full_docs_button"),
+                contentAlignment = Alignment.Center,
+            ) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                ) {
+                    Text(
+                        text = stringResource(R.string.home_checkout_full_docs),
+                        fontFamily = BodyFontFamily,
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = colors.indigo,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.weight(1f).padding(end = 8.dp),
+                    )
+                    Icon(
+                        imageVector = Icons.AutoMirrored.Filled.ArrowForward,
+                        contentDescription = stringResource(R.string.home_checkout_full_docs),
+                        tint = colors.indigo,
+                        modifier = Modifier.size(16.dp),
+                    )
+                }
             }
         }
     }
