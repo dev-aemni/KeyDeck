@@ -4,6 +4,7 @@ import android.view.KeyEvent
 import androidx.compose.ui.graphics.Color
 import com.example.keyboard.AppThemeMode
 import com.example.keyboard.BuiltInWallpapers
+import com.example.keyboard.ClipboardHistoryStore
 import com.example.keyboard.CustomHotkey
 import com.example.keyboard.HotkeyActionType
 import com.example.keyboard.HotkeyCategory
@@ -16,6 +17,7 @@ import com.example.keyboard.KeyboardWallpaper
 import com.example.keyboard.MouseJoystickMath
 import com.example.keyboard.PcKeyboardLayoutData
 import com.example.keyboard.RgbBorderMode
+import com.example.keyboard.SimpleSmartTyping
 import com.example.keyboard.SimpleSuggestionEngine
 import com.example.keyboard.SimpleTypingController
 import com.example.keyboard.WallpaperSourceType
@@ -238,9 +240,20 @@ class KeyDeckLogicTest {
             showKeyBorder = true,
             simpleSuggestionsEnabled = true,
             simpleAutoCorrectEnabled = false,
+            simpleAutoCapitalize = false,
+            simpleSmartPunctuation = true,
+            simpleDoubleSpacePeriod = false,
+            simpleClipboardStripEnabled = true,
+            showGameMousePointer = false,
             holdToRepeat = false,
         )
-        assertTrue(KeyDeckSettings().holdToRepeat)
+        val defaults = KeyDeckSettings()
+        assertTrue(defaults.holdToRepeat)
+        assertTrue(defaults.simpleAutoCapitalize)
+        assertTrue(defaults.simpleSmartPunctuation)
+        assertTrue(defaults.simpleDoubleSpacePeriod)
+        assertTrue(defaults.simpleClipboardStripEnabled)
+        assertTrue(defaults.showGameMousePointer)
         val hotkeys = listOf(
             CustomHotkey(
                 id = "hk_copy",
@@ -299,6 +312,11 @@ class KeyDeckLogicTest {
         assertTrue(parsed.settings.showKeyBorder)
         assertTrue(parsed.settings.simpleSuggestionsEnabled)
         assertFalse(parsed.settings.simpleAutoCorrectEnabled)
+        assertFalse(parsed.settings.simpleAutoCapitalize)
+        assertTrue(parsed.settings.simpleSmartPunctuation)
+        assertFalse(parsed.settings.simpleDoubleSpacePeriod)
+        assertTrue(parsed.settings.simpleClipboardStripEnabled)
+        assertFalse(parsed.settings.showGameMousePointer)
         assertFalse(parsed.settings.holdToRepeat)
         assertEquals(2, parsed.hotkeys?.size)
         assertEquals("Ctrl+C", parsed.hotkeys?.first()?.comboText())
@@ -434,5 +452,75 @@ class KeyDeckLogicTest {
         val leftPull = MouseJoystickMath.computeStickOutput(-0.8f, 0f)
         val rightPull = MouseJoystickMath.computeStickOutput(0.8f, 0f)
         assertEquals(-rightPull.stepDx, leftPull.stepDx, 0.0001f)
+    }
+
+    @Test
+    fun `simple mode auto-capitalization, smart punctuation, and double-space period behave accurately`() {
+        // Auto-capitalization rules
+        assertTrue(SimpleSmartTyping.shouldAutoCapitalize(""))
+        assertTrue(SimpleSmartTyping.shouldAutoCapitalize("Hello\n"))
+        assertTrue(SimpleSmartTyping.shouldAutoCapitalize("Done. "))
+        assertTrue(SimpleSmartTyping.shouldAutoCapitalize("Really? "))
+        assertTrue(SimpleSmartTyping.shouldAutoCapitalize("Nice! "))
+        assertTrue(SimpleSmartTyping.shouldAutoCapitalize("Wait... "))
+        assertTrue(SimpleSmartTyping.shouldAutoCapitalize("She said \"Hi.\" "))
+        assertFalse(SimpleSmartTyping.shouldAutoCapitalize(null))
+        assertFalse(SimpleSmartTyping.shouldAutoCapitalize("hello"))
+        assertFalse(SimpleSmartTyping.shouldAutoCapitalize("hello "))
+        assertFalse(SimpleSmartTyping.shouldAutoCapitalize("Done."))
+        assertFalse(SimpleSmartTyping.shouldAutoCapitalize("Use e.g. "))
+        assertFalse(SimpleSmartTyping.shouldAutoCapitalize("Check v1.2. "))
+
+        // Double-space period rules
+        val now = 10_000L
+        assertTrue(SimpleSmartTyping.canConvertDoubleSpaceToPeriod("hello ", now - 250L, now))
+        assertTrue(SimpleSmartTyping.canConvertDoubleSpaceToPeriod("item 2 ", now - 150L, now))
+        assertFalse(SimpleSmartTyping.canConvertDoubleSpaceToPeriod("hello ", now - 900L, now))
+        assertFalse(SimpleSmartTyping.canConvertDoubleSpaceToPeriod("hello. ", now - 150L, now))
+        assertFalse(SimpleSmartTyping.canConvertDoubleSpaceToPeriod("hello  ", now - 150L, now))
+        assertFalse(SimpleSmartTyping.canConvertDoubleSpaceToPeriod("https://site ", now - 150L, now))
+        assertFalse(SimpleSmartTyping.canConvertDoubleSpaceToPeriod(" ", now - 150L, now))
+
+        // Controller integration: double-space period + Backspace undo + solo 'i' -> 'I'
+        val controller = SimpleTypingController()
+        controller.registerDoubleSpacePeriod()
+        assertTrue(controller.trailingAutoSpaceAfterCommit)
+        val undoPeriod = controller.onBackspace()
+        assertEquals(" ", undoPeriod?.originalWord)
+        assertEquals(". ", undoPeriod?.replacedTextWithSeparator)
+
+        // Solo lowercase 'i' smart capitalization on space + Backspace revert & learn
+        controller.resetOnCursorOrBoundary()
+        controller.onCharTyped('i', autoCorrectEnabled = true, isCursorTouchingExistingWord = false)
+        val soloI = controller.onCharTyped(' ', autoCorrectEnabled = true, isCursorTouchingExistingWord = false)
+        assertEquals("i", soloI?.originalWord)
+        assertEquals("I ", soloI?.replacementWithSeparator)
+        val revertI = controller.onBackspace()
+        assertEquals("i", revertI?.originalWord)
+        assertTrue("i" in controller.learnedCustomWords)
+        assertNull(controller.onCharTyped(' ', autoCorrectEnabled = true, isCursorTouchingExistingWord = false))
+    }
+
+    @Test
+    fun `clipboard history store ignores sensitive or internal clips and caps at 12 items`() {
+        ClipboardHistoryStore.clearAll()
+        ClipboardHistoryStore.recordClip("secret_otp_1234", isSensitive = true)
+        ClipboardHistoryStore.recordClip("typed_from_a11y", isSensitive = false, label = "KeyDeckInput")
+        ClipboardHistoryStore.recordClip("   \n  ", isSensitive = false)
+        assertTrue(ClipboardHistoryStore.clips.value.isEmpty())
+
+        for (i in 1..15) {
+            ClipboardHistoryStore.recordClip("Clip item $i", nowMs = 1000L + i)
+        }
+        assertEquals(12, ClipboardHistoryStore.clips.value.size)
+        assertEquals("Clip item 15", ClipboardHistoryStore.clips.value.first().text)
+
+        // Duplicate clip moves to front without duplicating
+        ClipboardHistoryStore.recordClip("Clip item 10", nowMs = 2000L)
+        assertEquals(12, ClipboardHistoryStore.clips.value.size)
+        assertEquals("Clip item 10", ClipboardHistoryStore.clips.value.first().text)
+
+        ClipboardHistoryStore.clearAll()
+        assertTrue(ClipboardHistoryStore.clips.value.isEmpty())
     }
 }

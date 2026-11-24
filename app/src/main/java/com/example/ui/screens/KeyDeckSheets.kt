@@ -913,6 +913,38 @@ fun SettingsSheet(
             )
 
             SettingsSwitchRow(
+                title = "Auto-Capitalization (Simple Mode)",
+                subtitle = "Automatically shifts the first letter of new fields, newlines, and sentences",
+                checked = settings.simpleAutoCapitalize,
+                testTag = "switch_simple_autocap",
+                onCheckedChange = { checked -> onUpdateSettings { it.copy(simpleAutoCapitalize = checked) } },
+            )
+
+            SettingsSwitchRow(
+                title = "Smart Punctuation (Simple Mode)",
+                subtitle = "Trims stray spaces before punctuation after suggestions and keeps sentence spacing tidy",
+                checked = settings.simpleSmartPunctuation,
+                testTag = "switch_simple_smart_punct",
+                onCheckedChange = { checked -> onUpdateSettings { it.copy(simpleSmartPunctuation = checked) } },
+            )
+
+            SettingsSwitchRow(
+                title = "Double-Space Period (Simple Mode)",
+                subtitle = "Tap Space twice quickly after a word to insert \". \" (Backspace reverts cleanly)",
+                checked = settings.simpleDoubleSpacePeriod,
+                testTag = "switch_simple_double_space",
+                onCheckedChange = { checked -> onUpdateSettings { it.copy(simpleDoubleSpacePeriod = checked) } },
+            )
+
+            SettingsSwitchRow(
+                title = "Quick Clipboard History Strip",
+                subtitle = "Show a one-tap recent clipboard strip button in the keyboard top bar (skips sensitive clips)",
+                checked = settings.simpleClipboardStripEnabled,
+                testTag = "switch_simple_clipboard_strip",
+                onCheckedChange = { checked -> onUpdateSettings { it.copy(simpleClipboardStripEnabled = checked) } },
+            )
+
+            SettingsSwitchRow(
                 title = "Hold to Repeat (PC Mode)",
                 subtitle = "Holding letters, numbers, or keys in PC mode repeats them continuously like a physical PC keyboard (on by default)",
                 checked = settings.holdToRepeat,
@@ -942,6 +974,14 @@ fun SettingsSheet(
                 checked = settings.gamingMcpeLookMode,
                 testTag = "switch_mcpe_look",
                 onCheckedChange = { checked -> onUpdateSettings { it.copy(gamingMcpeLookMode = checked) } },
+            )
+
+            SettingsSwitchRow(
+                title = "Show PC Mouse Pointer (Game Mode)",
+                subtitle = "Display a classic PC arrow cursor over the screen in Game Mode (on by default)",
+                checked = settings.showGameMousePointer,
+                testTag = "switch_game_mouse_pointer",
+                onCheckedChange = { checked -> onUpdateSettings { it.copy(showGameMousePointer = checked) } },
             )
 
             LabeledSlider(

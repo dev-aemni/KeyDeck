@@ -789,6 +789,12 @@ fun DeckQuickSettingsPopup(
                 palette = palette,
                 onCheckedChange = { c -> onUpdateSettings { it.copy(gamingMcpeLookMode = c) } },
             )
+            QuickPopupToggle(
+                label = "Show PC Mouse Pointer (Game Mode)",
+                checked = settings.showGameMousePointer,
+                palette = palette,
+                onCheckedChange = { c -> onUpdateSettings { it.copy(showGameMousePointer = c) } },
+            )
         }
 
         // App Dark Mode Selector
@@ -852,6 +858,12 @@ fun DeckQuickSettingsPopup(
             palette = palette,
             onCheckedChange = { c -> onUpdateSettings { it.copy(suppressAutoImeOnInput = c) } },
         )
+        QuickPopupToggle(
+            label = "Quick Clipboard Top Bar",
+            checked = settings.simpleClipboardStripEnabled,
+            palette = palette,
+            onCheckedChange = { c -> onUpdateSettings { it.copy(simpleClipboardStripEnabled = c) } },
+        )
         if (settings.layoutMode == KeyboardLayoutMode.SIMPLE) {
             QuickPopupToggle(
                 label = "Simple 3-Suggestion Bar",
@@ -867,6 +879,24 @@ fun DeckQuickSettingsPopup(
                     onCheckedChange = { c -> onUpdateSettings { it.copy(simpleAutoCorrectEnabled = c) } },
                 )
             }
+            QuickPopupToggle(
+                label = "Auto-Capitalize Sentences",
+                checked = settings.simpleAutoCapitalize,
+                palette = palette,
+                onCheckedChange = { c -> onUpdateSettings { it.copy(simpleAutoCapitalize = c) } },
+            )
+            QuickPopupToggle(
+                label = "Smart Punctuation",
+                checked = settings.simpleSmartPunctuation,
+                palette = palette,
+                onCheckedChange = { c -> onUpdateSettings { it.copy(simpleSmartPunctuation = c) } },
+            )
+            QuickPopupToggle(
+                label = "Double-Space Period (. )",
+                checked = settings.simpleDoubleSpacePeriod,
+                palette = palette,
+                onCheckedChange = { c -> onUpdateSettings { it.copy(simpleDoubleSpacePeriod = c) } },
+            )
         }
         if (settings.layoutMode == KeyboardLayoutMode.PC_STANDARD ||
             settings.layoutMode == KeyboardLayoutMode.PC_WITH_NUMPAD ||

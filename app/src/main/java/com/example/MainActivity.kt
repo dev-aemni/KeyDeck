@@ -88,6 +88,7 @@ class MainActivity : ComponentActivity() {
             navigationBarStyle = SystemBarStyle.light(NeuBg.toArgb(), NeuBg.toArgb()),
         )
         handleIntentExtras(intent)
+        com.example.keyboard.ClipboardHistoryStore.ensureListening(applicationContext)
         setContent {
             val settings by viewModel.settings.collectAsStateWithLifecycle()
             val isDark = resolveIsAppDark(settings.appThemeMode)

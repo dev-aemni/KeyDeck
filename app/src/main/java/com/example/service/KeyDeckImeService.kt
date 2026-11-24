@@ -65,6 +65,7 @@ class KeyDeckImeService : InputMethodService() {
         super.onCreate()
         activeInstance = this
         repository = KeyDeckRepository(applicationContext)
+        com.example.keyboard.ClipboardHistoryStore.ensureListening(applicationContext)
         lifecycleOwner.onCreate()
         serviceScope.launch {
             repository.migrateSchemaIfNeeded()
@@ -399,5 +400,10 @@ class KeyDeckImeService : InputMethodService() {
             ic.endBatchEdit()
         }
         return true
+    }
+
+    fun commitPlainText(text: String): Boolean {
+        val ic = currentInputConnection ?: return false
+        return ic.commitText(text, 1)
     }
 }

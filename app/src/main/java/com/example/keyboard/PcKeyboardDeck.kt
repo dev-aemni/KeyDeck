@@ -44,6 +44,7 @@ import androidx.compose.material.icons.filled.ArrowDropDown
 import androidx.compose.material.icons.filled.ArrowDropUp
 import androidx.compose.material.icons.filled.Bolt
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.ContentPaste
 import androidx.compose.material.icons.filled.Dialpad
 import androidx.compose.material.icons.filled.DragHandle
 import androidx.compose.material.icons.filled.KeyboardHide
@@ -178,11 +179,13 @@ fun PcKeyboardDeck(
     var fnActive by remember { mutableStateOf(false) }
 
     var showShortcutsStrip by remember { mutableStateOf(false) }
+    var showClipboardStrip by remember { mutableStateOf(false) }
     var showResizeStrip by remember { mutableStateOf(false) }
     var showQuickSettingsPopup by remember { mutableStateOf(false) }
     var showCloseConfirm by remember { mutableStateOf(false) }
     var simpleSymbolLayer by remember { mutableStateOf(false) }
     var simpleSymbolAltLayer by remember { mutableStateOf(false) }
+    val clipboardClips by ClipboardHistoryStore.clips.collectAsStateWithLifecycle()
 
     var rootCoords by remember { mutableStateOf<LayoutCoordinates?>(null) }
     var activeHoldPopup by remember { mutableStateOf<ActiveHoldPopup?>(null) }
@@ -194,10 +197,25 @@ fun PcKeyboardDeck(
     var suggestionEval by remember {
         mutableStateOf(typingController.currentEval(settings.simpleAutoCorrectEnabled))
     }
+    var autoShiftEligible by remember { mutableStateOf(false) }
+    var autoShiftDisarmedForCursor by remember { mutableStateOf(false) }
     val inputSessionGen by KeyDeckRuntimeState.inputSessionGeneration.collectAsStateWithLifecycle()
 
     fun refreshSuggestionEval() {
         suggestionEval = typingController.currentEval(settings.simpleAutoCorrectEnabled)
+    }
+
+    fun refreshAutoCapitalize(beforeCursorOverride: String? = null) {
+        if (!enableLiveSuggestions ||
+            settings.layoutMode != KeyboardLayoutMode.SIMPLE ||
+            !settings.simpleAutoCapitalize ||
+            KeyDispatcher.shouldDisableSuggestions()
+        ) {
+            autoShiftEligible = false
+            return
+        }
+        val before = beforeCursorOverride ?: KeyDispatcher.getSurroundingChars(32, 0)?.first
+        autoShiftEligible = SimpleSmartTyping.shouldAutoCapitalize(before)
     }
 
     LaunchedEffect(
@@ -205,29 +223,41 @@ fun PcKeyboardDeck(
         settings.layoutMode,
         settings.simpleSuggestionsEnabled,
         settings.simpleAutoCorrectEnabled,
+        settings.simpleAutoCapitalize,
         enableLiveSuggestions,
     ) {
-        if (settings.layoutMode != KeyboardLayoutMode.SIMPLE || !settings.simpleSuggestionsEnabled || !enableLiveSuggestions) {
+        if (settings.layoutMode != KeyboardLayoutMode.SIMPLE || !enableLiveSuggestions) {
             typingController.resetOnCursorOrBoundary(clearLastWord = true)
             refreshSuggestionEval()
+            autoShiftEligible = false
+            autoShiftDisarmedForCursor = false
         } else {
             val before = KeyDispatcher.getSurroundingChars(48, 0)?.first
-            if (before != null && typingController.activeWord.isEmpty()) {
-                typingController.syncContextFromSurroundingText(before)
+            if (settings.simpleSuggestionsEnabled) {
+                if (before != null && typingController.activeWord.isEmpty()) {
+                    typingController.syncContextFromSurroundingText(before)
+                }
+            } else {
+                typingController.resetOnCursorOrBoundary(clearLastWord = true)
             }
             refreshSuggestionEval()
+            refreshAutoCapitalize(before)
         }
     }
 
     LaunchedEffect(inputSessionGen) {
         typingController.resetOnCursorOrBoundary(clearLastWord = true)
-        if (enableLiveSuggestions && settings.layoutMode == KeyboardLayoutMode.SIMPLE && settings.simpleSuggestionsEnabled) {
-            val before = KeyDispatcher.getSurroundingChars(48, 0)?.first
-            if (before != null) {
-                typingController.syncContextFromSurroundingText(before)
-            }
+        autoShiftDisarmedForCursor = false
+        val before = if (enableLiveSuggestions && settings.layoutMode == KeyboardLayoutMode.SIMPLE) {
+            KeyDispatcher.getSurroundingChars(48, 0)?.first
+        } else {
+            null
+        }
+        if (before != null && settings.simpleSuggestionsEnabled) {
+            typingController.syncContextFromSurroundingText(before)
         }
         refreshSuggestionEval()
+        refreshAutoCapitalize(before)
     }
 
     LaunchedEffect(settings.layoutMode) {
@@ -235,6 +265,14 @@ fun PcKeyboardDeck(
             simpleSymbolLayer = false
             simpleSymbolAltLayer = false
             activeKeyPreview = null
+            autoShiftEligible = false
+            autoShiftDisarmedForCursor = false
+        }
+    }
+
+    LaunchedEffect(settings.simpleClipboardStripEnabled) {
+        if (!settings.simpleClipboardStripEnabled) {
+            showClipboardStrip = false
         }
     }
 
@@ -243,18 +281,22 @@ fun PcKeyboardDeck(
         lastDispatched?.timestampMs,
         settings.layoutMode,
         settings.simpleSuggestionsEnabled,
+        settings.simpleAutoCapitalize,
         enableLiveSuggestions,
     ) {
-        if (!enableLiveSuggestions || settings.layoutMode != KeyboardLayoutMode.SIMPLE || !settings.simpleSuggestionsEnabled) {
+        if (!enableLiveSuggestions || settings.layoutMode != KeyboardLayoutMode.SIMPLE) {
             return@LaunchedEffect
         }
         delay(18L)
-        if (typingController.activeWord.isEmpty() && !KeyDispatcher.shouldDisableSuggestions()) {
+        if (!KeyDispatcher.shouldDisableSuggestions()) {
             val before = KeyDispatcher.getSurroundingChars(48, 0)?.first
-            if (before != null) {
+            if (before != null && settings.simpleSuggestionsEnabled && typingController.activeWord.isEmpty()) {
                 typingController.syncContextFromSurroundingText(before)
                 refreshSuggestionEval()
             }
+            refreshAutoCapitalize(before)
+        } else {
+            autoShiftEligible = false
         }
     }
     var overlayFeedbackText by remember { mutableStateOf<String?>(null) }
@@ -300,7 +342,15 @@ fun PcKeyboardDeck(
     val keyCorner = settings.keyCornerRadiusDp.coerceIn(4, 16).dp
     val fontScale = settings.fontScale.coerceIn(0.75f, 1.25f)
 
-    val effectiveUpperCase = shiftActive xor capsActive
+    val autoShiftActive = enableLiveSuggestions &&
+        settings.layoutMode == KeyboardLayoutMode.SIMPLE &&
+        settings.simpleAutoCapitalize &&
+        !simpleSymbolLayer &&
+        !capsActive &&
+        !autoShiftDisarmedForCursor &&
+        autoShiftEligible &&
+        !KeyDispatcher.shouldDisableSuggestions()
+    val effectiveUpperCase = (shiftActive || autoShiftActive) xor capsActive
 
     fun currentMetaState(): Int {
         var flags = 0
@@ -355,10 +405,17 @@ fun PcKeyboardDeck(
                 return
             }
             ModifierKey.SHIFT -> {
-                shiftActive = !shiftActive
+                if (settings.layoutMode == KeyboardLayoutMode.SIMPLE && autoShiftActive && !shiftActive) {
+                    autoShiftDisarmedForCursor = true
+                    shiftActive = false
+                } else {
+                    autoShiftDisarmedForCursor = true
+                    shiftActive = !shiftActive
+                }
                 return
             }
             ModifierKey.CAPS -> {
+                autoShiftDisarmedForCursor = true
                 capsActive = !capsActive
                 return
             }
@@ -421,30 +478,35 @@ fun PcKeyboardDeck(
             else -> spec.label
         }
 
-        val isSimpleSuggestionTracking =
+        val isSimpleSmartMode =
             enableLiveSuggestions &&
-                settings.layoutMode == KeyboardLayoutMode.SIMPLE &&
-                settings.simpleSuggestionsEnabled
+                settings.layoutMode == KeyboardLayoutMode.SIMPLE
+        val isSimpleSuggestionTracking =
+            isSimpleSmartMode && settings.simpleSuggestionsEnabled
 
         val effectiveMeta = currentMetaState()
         val hasCtrlAltMeta = (effectiveMeta and (KeyEvent.META_CTRL_ON or KeyEvent.META_ALT_ON or KeyEvent.META_META_ON)) != 0
 
-        if (isSimpleSuggestionTracking) {
+        if (isSimpleSmartMode) {
             if (hasCtrlAltMeta) {
                 typingController.resetOnCursorOrBoundary(clearLastWord = true)
                 refreshSuggestionEval()
+                autoShiftDisarmedForCursor = false
             } else if (effectiveKeyCode == KeyEvent.KEYCODE_DEL) {
                 val undo = typingController.onBackspace()
                 refreshSuggestionEval()
+                autoShiftDisarmedForCursor = false
                 if (undo != null) {
+                    val isPeriodUndo = undo.originalWord == " " && undo.replacedTextWithSeparator == ". "
                     val reverted = KeyDispatcher.dispatchSuggestionReplace(
                         context = context,
                         expectedTail = undo.replacedTextWithSeparator,
                         replacement = undo.originalWord,
-                        comboLabel = "Undo Auto → ${undo.originalWord}",
+                        comboLabel = if (isPeriodUndo) "Undo Period" else "Undo Auto → ${undo.originalWord}",
                         hapticEnabled = settings.isHapticActiveForCurrentMode(),
                     )
                     if (reverted) {
+                        autoShiftEligible = false
                         clearStickyModifiersIfNeeded()
                         return
                     }
@@ -454,7 +516,15 @@ fun PcKeyboardDeck(
                 }
             } else if (
                 effectiveKeyCode == KeyEvent.KEYCODE_ENTER ||
-                effectiveKeyCode == KeyEvent.KEYCODE_NUMPAD_ENTER ||
+                effectiveKeyCode == KeyEvent.KEYCODE_NUMPAD_ENTER
+            ) {
+                typingController.resetOnCursorOrBoundary(clearLastWord = true)
+                refreshSuggestionEval()
+                autoShiftDisarmedForCursor = false
+                if (settings.simpleAutoCapitalize && !KeyDispatcher.shouldDisableSuggestions()) {
+                    autoShiftEligible = true
+                }
+            } else if (
                 effectiveKeyCode == KeyEvent.KEYCODE_TAB ||
                 effectiveKeyCode == KeyEvent.KEYCODE_DPAD_LEFT ||
                 effectiveKeyCode == KeyEvent.KEYCODE_DPAD_RIGHT ||
@@ -467,34 +537,143 @@ fun PcKeyboardDeck(
             ) {
                 typingController.resetOnCursorOrBoundary(clearLastWord = true)
                 refreshSuggestionEval()
-            } else if (effectiveChar != null && !KeyDispatcher.shouldDisableSuggestions()) {
-                val cursorTouchingExistingWord = if (typingController.activeWord.isEmpty()) {
-                    KeyDispatcher.isCursorTouchingWord()
-                } else {
-                    false
-                }
-                val autoAction = typingController.onCharTyped(
-                    ch = effectiveChar,
-                    autoCorrectEnabled = settings.simpleAutoCorrectEnabled,
-                    isCursorTouchingExistingWord = cursorTouchingExistingWord,
-                )
-                refreshSuggestionEval()
-                if (autoAction != null) {
-                    val replaced = KeyDispatcher.dispatchSuggestionReplace(
+                autoShiftDisarmedForCursor = false
+            } else if (effectiveChar == ' ' && !isRepeat && !KeyDispatcher.shouldDisableSuggestions()) {
+                val nowMs = System.currentTimeMillis()
+                val beforeCursor = KeyDispatcher.getSurroundingChars(32, 0)?.first
+                if (settings.simpleDoubleSpacePeriod &&
+                    SimpleSmartTyping.canConvertDoubleSpaceToPeriod(
+                        beforeCursor = beforeCursor,
+                        lastSpaceTapAtMs = typingController.lastSpaceTapAtMs,
+                        nowMs = nowMs,
+                    )
+                ) {
+                    val replacedPeriod = KeyDispatcher.dispatchSuggestionReplace(
                         context = context,
-                        expectedTail = autoAction.originalWord,
-                        replacement = autoAction.replacementWithSeparator,
-                        comboLabel = "Auto: ${autoAction.replacementWithSeparator.trimEnd()}",
+                        expectedTail = " ",
+                        replacement = ". ",
+                        comboLabel = "Double-Space → .",
                         hapticEnabled = settings.isHapticActiveForCurrentMode(),
                     )
-                    if (replaced) {
+                    if (replacedPeriod) {
+                        typingController.registerDoubleSpacePeriod()
+                        refreshSuggestionEval()
+                        autoShiftDisarmedForCursor = false
+                        if (settings.simpleAutoCapitalize) {
+                            autoShiftEligible = true
+                        }
                         clearStickyModifiersIfNeeded()
                         return
+                    }
+                }
+
+                if (isSimpleSuggestionTracking) {
+                    val cursorTouchingExistingWord = if (typingController.activeWord.isEmpty()) {
+                        KeyDispatcher.isCursorTouchingWord()
+                    } else {
+                        false
+                    }
+                    val autoAction = typingController.onCharTyped(
+                        ch = ' ',
+                        autoCorrectEnabled = settings.simpleAutoCorrectEnabled,
+                        isCursorTouchingExistingWord = cursorTouchingExistingWord,
+                        smartCapitalizeSoloI = settings.simpleAutoCorrectEnabled || settings.simpleSmartPunctuation,
+                    )
+                    typingController.recordSpaceTapped(nowMs)
+                    refreshSuggestionEval()
+                    if (autoAction != null) {
+                        val replaced = KeyDispatcher.dispatchSuggestionReplace(
+                            context = context,
+                            expectedTail = autoAction.originalWord,
+                            replacement = autoAction.replacementWithSeparator,
+                            comboLabel = "Auto: ${autoAction.replacementWithSeparator.trimEnd()}",
+                            hapticEnabled = settings.isHapticActiveForCurrentMode(),
+                        )
+                        if (replaced) {
+                            autoShiftDisarmedForCursor = false
+                            if (settings.simpleAutoCapitalize) {
+                                autoShiftEligible = SimpleSmartTyping.shouldAutoCapitalize(
+                                    (beforeCursor?.dropLast(autoAction.originalWord.length) ?: "") + autoAction.replacementWithSeparator,
+                                )
+                            }
+                            clearStickyModifiersIfNeeded()
+                            return
+                        }
+                    }
+                } else {
+                    typingController.recordSpaceTapped(nowMs)
+                }
+
+                autoShiftDisarmedForCursor = false
+                if (settings.simpleAutoCapitalize) {
+                    autoShiftEligible = SimpleSmartTyping.shouldAutoCapitalize((beforeCursor ?: "") + " ")
+                }
+            } else if (
+                effectiveChar != null &&
+                SimpleSmartTyping.isSmartPunctuationMark(effectiveChar) &&
+                settings.simpleSmartPunctuation &&
+                typingController.trailingAutoSpaceAfterCommit &&
+                typingController.activeWord.isEmpty() &&
+                !isRepeat &&
+                !KeyDispatcher.shouldDisableSuggestions()
+            ) {
+                val replacedPunct = KeyDispatcher.dispatchSuggestionReplace(
+                    context = context,
+                    expectedTail = " ",
+                    replacement = "$effectiveChar ",
+                    comboLabel = "Smart Punct → $effectiveChar",
+                    hapticEnabled = settings.isHapticActiveForCurrentMode(),
+                )
+                if (replacedPunct) {
+                    typingController.markSmartPunctuationAfterSpace(effectiveChar)
+                    refreshSuggestionEval()
+                    autoShiftDisarmedForCursor = false
+                    if (settings.simpleAutoCapitalize) {
+                        autoShiftEligible = SimpleSmartTyping.isSentenceEndingPunctuation(effectiveChar)
+                    }
+                    clearStickyModifiersIfNeeded()
+                    return
+                }
+            } else if (effectiveChar != null && !KeyDispatcher.shouldDisableSuggestions()) {
+                autoShiftEligible = false
+                autoShiftDisarmedForCursor = false
+                if (isSimpleSuggestionTracking) {
+                    val cursorTouchingExistingWord = if (typingController.activeWord.isEmpty()) {
+                        KeyDispatcher.isCursorTouchingWord()
+                    } else {
+                        false
+                    }
+                    val autoAction = typingController.onCharTyped(
+                        ch = effectiveChar,
+                        autoCorrectEnabled = settings.simpleAutoCorrectEnabled,
+                        isCursorTouchingExistingWord = cursorTouchingExistingWord,
+                        smartCapitalizeSoloI = settings.simpleAutoCorrectEnabled || settings.simpleSmartPunctuation,
+                    )
+                    refreshSuggestionEval()
+                    if (autoAction != null) {
+                        val replaced = KeyDispatcher.dispatchSuggestionReplace(
+                            context = context,
+                            expectedTail = autoAction.originalWord,
+                            replacement = autoAction.replacementWithSeparator,
+                            comboLabel = "Auto: ${autoAction.replacementWithSeparator.trimEnd()}",
+                            hapticEnabled = settings.isHapticActiveForCurrentMode(),
+                        )
+                        if (replaced) {
+                            if (settings.simpleAutoCapitalize) {
+                                autoShiftEligible = false
+                            }
+                            clearStickyModifiersIfNeeded()
+                            return
+                        }
                     }
                 }
             } else if (effectiveChar == null) {
                 typingController.resetOnCursorOrBoundary(clearLastWord = true)
                 refreshSuggestionEval()
+                autoShiftDisarmedForCursor = false
+            } else {
+                autoShiftEligible = false
+                autoShiftDisarmedForCursor = false
             }
         }
 
@@ -510,6 +689,10 @@ fun PcKeyboardDeck(
 
     fun handleHoldCharCommit(chosen: String) {
         val ch = chosen.firstOrNull()
+        if (settings.layoutMode == KeyboardLayoutMode.SIMPLE) {
+            autoShiftEligible = false
+            autoShiftDisarmedForCursor = false
+        }
         if (enableLiveSuggestions &&
             settings.layoutMode == KeyboardLayoutMode.SIMPLE &&
             settings.simpleSuggestionsEnabled &&
@@ -525,6 +708,7 @@ fun PcKeyboardDeck(
                 ch = ch,
                 autoCorrectEnabled = settings.simpleAutoCorrectEnabled,
                 isCursorTouchingExistingWord = touching,
+                smartCapitalizeSoloI = settings.simpleAutoCorrectEnabled || settings.simpleSmartPunctuation,
             )
             refreshSuggestionEval()
             if (autoAction != null) {
@@ -553,7 +737,9 @@ fun PcKeyboardDeck(
     fun handleSpaceCursorSlide(direction: Int) {
         if (settings.layoutMode == KeyboardLayoutMode.SIMPLE) {
             typingController.resetOnCursorOrBoundary(clearLastWord = true)
+            typingController.clearDoubleSpaceHistory()
             refreshSuggestionEval()
+            autoShiftDisarmedForCursor = false
         }
         val code = if (direction < 0) KeyEvent.KEYCODE_DPAD_LEFT else KeyEvent.KEYCODE_DPAD_RIGHT
         val label = if (direction < 0) "◀ Cursor" else "Cursor ▶"
@@ -587,6 +773,8 @@ fun PcKeyboardDeck(
                 onKeyDispatch(kc, 0, ch, slot.text)
             }
         }
+        autoShiftEligible = false
+        autoShiftDisarmedForCursor = false
         refreshSuggestionEval()
         clearStickyModifiersIfNeeded()
     }
@@ -684,6 +872,25 @@ fun PcKeyboardDeck(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(5.dp),
             ) {
+                if (settings.simpleClipboardStripEnabled) {
+                    TopActionIconChip(
+                        icon = Icons.Default.ContentPaste,
+                        contentDescription = "Quick clipboard history strip",
+                        active = showClipboardStrip,
+                        palette = palette,
+                        borderColor = borderCol,
+                        testTag = "deck_top_clipboard_toggle",
+                        onClick = {
+                            showClipboardStrip = !showClipboardStrip
+                            if (showClipboardStrip) {
+                                ClipboardHistoryStore.syncFromSystemClipboard(context)
+                                showShortcutsStrip = false
+                                showResizeStrip = false
+                                showQuickSettingsPopup = false
+                            }
+                        },
+                    )
+                }
                 if (hotkeys.isNotEmpty()) {
                     // Custom App-Launch & Macro Shortcuts Drawer Toggle
                     TopActionIconChip(
@@ -696,6 +903,7 @@ fun PcKeyboardDeck(
                         onClick = {
                             showShortcutsStrip = !showShortcutsStrip
                             if (showShortcutsStrip) {
+                                showClipboardStrip = false
                                 showResizeStrip = false
                                 showQuickSettingsPopup = false
                             }
@@ -713,6 +921,7 @@ fun PcKeyboardDeck(
                     onClick = {
                         showResizeStrip = !showResizeStrip
                         if (showResizeStrip) {
+                            showClipboardStrip = false
                             showQuickSettingsPopup = false
                             showShortcutsStrip = false
                         }
@@ -729,6 +938,7 @@ fun PcKeyboardDeck(
                     onClick = {
                         showQuickSettingsPopup = !showQuickSettingsPopup
                         if (showQuickSettingsPopup) {
+                            showClipboardStrip = false
                             showResizeStrip = false
                             showShortcutsStrip = false
                         }
@@ -757,6 +967,35 @@ fun PcKeyboardDeck(
                     )
                 }
             }
+        }
+
+        // Expandable Quick Clipboard History Strip
+        AnimatedVisibility(visible = showClipboardStrip && settings.simpleClipboardStripEnabled) {
+            KeyboardClipboardHistoryStrip(
+                clips = clipboardClips,
+                palette = palette,
+                borderColor = borderCol,
+                onPasteClip = { entry ->
+                    if (KeyDispatcher.dispatchTextCommit(
+                            context = context,
+                            text = entry.text,
+                            comboLabel = "Clip: ${entry.preview.take(18)}",
+                            hapticEnabled = settings.isHapticActiveForCurrentMode(),
+                        )
+                    ) {
+                        if (settings.layoutMode == KeyboardLayoutMode.SIMPLE) {
+                            typingController.resetOnCursorOrBoundary(clearLastWord = true)
+                            refreshSuggestionEval()
+                            autoShiftDisarmedForCursor = false
+                            if (settings.simpleAutoCapitalize) {
+                                autoShiftEligible = SimpleSmartTyping.shouldAutoCapitalize(entry.text)
+                            }
+                        }
+                        clearStickyModifiersIfNeeded()
+                    }
+                },
+                onClearAll = { ClipboardHistoryStore.clearAll() },
+            )
         }
 
         // Expandable Custom App & Hotkey Strip
@@ -1094,7 +1333,7 @@ fun PcKeyboardDeck(
                         upperCaseLetters = effectiveUpperCase,
                         ctrlActive = ctrlActive,
                         altActive = altActive,
-                        shiftActive = shiftActive,
+                        shiftActive = if (simpleSymbolLayer) shiftActive else (shiftActive || autoShiftActive),
                         capsActive = capsActive,
                         metaActive = metaActive,
                         fnActive = fnActive,

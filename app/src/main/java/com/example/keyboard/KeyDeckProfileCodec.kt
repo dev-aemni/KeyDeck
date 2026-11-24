@@ -116,6 +116,10 @@ object KeyDeckProfileCodec {
         sb.appendLine("@kdb.suppressime:${settings.suppressAutoImeOnInput}")
         sb.appendLine("@kdb.suggestions:${settings.simpleSuggestionsEnabled}")
         sb.appendLine("@kdb.autocorrect:${settings.simpleAutoCorrectEnabled}")
+        sb.appendLine("@kdb.autocap:${settings.simpleAutoCapitalize}")
+        sb.appendLine("@kdb.smartpunct:${settings.simpleSmartPunctuation}")
+        sb.appendLine("@kdb.doublespace:${settings.simpleDoubleSpacePeriod}")
+        sb.appendLine("@kdb.clipstrip:${settings.simpleClipboardStripEnabled}")
         sb.appendLine("@kdb.hold_repeat:${settings.holdToRepeat}")
         sb.appendLine("@kdb.sync_dark:${settings.syncKeyboardWithDarkMode}")
         sb.appendLine("@kdb.borders:${settings.showKeyBorder}")
@@ -124,6 +128,7 @@ object KeyDeckProfileCodec {
         sb.appendLine("@kdb.touchpad_sens:${String.format(Locale.US, "%.2f", settings.touchpadSensitivity)}")
         sb.appendLine("@kdb.touchpad_width:${String.format(Locale.US, "%.2f", settings.touchpadWidthFraction)}")
         sb.appendLine("@kdb.mcpe_look:${settings.gamingMcpeLookMode}")
+        sb.appendLine("@kdb.game_pointer:${settings.showGameMousePointer}")
 
         if (settings.overrideAccentHex != 0L) {
             sb.appendLine("@kdb.override_accent:0x${settings.overrideAccentHex.toString(16).uppercase(Locale.US)}")
@@ -295,6 +300,18 @@ object KeyDeckProfileCodec {
         props["@kdb.autocorrect"]?.toBooleanStrictOrNull()?.let {
             resolvedSettings = resolvedSettings.copy(simpleAutoCorrectEnabled = it)
         }
+        props["@kdb.autocap"]?.toBooleanStrictOrNull()?.let {
+            resolvedSettings = resolvedSettings.copy(simpleAutoCapitalize = it)
+        }
+        props["@kdb.smartpunct"]?.toBooleanStrictOrNull()?.let {
+            resolvedSettings = resolvedSettings.copy(simpleSmartPunctuation = it)
+        }
+        props["@kdb.doublespace"]?.toBooleanStrictOrNull()?.let {
+            resolvedSettings = resolvedSettings.copy(simpleDoubleSpacePeriod = it)
+        }
+        props["@kdb.clipstrip"]?.toBooleanStrictOrNull()?.let {
+            resolvedSettings = resolvedSettings.copy(simpleClipboardStripEnabled = it)
+        }
         props["@kdb.hold_repeat"]?.toBooleanStrictOrNull()?.let {
             resolvedSettings = resolvedSettings.copy(holdToRepeat = it)
         }
@@ -320,6 +337,9 @@ object KeyDeckProfileCodec {
         }
         props["@kdb.mcpe_look"]?.toBooleanStrictOrNull()?.let {
             resolvedSettings = resolvedSettings.copy(gamingMcpeLookMode = it)
+        }
+        props["@kdb.game_pointer"]?.toBooleanStrictOrNull()?.let {
+            resolvedSettings = resolvedSettings.copy(showGameMousePointer = it)
         }
         parseHexLong(props["@kdb.override_accent"])?.let {
             resolvedSettings = resolvedSettings.copy(overrideAccentHex = it)

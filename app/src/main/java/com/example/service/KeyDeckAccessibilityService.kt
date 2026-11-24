@@ -228,7 +228,6 @@ class KeyDeckAccessibilityService : AccessibilityService() {
             return
         }
 
-        KeyDeckRuntimeState.updateMouseCursor(cursorX, cursorY, visible = false)
         lookPendingDx += dx
         lookPendingDy += dy
         lookWantsRelease = false
@@ -1209,6 +1208,19 @@ class KeyDeckAccessibilityService : AccessibilityService() {
         }
     }
 
+    fun commitPlainText(text: String): Boolean {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            A11yInputBridge.commitPlainText(this, text)?.let { ok ->
+                if (ok) return true
+            }
+        }
+        val (activeRoot, focusedNode) = findTargetWindowAndFocus()
+        val editableNode = focusedNode?.takeIf { isNodeEditableInput(it) && it.isVisibleToUser }
+            ?: findEditableAncestorOrCached(focusedNode, activeRoot)
+            ?: return false
+        return insertTextAtCursor(editableNode, text)
+    }
+
     @RequiresApi(Build.VERSION_CODES.TIRAMISU)
     private object A11yInputBridge {
         fun isSuggestionsSuppressed(service: AccessibilityService): Boolean? {
@@ -1272,6 +1284,21 @@ class KeyDeckAccessibilityService : AccessibilityService() {
                 ic.deleteSurroundingText(expectedTail.length, 0)
             }
             ic.commitText(replacement, 1, null)
+            return true
+        }
+
+        fun commitPlainText(
+            service: AccessibilityService,
+            text: String,
+        ): Boolean? {
+            val im: InputMethod = runCatching { service.inputMethod }.getOrNull() ?: return null
+            if (!im.currentInputStarted) return null
+            val ic = im.currentInputConnection ?: return null
+            val info = im.currentInputEditorInfo
+            if (!KeyDeckRuntimeState.isAppInForeground.value && info?.packageName == service.packageName) {
+                return null
+            }
+            ic.commitText(text, 1, null)
             return true
         }
 

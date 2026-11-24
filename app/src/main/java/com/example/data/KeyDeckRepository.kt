@@ -122,6 +122,10 @@ class KeyDeckRepository(private val context: Context) {
         val SUPPRESS_AUTO_IME_ON_INPUT = booleanPreferencesKey("suppress_auto_ime_on_input")
         val SIMPLE_SUGGESTIONS_ENABLED = booleanPreferencesKey("simple_suggestions_enabled")
         val SIMPLE_AUTO_CORRECT_ENABLED = booleanPreferencesKey("simple_auto_correct_enabled")
+        val SIMPLE_AUTO_CAPITALIZE = booleanPreferencesKey("simple_auto_capitalize")
+        val SIMPLE_SMART_PUNCTUATION = booleanPreferencesKey("simple_smart_punctuation")
+        val SIMPLE_DOUBLE_SPACE_PERIOD = booleanPreferencesKey("simple_double_space_period")
+        val SIMPLE_CLIPBOARD_STRIP = booleanPreferencesKey("simple_clipboard_strip")
         val HOLD_TO_REPEAT = booleanPreferencesKey("hold_to_repeat")
         val KEY_HEIGHT_DP = intPreferencesKey("key_height_dp")
         val WIDTH_FRACTION = floatPreferencesKey("width_fraction")
@@ -141,6 +145,7 @@ class KeyDeckRepository(private val context: Context) {
         val TOUCHPAD_SENSITIVITY = floatPreferencesKey("touchpad_sensitivity")
         val TOUCHPAD_WIDTH_FRACTION = floatPreferencesKey("touchpad_width_fraction")
         val GAMING_MCPE_LOOK_MODE = booleanPreferencesKey("gaming_mcpe_look_mode")
+        val SHOW_GAME_MOUSE_POINTER = booleanPreferencesKey("show_game_mouse_pointer")
         val OVERRIDE_ACCENT_HEX = longPreferencesKey("override_accent_hex")
         val CUSTOM_DECK_HEX = longPreferencesKey("custom_deck_hex")
         val CUSTOM_KEY_HEX = longPreferencesKey("custom_key_hex")
@@ -220,6 +225,10 @@ class KeyDeckRepository(private val context: Context) {
             prefs[Keys.SUPPRESS_AUTO_IME_ON_INPUT] = updated.suppressAutoImeOnInput
             prefs[Keys.SIMPLE_SUGGESTIONS_ENABLED] = updated.simpleSuggestionsEnabled
             prefs[Keys.SIMPLE_AUTO_CORRECT_ENABLED] = updated.simpleAutoCorrectEnabled
+            prefs[Keys.SIMPLE_AUTO_CAPITALIZE] = updated.simpleAutoCapitalize
+            prefs[Keys.SIMPLE_SMART_PUNCTUATION] = updated.simpleSmartPunctuation
+            prefs[Keys.SIMPLE_DOUBLE_SPACE_PERIOD] = updated.simpleDoubleSpacePeriod
+            prefs[Keys.SIMPLE_CLIPBOARD_STRIP] = updated.simpleClipboardStripEnabled
             prefs[Keys.HOLD_TO_REPEAT] = updated.holdToRepeat
             prefs[Keys.KEY_HEIGHT_DP] = updated.keyHeightDp
             prefs[Keys.WIDTH_FRACTION] = updated.keyboardWidthFraction
@@ -238,6 +247,7 @@ class KeyDeckRepository(private val context: Context) {
             prefs[Keys.TOUCHPAD_SENSITIVITY] = updated.touchpadSensitivity
             prefs[Keys.TOUCHPAD_WIDTH_FRACTION] = updated.touchpadWidthFraction
             prefs[Keys.GAMING_MCPE_LOOK_MODE] = updated.gamingMcpeLookMode
+            prefs[Keys.SHOW_GAME_MOUSE_POINTER] = updated.showGameMousePointer
             prefs[Keys.OVERRIDE_ACCENT_HEX] = updated.overrideAccentHex
             prefs[Keys.CUSTOM_DECK_HEX] = updated.customDeckHex
             prefs[Keys.CUSTOM_KEY_HEX] = updated.customKeyHex
@@ -280,6 +290,10 @@ class KeyDeckRepository(private val context: Context) {
             suppressAutoImeOnInput = prefs[Keys.SUPPRESS_AUTO_IME_ON_INPUT] ?: true,
             simpleSuggestionsEnabled = prefs[Keys.SIMPLE_SUGGESTIONS_ENABLED] ?: true,
             simpleAutoCorrectEnabled = prefs[Keys.SIMPLE_AUTO_CORRECT_ENABLED] ?: true,
+            simpleAutoCapitalize = prefs[Keys.SIMPLE_AUTO_CAPITALIZE] ?: true,
+            simpleSmartPunctuation = prefs[Keys.SIMPLE_SMART_PUNCTUATION] ?: true,
+            simpleDoubleSpacePeriod = prefs[Keys.SIMPLE_DOUBLE_SPACE_PERIOD] ?: true,
+            simpleClipboardStripEnabled = prefs[Keys.SIMPLE_CLIPBOARD_STRIP] ?: true,
             holdToRepeat = prefs[Keys.HOLD_TO_REPEAT] ?: true,
             keyHeightDp = (prefs[Keys.KEY_HEIGHT_DP] ?: 38).coerceIn(26, 54),
             keyboardWidthFraction = (prefs[Keys.WIDTH_FRACTION] ?: 1.0f).coerceIn(0.60f, 1.0f),
@@ -300,6 +314,7 @@ class KeyDeckRepository(private val context: Context) {
             touchpadSensitivity = (prefs[Keys.TOUCHPAD_SENSITIVITY] ?: 1.6f).coerceIn(0.6f, 3.5f),
             touchpadWidthFraction = (prefs[Keys.TOUCHPAD_WIDTH_FRACTION] ?: 0.42f).coerceIn(0.30f, 0.55f),
             gamingMcpeLookMode = prefs[Keys.GAMING_MCPE_LOOK_MODE] ?: true,
+            showGameMousePointer = prefs[Keys.SHOW_GAME_MOUSE_POINTER] ?: true,
             overrideAccentHex = prefs[Keys.OVERRIDE_ACCENT_HEX] ?: 0L,
             customDeckHex = prefs[Keys.CUSTOM_DECK_HEX] ?: 0xFFD5DCE5,
             customKeyHex = prefs[Keys.CUSTOM_KEY_HEX] ?: 0xFFDCE1EA,

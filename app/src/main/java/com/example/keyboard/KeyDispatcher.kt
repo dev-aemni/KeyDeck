@@ -147,6 +147,61 @@ object KeyDispatcher {
         return false
     }
 
+    fun dispatchTextCommit(
+        context: Context,
+        text: String,
+        comboLabel: String = "Paste",
+        hapticEnabled: Boolean = true,
+    ): Boolean {
+        if (text.isEmpty()) return false
+        if (hapticEnabled) {
+            triggerHaptic(context)
+        }
+
+        val direct = if (KeyDeckRuntimeState.isAppInForeground.value) directTargetRef?.get() else null
+        if (direct != null && direct.replaceTailText("", text)) {
+            KeyDeckRuntimeState.recordDispatchedKey(
+                DispatchedKeyRecord(
+                    timestampMs = System.currentTimeMillis(),
+                    comboLabel = comboLabel,
+                    keyCode = KeyEvent.KEYCODE_UNKNOWN,
+                    route = "In-App",
+                    detail = text.take(28),
+                ),
+            )
+            return true
+        }
+
+        val ime = KeyDeckImeService.activeInstance
+        if (ime != null && KeyDeckImeService.hasActiveInputConnection() && ime.commitPlainText(text)) {
+            KeyDeckRuntimeState.recordDispatchedKey(
+                DispatchedKeyRecord(
+                    timestampMs = System.currentTimeMillis(),
+                    comboLabel = comboLabel,
+                    keyCode = KeyEvent.KEYCODE_UNKNOWN,
+                    route = "IME",
+                    detail = text.take(28),
+                ),
+            )
+            return true
+        }
+
+        val a11y = KeyDeckAccessibilityService.activeInstance
+        if (a11y != null && a11y.commitPlainText(text)) {
+            KeyDeckRuntimeState.recordDispatchedKey(
+                DispatchedKeyRecord(
+                    timestampMs = System.currentTimeMillis(),
+                    comboLabel = comboLabel,
+                    keyCode = KeyEvent.KEYCODE_UNKNOWN,
+                    route = "A11y",
+                    detail = text.take(28),
+                ),
+            )
+            return true
+        }
+        return false
+    }
+
     fun dispatchKey(
         context: Context,
         keyCode: Int,

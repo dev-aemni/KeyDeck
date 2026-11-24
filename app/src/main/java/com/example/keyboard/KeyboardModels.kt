@@ -475,6 +475,10 @@ data class KeyDeckSettings(
     val suppressAutoImeOnInput: Boolean = true,
     val simpleSuggestionsEnabled: Boolean = true,
     val simpleAutoCorrectEnabled: Boolean = true,
+    val simpleAutoCapitalize: Boolean = true,
+    val simpleSmartPunctuation: Boolean = true,
+    val simpleDoubleSpacePeriod: Boolean = true,
+    val simpleClipboardStripEnabled: Boolean = true,
     val holdToRepeat: Boolean = true,
     // Granular size & tightness customization
     val keyHeightDp: Int = 38,
@@ -496,6 +500,7 @@ data class KeyDeckSettings(
     val touchpadSensitivity: Float = 1.6f,
     val touchpadWidthFraction: Float = 0.42f,
     val gamingMcpeLookMode: Boolean = true,
+    val showGameMousePointer: Boolean = true,
     // Custom color overrides
     val overrideAccentHex: Long = 0L,
     val customDeckHex: Long = 0xFFD5DCE5,

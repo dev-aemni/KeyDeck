@@ -980,6 +980,12 @@ class SimpleTypingController {
     var pendingUndo: PendingAutoCorrectUndo? = null
         private set
 
+    var trailingAutoSpaceAfterCommit: Boolean = false
+        private set
+
+    var lastSpaceTapAtMs: Long = 0L
+        private set
+
     private val _learnedCustomWords = mutableSetOf<String>()
     val learnedCustomWords: Set<String> get() = _learnedCustomWords
 
@@ -1003,6 +1009,37 @@ class SimpleTypingController {
         lastCommittedWord = last
     }
 
+    fun recordSpaceTapped(nowMs: Long) {
+        lastSpaceTapAtMs = nowMs
+    }
+
+    fun clearDoubleSpaceHistory() {
+        lastSpaceTapAtMs = 0L
+    }
+
+    fun registerDoubleSpacePeriod() {
+        pendingUndo = PendingAutoCorrectUndo(
+            originalWord = " ",
+            replacedTextWithSeparator = ". ",
+        )
+        activeWord = ""
+        prevCommittedWord = ""
+        lastCommittedWord = ""
+        wordEligibleForAutoCorrect = false
+        trailingAutoSpaceAfterCommit = true
+        lastSpaceTapAtMs = 0L
+    }
+
+    fun markSmartPunctuationAfterSpace(punct: Char) {
+        trailingAutoSpaceAfterCommit = true
+        pendingUndo = null
+        if (SimpleSmartTyping.isSentenceEndingPunctuation(punct)) {
+            prevCommittedWord = ""
+            lastCommittedWord = ""
+        }
+        lastSpaceTapAtMs = 0L
+    }
+
     /**
      * Call when the user taps a character in Simple Mode without Ctrl/Alt/Meta.
      * [isCursorTouchingExistingWord] should be true if activeWord was empty and the cursor
@@ -1012,12 +1049,17 @@ class SimpleTypingController {
         ch: Char,
         autoCorrectEnabled: Boolean,
         isCursorTouchingExistingWord: Boolean = false,
+        smartCapitalizeSoloI: Boolean = true,
     ): AutoCorrectAction? {
+        if (ch != ' ') {
+            lastSpaceTapAtMs = 0L
+        }
         if (isWordChar(ch)) {
             if (activeWord.isEmpty()) {
                 // Only eligible if starting cleanly (not editing an existing/previous word)
                 wordEligibleForAutoCorrect = !isCursorTouchingExistingWord
             }
+            trailingAutoSpaceAfterCommit = false
             pendingUndo = null
             activeWord += ch
             return null
@@ -1027,6 +1069,12 @@ class SimpleTypingController {
         val isAutoCorrectTrigger = ch == ' ' || ch in SENTENCE_TRIGGERS
         val isSentenceEnd = ch in SENTENCE_END_PUNCT
         if (isAutoCorrectTrigger && activeWord.isNotEmpty()) {
+            val soloIRule = smartCapitalizeSoloI &&
+                activeWord == "i" &&
+                wordEligibleForAutoCorrect &&
+                "i" !in _learnedCustomWords &&
+                (ch == ' ' || ch in SENTENCE_TRIGGERS)
+
             val eval = SimpleSuggestionEngine.evaluate(
                 activeWord = activeWord,
                 lastCommittedWord = lastCommittedWord,
@@ -1035,7 +1083,10 @@ class SimpleTypingController {
                 autoCorrectEnabled = autoCorrectEnabled,
                 eligibleForAutoCorrect = wordEligibleForAutoCorrect,
             )
-            val candidate = eval.autoCorrectReplacement
+            val candidate = when {
+                soloIRule && autoCorrectEnabled -> "I"
+                else -> eval.autoCorrectReplacement
+            }
             if (candidate != null && !candidate.equals(activeWord, ignoreCase = false)) {
                 val original = activeWord
                 val replacementWithTrigger = candidate + ch
@@ -1043,6 +1094,7 @@ class SimpleTypingController {
                     originalWord = original,
                     replacedTextWithSeparator = replacementWithTrigger,
                 )
+                trailingAutoSpaceAfterCommit = (ch == ' ')
                 if (isSentenceEnd) {
                     prevCommittedWord = ""
                     lastCommittedWord = ""
@@ -1069,6 +1121,7 @@ class SimpleTypingController {
             prevCommittedWord = ""
             lastCommittedWord = ""
         }
+        trailingAutoSpaceAfterCommit = false
         pendingUndo = null
         activeWord = ""
         wordEligibleForAutoCorrect = false
@@ -1077,16 +1130,22 @@ class SimpleTypingController {
 
     /**
      * Handles Backspace. Returns a [PendingAutoCorrectUndo] when the user immediately backspaces
-     * after an autocorrection, instructing the caller to revert to [PendingAutoCorrectUndo.originalWord]
-     * and learn it. Otherwise disarms autocorrect for the edited word.
+     * after an autocorrection or double-space period, instructing the caller to revert to
+     * [PendingAutoCorrectUndo.originalWord]. Otherwise disarms autocorrect for the edited word.
      */
     fun onBackspace(): PendingAutoCorrectUndo? {
+        trailingAutoSpaceAfterCommit = false
+        lastSpaceTapAtMs = 0L
         val undo = pendingUndo
         if (undo != null) {
             pendingUndo = null
-            _learnedCustomWords.add(undo.originalWord.lowercase(Locale.US))
-            // Keep editing disabled so autocorrect won't re-trigger on Space for this word
-            activeWord = undo.originalWord
+            if (undo.originalWord.isNotBlank()) {
+                _learnedCustomWords.add(undo.originalWord.lowercase(Locale.US))
+                // Keep editing disabled so autocorrect won't re-trigger on Space for this word
+                activeWord = undo.originalWord
+            } else {
+                activeWord = ""
+            }
             wordEligibleForAutoCorrect = false
             return undo
         }
@@ -1106,6 +1165,8 @@ class SimpleTypingController {
         activeWord = ""
         pendingUndo = null
         wordEligibleForAutoCorrect = false
+        trailingAutoSpaceAfterCommit = false
+        lastSpaceTapAtMs = 0L
         if (clearLastWord) {
             prevCommittedWord = ""
             lastCommittedWord = ""
@@ -1128,6 +1189,8 @@ class SimpleTypingController {
         activeWord = ""
         pendingUndo = null
         wordEligibleForAutoCorrect = false
+        trailingAutoSpaceAfterCommit = true
+        lastSpaceTapAtMs = 0L
         return prior to toCommit
     }
 

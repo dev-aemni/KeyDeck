@@ -136,6 +136,7 @@ class FloatingKeyboardService : Service() {
         }
 
         KeyDeckRuntimeState.setOverlayServiceRunning(true)
+        com.example.keyboard.ClipboardHistoryStore.ensureListening(applicationContext)
         serviceScope.launch { repository.migrateSchemaIfNeeded() }
         attachBubbleOverlay()
         observeExpansionState()
@@ -205,7 +206,7 @@ class FloatingKeyboardService : Service() {
             }.collectLatest { (expanded, settings, cursor) ->
                 val mousePointerActive = expanded &&
                     settings.layoutMode == KeyboardLayoutMode.GAMING &&
-                    !settings.gamingMcpeLookMode
+                    settings.showGameMousePointer
                 if (!mousePointerActive) {
                     if (cursor.visible) {
                         KeyDeckRuntimeState.updateMouseCursor(cursor.xPx, cursor.yPx, visible = false)
@@ -596,10 +597,7 @@ class FloatingKeyboardService : Service() {
             setViewTreeSavedStateRegistryOwner(owner)
             setViewTreeViewModelStoreOwner(owner)
             setContent {
-                val settings by repository.settingsFlow.collectAsStateWithLifecycle(initialValue = KeyDeckSettings())
-                val isDark = resolveIsAppDark(settings.appThemeMode)
-                val palette = settings.resolvePalette(isDark)
-                FloatingMousePointer(accentColor = palette.accentBg)
+                FloatingMousePointer()
             }
         }
         val added = runCatching { windowManager.addView(view, params) }.isSuccess
@@ -756,33 +754,38 @@ private fun FloatingTriggerBubble(
 }
 
 @Composable
-private fun FloatingMousePointer(accentColor: Color) {
+private fun FloatingMousePointer() {
     Canvas(modifier = Modifier.size(26.dp)) {
         val tipX = 1.dp.toPx()
         val tipY = 1.dp.toPx()
-        val arrowPath = Path().apply {
-            moveTo(tipX, tipY)
-            lineTo(tipX, tipY + 18.dp.toPx())
-            lineTo(tipX + 4.8.dp.toPx(), tipY + 13.8.dp.toPx())
-            lineTo(tipX + 8.6.dp.toPx(), tipY + 21.dp.toPx())
-            lineTo(tipX + 11.4.dp.toPx(), tipY + 19.6.dp.toPx())
-            lineTo(tipX + 7.6.dp.toPx(), tipY + 12.6.dp.toPx())
-            lineTo(tipX + 13.8.dp.toPx(), tipY + 12.6.dp.toPx())
+        val shadowOffset = 1.1.dp.toPx()
+
+        fun buildPointerPath(ox: Float, oy: Float): Path = Path().apply {
+            moveTo(ox, oy)
+            lineTo(ox, oy + 17.5.dp.toPx())
+            lineTo(ox + 4.4.dp.toPx(), oy + 13.4.dp.toPx())
+            lineTo(ox + 7.6.dp.toPx(), oy + 20.4.dp.toPx())
+            lineTo(ox + 9.9.dp.toPx(), oy + 19.3.dp.toPx())
+            lineTo(ox + 6.8.dp.toPx(), oy + 12.3.dp.toPx())
+            lineTo(ox + 12.6.dp.toPx(), oy + 12.3.dp.toPx())
             close()
         }
+
+        val shadowPath = buildPointerPath(tipX + shadowOffset, tipY + shadowOffset)
+        drawPath(
+            path = shadowPath,
+            color = Color.Black.copy(alpha = 0.28f),
+        )
+
+        val arrowPath = buildPointerPath(tipX, tipY)
         drawPath(
             path = arrowPath,
-            color = Color(0xFF0B0F19),
-            style = Stroke(width = 2.6.dp.toPx(), cap = StrokeCap.Round, join = StrokeJoin.Round),
+            color = Color(0xFF000000),
+            style = Stroke(width = 2.1.dp.toPx(), cap = StrokeCap.Butt, join = StrokeJoin.Miter),
         )
         drawPath(
             path = arrowPath,
             color = Color.White,
-        )
-        drawCircle(
-            color = accentColor,
-            radius = 2.2.dp.toPx(),
-            center = Offset(tipX + 4.5.dp.toPx(), tipY + 9.2.dp.toPx()),
         )
     }
 }
