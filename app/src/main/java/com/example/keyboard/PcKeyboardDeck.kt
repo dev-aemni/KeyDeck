@@ -1433,6 +1433,11 @@ fun PcKeyboardDeck(
                         onMouseMove = { dx, dy -> onMouseMove?.invoke(dx, dy) },
                         onMouseClick = { isRight -> onMouseClick?.invoke(isRight) },
                         onMouseEnd = { onMouseEnd?.invoke() },
+                        onToggleLookMode = {
+                            onUpdateSettings { cur ->
+                                cur.copy(gamingMcpeLookMode = !cur.gamingMcpeLookMode)
+                            }
+                        },
                     )
                 }
             }

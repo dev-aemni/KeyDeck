@@ -69,6 +69,44 @@ object KeyDeckRuntimeState {
         )
     }
 
+    fun moveMouseCursorBy(
+        dx: Float,
+        dy: Float,
+        screenWidthPx: Float,
+        screenHeightPx: Float,
+        visible: Boolean = true,
+    ): Pair<Float, Float> {
+        val cur = _mouseCursorState.value
+        val (nx, ny) = com.example.keyboard.MouseJoystickMath.clampCursorPosition(
+            currentX = cur.xPx,
+            currentY = cur.yPx,
+            dx = dx,
+            dy = dy,
+            screenWidthPx = screenWidthPx,
+            screenHeightPx = screenHeightPx,
+        )
+        _mouseCursorState.value = com.example.keyboard.MouseCursorState(
+            xPx = nx,
+            yPx = ny,
+            visible = visible,
+        )
+        return nx to ny
+    }
+
+    fun parkMouseCursorAtCenter(
+        screenWidthPx: Float,
+        screenHeightPx: Float,
+        visible: Boolean,
+    ) {
+        val w = screenWidthPx.coerceAtLeast(320f)
+        val h = screenHeightPx.coerceAtLeast(480f)
+        _mouseCursorState.value = com.example.keyboard.MouseCursorState(
+            xPx = w * 0.5f,
+            yPx = h * 0.42f,
+            visible = visible,
+        )
+    }
+
     fun setAppInForeground(foreground: Boolean) {
         _isAppInForeground.value = foreground
     }
@@ -146,6 +184,7 @@ class KeyDeckRepository(private val context: Context) {
         val TOUCHPAD_WIDTH_FRACTION = floatPreferencesKey("touchpad_width_fraction")
         val GAMING_MCPE_LOOK_MODE = booleanPreferencesKey("gaming_mcpe_look_mode")
         val SHOW_GAME_MOUSE_POINTER = booleanPreferencesKey("show_game_mouse_pointer")
+        val GAME_MOUSE_POINTER_SCALE = floatPreferencesKey("game_mouse_pointer_scale")
         val OVERRIDE_ACCENT_HEX = longPreferencesKey("override_accent_hex")
         val CUSTOM_DECK_HEX = longPreferencesKey("custom_deck_hex")
         val CUSTOM_KEY_HEX = longPreferencesKey("custom_key_hex")
@@ -248,6 +287,7 @@ class KeyDeckRepository(private val context: Context) {
             prefs[Keys.TOUCHPAD_WIDTH_FRACTION] = updated.touchpadWidthFraction
             prefs[Keys.GAMING_MCPE_LOOK_MODE] = updated.gamingMcpeLookMode
             prefs[Keys.SHOW_GAME_MOUSE_POINTER] = updated.showGameMousePointer
+            prefs[Keys.GAME_MOUSE_POINTER_SCALE] = updated.gameMousePointerScale.coerceIn(0.55f, 1.60f)
             prefs[Keys.OVERRIDE_ACCENT_HEX] = updated.overrideAccentHex
             prefs[Keys.CUSTOM_DECK_HEX] = updated.customDeckHex
             prefs[Keys.CUSTOM_KEY_HEX] = updated.customKeyHex
@@ -313,8 +353,9 @@ class KeyDeckRepository(private val context: Context) {
             activeWallpaperId = prefs[Keys.ACTIVE_WALLPAPER_ID] ?: "",
             touchpadSensitivity = (prefs[Keys.TOUCHPAD_SENSITIVITY] ?: 1.6f).coerceIn(0.6f, 3.5f),
             touchpadWidthFraction = (prefs[Keys.TOUCHPAD_WIDTH_FRACTION] ?: 0.42f).coerceIn(0.30f, 0.55f),
-            gamingMcpeLookMode = prefs[Keys.GAMING_MCPE_LOOK_MODE] ?: true,
+            gamingMcpeLookMode = prefs[Keys.GAMING_MCPE_LOOK_MODE] ?: false,
             showGameMousePointer = prefs[Keys.SHOW_GAME_MOUSE_POINTER] ?: true,
+            gameMousePointerScale = (prefs[Keys.GAME_MOUSE_POINTER_SCALE] ?: 0.80f).coerceIn(0.55f, 1.60f),
             overrideAccentHex = prefs[Keys.OVERRIDE_ACCENT_HEX] ?: 0L,
             customDeckHex = prefs[Keys.CUSTOM_DECK_HEX] ?: 0xFFD5DCE5,
             customKeyHex = prefs[Keys.CUSTOM_KEY_HEX] ?: 0xFFDCE1EA,

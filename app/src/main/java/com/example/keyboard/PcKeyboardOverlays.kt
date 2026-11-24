@@ -47,11 +47,16 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.input.pointer.positionChange
 import androidx.compose.ui.platform.LocalViewConfiguration
 import androidx.compose.ui.platform.testTag
+import kotlin.math.max
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
@@ -79,6 +84,7 @@ fun GamingMouseTouchpad(
     onMouseMove: (dx: Float, dy: Float) -> Unit,
     onMouseClick: (isRightClick: Boolean) -> Unit,
     onMouseEnd: () -> Unit = {},
+    onToggleLookMode: (() -> Unit)? = null,
     modifier: Modifier = Modifier,
 ) {
     val touchSlop = LocalViewConfiguration.current.touchSlop
@@ -101,7 +107,7 @@ fun GamingMouseTouchpad(
         if (!fingerActive) return@LaunchedEffect
         while (fingerActive) {
             delay(16L)
-            val heldPastTapMs = (SystemClock.uptimeMillis() - downAtMs) > 110L
+            val heldPastTapMs = (SystemClock.uptimeMillis() - downAtMs) > 120L
             if (isDragged || heldPastTapMs) {
                 val stick = MouseJoystickMath.computeStickOutput(rawOffsetX, rawOffsetY)
                 if (stick.stepDx != 0f || stick.stepDy != 0f) {
@@ -118,6 +124,59 @@ fun GamingMouseTouchpad(
             .testTag("gaming_mouse_touchpad"),
         verticalArrangement = Arrangement.spacedBy(4.dp),
     ) {
+        // Slim Header Row with 1-tap Cursor / Cam Look toggle (kept outside joystick pointer area)
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 2.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween,
+        ) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(4.dp),
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Mouse,
+                    contentDescription = "Mouse Joystick",
+                    tint = if (fingerActive) palette.accentBg else palette.secondaryText,
+                    modifier = Modifier.size(12.dp),
+                )
+                Text(
+                    text = if (settings.gamingMcpeLookMode) "Cam Look" else "Cursor Pad",
+                    fontFamily = BodyFontFamily,
+                    fontSize = 10.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    color = if (fingerActive) palette.accentBg else palette.secondaryText,
+                )
+            }
+            if (onToggleLookMode != null) {
+                Box(
+                    modifier = Modifier
+                        .clip(CircleShape)
+                        .background(
+                            if (settings.gamingMcpeLookMode) {
+                                palette.accentBg.copy(alpha = 0.18f)
+                            } else {
+                                palette.activeFill
+                            },
+                        )
+                        .clickable(onClick = onToggleLookMode)
+                        .padding(horizontal = 7.dp, vertical = 2.dp)
+                        .testTag("gaming_pad_mode_toggle"),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Text(
+                        text = if (settings.gamingMcpeLookMode) "Look ON" else "Cursor",
+                        fontFamily = BodyFontFamily,
+                        fontSize = 9.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = palette.accentBg,
+                    )
+                }
+            }
+        }
+
         // Recessed Hybrid Trackpad + Analog Mouse Joystick
         val padBaseColor = if (fingerActive) palette.activeFill else palette.modifierBg
         val padSurface = if (keyOpacity < 0.99f) {
@@ -151,13 +210,16 @@ fun GamingMouseTouchpad(
                     },
                 )
                 .pointerInput(touchSlop) {
+                    val dragActivatePx = min(touchSlop * 0.35f, 6.dp.toPx()).coerceAtLeast(3f)
                     awaitEachGesture {
                         val down = awaitFirstDown(requireUnconsumed = false)
+                        // Consume down immediately so ancestor verticalScroll never steals joystick drags
+                        down.consume()
                         val w = size.width.toFloat().coerceAtLeast(1f)
                         val h = size.height.toFloat().coerceAtLeast(1f)
                         val cx = w * 0.5f
                         val cy = h * 0.5f
-                        val radius = (min(w, h) * 0.38f).coerceAtLeast(18f)
+                        val radius = (min(w, h) * 0.40f).coerceAtLeast(18f)
 
                         fingerActive = true
                         isDragged = false
@@ -167,25 +229,45 @@ fun GamingMouseTouchpad(
                         rawOffsetY = (down.position.y - cy) / radius
 
                         var totalDist = 0f
+                        var pendingPreSlopDx = 0f
+                        var pendingPreSlopDy = 0f
                         try {
                             while (true) {
-                                val event = awaitPointerEvent()
+                                val event = awaitPointerEvent(PointerEventPass.Main)
                                 val change = event.changes.firstOrNull { it.id == down.id } ?: break
                                 if (!change.pressed) {
+                                    change.consume()
                                     if (!isDragged && !analogMoved) {
                                         currentOnMouseClick(false)
                                     }
                                     break
                                 }
                                 val delta = change.positionChange()
-                                totalDist += hypot(delta.x.toDouble(), delta.y.toDouble()).toFloat()
-                                if (totalDist > touchSlop) {
-                                    isDragged = true
-                                }
+                                // Consume every move immediately so scroll containers never intercept mid-drag
+                                change.consume()
+
+                                val stepDist = hypot(delta.x.toDouble(), delta.y.toDouble()).toFloat()
+                                val fromDownDist = hypot(
+                                    (change.position.x - down.position.x).toDouble(),
+                                    (change.position.y - down.position.y).toDouble(),
+                                ).toFloat()
+                                totalDist += stepDist
+
                                 rawOffsetX = (change.position.x - cx) / radius
                                 rawOffsetY = (change.position.y - cy) / radius
-                                if (isDragged && (delta.x != 0f || delta.y != 0f)) {
-                                    change.consume()
+
+                                if (!isDragged) {
+                                    pendingPreSlopDx += delta.x
+                                    pendingPreSlopDy += delta.y
+                                    if (max(totalDist, fromDownDist) > dragActivatePx) {
+                                        isDragged = true
+                                        if (pendingPreSlopDx != 0f || pendingPreSlopDy != 0f) {
+                                            currentOnMouseMove(pendingPreSlopDx, pendingPreSlopDy)
+                                            pendingPreSlopDx = 0f
+                                            pendingPreSlopDy = 0f
+                                        }
+                                    }
+                                } else if (delta.x != 0f || delta.y != 0f) {
                                     currentOnMouseMove(delta.x, delta.y)
                                 }
                             }
@@ -199,14 +281,14 @@ fun GamingMouseTouchpad(
                         }
                     }
                 }
-                .padding(6.dp),
+                .padding(5.dp),
         ) {
-            val stickVisual = MouseJoystickMath.computeStickOutput(rawOffsetX, rawOffsetY)
-
             // Circular analog joystick ring, deadzone, crosshairs, directional tether & thumbstick puck
+            // (Read rawOffsetX/Y strictly inside Canvas draw scope to avoid recomposition jank while dragging)
             Canvas(modifier = Modifier.fillMaxSize()) {
+                val stickVisual = MouseJoystickMath.computeStickOutput(rawOffsetX, rawOffsetY)
                 val center = Offset(size.width * 0.5f, size.height * 0.5f)
-                val ringRadius = (min(size.width, size.height) * 0.40f).coerceAtLeast(14f)
+                val ringRadius = (min(size.width, size.height) * 0.42f).coerceAtLeast(14f)
                 val deadzoneRadius = ringRadius * MouseJoystickMath.DEFAULT_DEADZONE
 
                 val guideColor = palette.secondaryText.copy(alpha = if (fingerActive) 0.36f else 0.24f)
@@ -286,28 +368,8 @@ fun GamingMouseTouchpad(
                 )
             }
 
-            Row(
-                modifier = Modifier.align(Alignment.TopStart),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(4.dp),
-            ) {
-                Icon(
-                    imageVector = Icons.Default.Mouse,
-                    contentDescription = "Mouse Joystick",
-                    tint = if (fingerActive) palette.accentBg else palette.secondaryText,
-                    modifier = Modifier.size(12.dp),
-                )
-                Text(
-                    text = if (settings.gamingMcpeLookMode) "Look Joystick" else "Mouse Joystick",
-                    fontFamily = BodyFontFamily,
-                    fontSize = 10.sp,
-                    fontWeight = FontWeight.SemiBold,
-                    color = if (fingerActive) palette.accentBg else palette.secondaryText,
-                )
-            }
-
             Text(
-                text = "Drag/hold stick • Tap LMB",
+                text = if (settings.gamingMcpeLookMode) "Drag/hold look • Tap Attack" else "Drag/hold cursor • Tap LMB",
                 fontFamily = BodyFontFamily,
                 fontSize = 8.5.sp,
                 color = palette.secondaryText.copy(alpha = 0.72f),
@@ -795,6 +857,15 @@ fun DeckQuickSettingsPopup(
                 palette = palette,
                 onCheckedChange = { c -> onUpdateSettings { it.copy(showGameMousePointer = c) } },
             )
+            if (settings.showGameMousePointer) {
+                QuickPopupSlider(
+                    label = "Pointer Size (${(settings.gameMousePointerScale * 100).roundToInt()}%)",
+                    value = settings.gameMousePointerScale,
+                    range = 0.55f..1.60f,
+                    palette = palette,
+                    onValueChange = { v -> onUpdateSettings { it.copy(gameMousePointerScale = v) } },
+                )
+            }
         }
 
         // App Dark Mode Selector
@@ -1005,6 +1076,57 @@ private fun QuickPopupToggle(
                 uncheckedTrackColor = palette.modifierBg,
                 uncheckedBorderColor = palette.keyBorder,
             ),
+        )
+    }
+}
+
+@Composable
+fun PcMousePointerGraphic(
+    pointerScale: Float = 0.80f,
+    isLookMode: Boolean = false,
+    modifier: Modifier = Modifier,
+) {
+    val s = pointerScale.coerceIn(0.55f, 1.60f)
+    Canvas(modifier = modifier.size((26f * s).dp)) {
+        val tipX = (1f * s).dp.toPx()
+        val tipY = (1f * s).dp.toPx()
+        val shadowOffset = (1.1f * s).dp.toPx()
+
+        fun buildPointerPath(ox: Float, oy: Float): Path = Path().apply {
+            moveTo(ox, oy)
+            lineTo(ox, oy + (17.5f * s).dp.toPx())
+            lineTo(ox + (4.4f * s).dp.toPx(), oy + (13.4f * s).dp.toPx())
+            lineTo(ox + (7.6f * s).dp.toPx(), oy + (20.4f * s).dp.toPx())
+            lineTo(ox + (9.9f * s).dp.toPx(), oy + (19.3f * s).dp.toPx())
+            lineTo(ox + (6.8f * s).dp.toPx(), oy + (12.3f * s).dp.toPx())
+            lineTo(ox + (12.6f * s).dp.toPx(), oy + (12.3f * s).dp.toPx())
+            close()
+        }
+
+        if (isLookMode) {
+            drawCircle(
+                color = Color(0xFF38BDF8).copy(alpha = 0.85f),
+                radius = (3f * s).dp.toPx(),
+                center = Offset(tipX, tipY),
+                style = Stroke(width = (1.2f * s).dp.toPx()),
+            )
+        }
+
+        val shadowPath = buildPointerPath(tipX + shadowOffset, tipY + shadowOffset)
+        drawPath(
+            path = shadowPath,
+            color = Color.Black.copy(alpha = 0.28f),
+        )
+
+        val arrowPath = buildPointerPath(tipX, tipY)
+        drawPath(
+            path = arrowPath,
+            color = Color(0xFF000000),
+            style = Stroke(width = (2.1f * s).dp.toPx(), cap = StrokeCap.Butt, join = StrokeJoin.Miter),
+        )
+        drawPath(
+            path = arrowPath,
+            color = Color.White,
         )
     }
 }

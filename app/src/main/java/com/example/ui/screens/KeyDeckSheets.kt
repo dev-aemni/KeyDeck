@@ -970,7 +970,7 @@ fun SettingsSheet(
 
             SettingsSwitchRow(
                 title = "Gaming MCPE Camera Look Mode",
-                subtitle = "Touchpad swipes look around in Minecraft PE; turn off for cursor pointer",
+                subtitle = "OFF = move PC arrow cursor & click tip; ON = swipe 3D camera look (MCPE/FPS)",
                 checked = settings.gamingMcpeLookMode,
                 testTag = "switch_mcpe_look",
                 onCheckedChange = { checked -> onUpdateSettings { it.copy(gamingMcpeLookMode = checked) } },
@@ -982,6 +982,15 @@ fun SettingsSheet(
                 checked = settings.showGameMousePointer,
                 testTag = "switch_game_mouse_pointer",
                 onCheckedChange = { checked -> onUpdateSettings { it.copy(showGameMousePointer = checked) } },
+            )
+
+            LabeledSlider(
+                label = "Game Mode Pointer Size",
+                valueLabel = "${(settings.gameMousePointerScale * 100).roundToInt()}%",
+                value = settings.gameMousePointerScale,
+                range = 0.55f..1.60f,
+                accentColor = colors.indigo,
+                onValueChange = { v -> onUpdateSettings { it.copy(gameMousePointerScale = v) } },
             )
 
             LabeledSlider(

@@ -32,6 +32,7 @@ object KeyDispatcher {
 
     private var directTargetRef: WeakReference<DirectKeyTarget>? = null
     private var directMouseRef: WeakReference<DirectMouseTarget>? = null
+    private var lastMouseA11yHintMs: Long = 0L
 
     fun setDirectTarget(target: DirectKeyTarget?) {
         directTargetRef = target?.let { WeakReference(it) }
@@ -402,18 +403,62 @@ object KeyDispatcher {
         dy: Float,
         sensitivity: Float,
         mcpeLookMode: Boolean,
+        context: Context? = null,
     ) {
         val scaledDx = dx * sensitivity
         val scaledDy = dy * sensitivity
 
-        val directMouse = if (KeyDeckRuntimeState.isAppInForeground.value) directMouseRef?.get() else null
-        if (directMouse != null) {
-            directMouse.onMouseDelta(scaledDx, scaledDy)
+        val inForeground = KeyDeckRuntimeState.isAppInForeground.value
+        val directMouse = if (inForeground) directMouseRef?.get() else null
+        directMouse?.onMouseDelta(scaledDx, scaledDy)
+
+        val a11y = KeyDeckAccessibilityService.activeInstance
+        val dm = a11y?.resources?.displayMetrics ?: context?.resources?.displayMetrics
+
+        if (!mcpeLookMode) {
+            // Desktop Pointer Mode: always update shared PC cursor coordinates so both Floating Overlay & In-App preview move smoothly
+            val w = dm?.widthPixels?.toFloat() ?: 1080f
+            val h = dm?.heightPixels?.toFloat() ?: 2200f
+            KeyDeckRuntimeState.moveMouseCursorBy(scaledDx, scaledDy, w, h, visible = true)
+            if (!inForeground && a11y == null) {
+                val now = SystemClock.uptimeMillis()
+                if (now - lastMouseA11yHintMs > 3500L) {
+                    lastMouseA11yHintMs = now
+                    KeyDeckRuntimeState.recordDispatchedKey(
+                        DispatchedKeyRecord(
+                            timestampMs = System.currentTimeMillis(),
+                            comboLabel = "Cursor",
+                            keyCode = 0,
+                            route = "Setup",
+                            detail = "Enable Accessibility for external cursor clicks",
+                        ),
+                    )
+                }
+            }
             return
         }
 
-        val a11y = KeyDeckAccessibilityService.activeInstance
-        a11y?.dispatchMouseLookOrMove(scaledDx, scaledDy, mcpeLookMode)
+        if (inForeground && directMouse != null) {
+            return
+        }
+
+        if (a11y != null) {
+            a11y.dispatchMouseLookOrMove(scaledDx, scaledDy, mcpeLookMode = true)
+        } else {
+            val now = SystemClock.uptimeMillis()
+            if (now - lastMouseA11yHintMs > 3500L) {
+                lastMouseA11yHintMs = now
+                KeyDeckRuntimeState.recordDispatchedKey(
+                    DispatchedKeyRecord(
+                        timestampMs = System.currentTimeMillis(),
+                        comboLabel = "Cam Look",
+                        keyCode = 0,
+                        route = "Setup",
+                        detail = "Enable Accessibility for external camera look swipes",
+                    ),
+                )
+            }
+        }
     }
 
     fun dispatchMouseEnd(mcpeLookMode: Boolean) {

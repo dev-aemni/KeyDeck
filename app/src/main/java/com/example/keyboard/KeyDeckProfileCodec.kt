@@ -129,6 +129,7 @@ object KeyDeckProfileCodec {
         sb.appendLine("@kdb.touchpad_width:${String.format(Locale.US, "%.2f", settings.touchpadWidthFraction)}")
         sb.appendLine("@kdb.mcpe_look:${settings.gamingMcpeLookMode}")
         sb.appendLine("@kdb.game_pointer:${settings.showGameMousePointer}")
+        sb.appendLine("@kdb.game_pointer_scale:${String.format(Locale.US, "%.2f", settings.gameMousePointerScale)}")
 
         if (settings.overrideAccentHex != 0L) {
             sb.appendLine("@kdb.override_accent:0x${settings.overrideAccentHex.toString(16).uppercase(Locale.US)}")
@@ -340,6 +341,9 @@ object KeyDeckProfileCodec {
         }
         props["@kdb.game_pointer"]?.toBooleanStrictOrNull()?.let {
             resolvedSettings = resolvedSettings.copy(showGameMousePointer = it)
+        }
+        props["@kdb.game_pointer_scale"]?.toFloatOrNull()?.let {
+            resolvedSettings = resolvedSettings.copy(gameMousePointerScale = it.coerceIn(0.55f, 1.60f))
         }
         parseHexLong(props["@kdb.override_accent"])?.let {
             resolvedSettings = resolvedSettings.copy(overrideAccentHex = it)

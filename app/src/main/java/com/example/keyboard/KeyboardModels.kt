@@ -499,8 +499,9 @@ data class KeyDeckSettings(
     // Gaming & Touchpad tuning
     val touchpadSensitivity: Float = 1.6f,
     val touchpadWidthFraction: Float = 0.42f,
-    val gamingMcpeLookMode: Boolean = true,
+    val gamingMcpeLookMode: Boolean = false,
     val showGameMousePointer: Boolean = true,
+    val gameMousePointerScale: Float = 0.80f,
     // Custom color overrides
     val overrideAccentHex: Long = 0L,
     val customDeckHex: Long = 0xFFD5DCE5,
@@ -629,6 +630,23 @@ object MouseJoystickMath {
             stepDx = dirX * curvedSpeed,
             stepDy = dirY * curvedSpeed,
         )
+    }
+
+    fun clampCursorPosition(
+        currentX: Float,
+        currentY: Float,
+        dx: Float,
+        dy: Float,
+        screenWidthPx: Float,
+        screenHeightPx: Float,
+    ): Pair<Float, Float> {
+        val w = screenWidthPx.coerceAtLeast(320f)
+        val h = screenHeightPx.coerceAtLeast(480f)
+        val baseX = if (currentX >= 0f) currentX else w * 0.5f
+        val baseY = if (currentY >= 0f) currentY else h * 0.42f
+        val nextX = (baseX + dx).coerceIn(8f, w - 8f)
+        val nextY = (baseY + dy).coerceIn(16f, h - 16f)
+        return nextX to nextY
     }
 
     data class StickOutput(

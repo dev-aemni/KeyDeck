@@ -36,6 +36,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.launch
 import kotlin.math.hypot
 
@@ -44,8 +45,6 @@ class KeyDeckAccessibilityService : AccessibilityService() {
     private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
     private val mainHandler = Handler(Looper.getMainLooper())
 
-    private var cursorX = -1f
-    private var cursorY = -1f
     private var lookAnchorX = -1f
     private var lookAnchorY = -1f
     private var lookPendingDx = 0f
@@ -75,24 +74,13 @@ class KeyDeckAccessibilityService : AccessibilityService() {
         KeyDeckRuntimeState.setAccessibilityRunning(true)
 
         val dm = resources.displayMetrics
-        cursorX = dm.widthPixels * 0.5f
-        cursorY = dm.heightPixels * 0.42f
-
-        runCatching {
-            val info = serviceInfo
-            if (info != null) {
-                var updatedFlags = info.flags
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                    updatedFlags = updatedFlags and AccessibilityServiceInfo.FLAG_REQUEST_ACCESSIBILITY_BUTTON.inv()
-                }
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-                    updatedFlags = updatedFlags or AccessibilityServiceInfo.FLAG_INPUT_METHOD_EDITOR
-                }
-                if (updatedFlags != info.flags) {
-                    info.flags = updatedFlags
-                    serviceInfo = info
-                }
-            }
+        val cur = KeyDeckRuntimeState.mouseCursorState.value
+        if (cur.xPx < 0f || cur.yPx < 0f) {
+            KeyDeckRuntimeState.parkMouseCursorAtCenter(
+                screenWidthPx = dm.widthPixels.toFloat(),
+                screenHeightPx = dm.heightPixels.toFloat(),
+                visible = cur.visible,
+            )
         }
 
         val repo = KeyDeckRepository(applicationContext)
@@ -108,9 +96,11 @@ class KeyDeckAccessibilityService : AccessibilityService() {
                 val keyDeckImeSelected = defaultIme.contains(packageName) &&
                     defaultIme.contains("KeyDeckImeService")
                 overlayExpanded && settings.suppressAutoImeOnInput && !keyDeckImeSelected
-            }.collect { shouldHide ->
-                syncSoftKeyboardPolicy(shouldHide)
             }
+                .distinctUntilChanged()
+                .collect { shouldHide ->
+                    syncSoftKeyboardPolicy(shouldHide)
+                }
         }
     }
 
@@ -200,7 +190,6 @@ class KeyDeckAccessibilityService : AccessibilityService() {
     }
 
     override fun onDestroy() {
-        syncSoftKeyboardPolicy(false)
         serviceScope.cancel()
         KeyDeckRuntimeState.setAccessibilityRunning(false)
         if (activeInstance === this) {
@@ -215,16 +204,9 @@ class KeyDeckAccessibilityService : AccessibilityService() {
         val w = dm.widthPixels.toFloat().coerceAtLeast(320f)
         val h = dm.heightPixels.toFloat().coerceAtLeast(480f)
 
-        if (cursorX < 0f || cursorY < 0f) {
-            cursorX = w * 0.5f
-            cursorY = h * 0.42f
-        }
-
         if (!mcpeLookMode) {
-            // Desktop Mouse Pointer Mode: move visible cursor smoothly without fake screen-dragging swipes
-            cursorX = (cursorX + dx).coerceIn(12f, w - 12f)
-            cursorY = (cursorY + dy).coerceIn(24f, h - 24f)
-            KeyDeckRuntimeState.updateMouseCursor(cursorX, cursorY, visible = true)
+            // Desktop Mouse Pointer Mode: move shared cursor smoothly without fake screen-dragging swipes
+            KeyDeckRuntimeState.moveMouseCursorBy(dx, dy, w, h, visible = true)
             return
         }
 
@@ -452,8 +434,12 @@ class KeyDeckAccessibilityService : AccessibilityService() {
         val w = dm.widthPixels.toFloat().coerceAtLeast(320f)
         val h = dm.heightPixels.toFloat().coerceAtLeast(480f)
 
-        val tapX = if (mcpeLookMode) w * 0.5f else cursorX.coerceIn(12f, w - 12f)
-        val tapY = if (mcpeLookMode) h * 0.42f else cursorY.coerceIn(24f, h - 24f)
+        val cursorState = KeyDeckRuntimeState.mouseCursorState.value
+        val curX = if (cursorState.xPx >= 0f) cursorState.xPx else w * 0.5f
+        val curY = if (cursorState.yPx >= 0f) cursorState.yPx else h * 0.42f
+
+        val tapX = if (mcpeLookMode) w * 0.5f else curX.coerceIn(8f, w - 8f)
+        val tapY = if (mcpeLookMode) h * 0.42f else curY.coerceIn(16f, h - 16f)
         val duration = if (isRightClick) 440L else 42L
 
         val path = Path().apply { moveTo(tapX, tapY) }
@@ -1223,8 +1209,16 @@ class KeyDeckAccessibilityService : AccessibilityService() {
 
     @RequiresApi(Build.VERSION_CODES.TIRAMISU)
     private object A11yInputBridge {
+        private fun activeInputMethod(service: AccessibilityService): InputMethod? {
+            val flags = runCatching { service.serviceInfo?.flags ?: 0 }.getOrDefault(0)
+            if ((flags and AccessibilityServiceInfo.FLAG_INPUT_METHOD_EDITOR) == 0) {
+                return null
+            }
+            return runCatching { service.inputMethod }.getOrNull()
+        }
+
         fun isSuggestionsSuppressed(service: AccessibilityService): Boolean? {
-            val im: InputMethod = runCatching { service.inputMethod }.getOrNull() ?: return null
+            val im: InputMethod = activeInputMethod(service) ?: return null
             if (!im.currentInputStarted) return null
             val info = im.currentInputEditorInfo ?: return null
             val inputType = info.inputType
@@ -1245,7 +1239,7 @@ class KeyDeckAccessibilityService : AccessibilityService() {
             beforeLen: Int,
             afterLen: Int,
         ): Pair<String, String>? {
-            val im: InputMethod = runCatching { service.inputMethod }.getOrNull() ?: return null
+            val im: InputMethod = activeInputMethod(service) ?: return null
             if (!im.currentInputStarted) return null
             val ic = im.currentInputConnection ?: return null
             val info = im.currentInputEditorInfo
@@ -1264,7 +1258,7 @@ class KeyDeckAccessibilityService : AccessibilityService() {
             expectedTail: String,
             replacement: String,
         ): Boolean? {
-            val im: InputMethod = runCatching { service.inputMethod }.getOrNull() ?: return null
+            val im: InputMethod = activeInputMethod(service) ?: return null
             if (!im.currentInputStarted) return null
             val ic = im.currentInputConnection ?: return null
             val info = im.currentInputEditorInfo
@@ -1291,7 +1285,7 @@ class KeyDeckAccessibilityService : AccessibilityService() {
             service: AccessibilityService,
             text: String,
         ): Boolean? {
-            val im: InputMethod = runCatching { service.inputMethod }.getOrNull() ?: return null
+            val im: InputMethod = activeInputMethod(service) ?: return null
             if (!im.currentInputStarted) return null
             val ic = im.currentInputConnection ?: return null
             val info = im.currentInputEditorInfo
@@ -1308,7 +1302,7 @@ class KeyDeckAccessibilityService : AccessibilityService() {
             metaState: Int,
             isDown: Boolean,
         ): Boolean {
-            val im: InputMethod = runCatching { service.inputMethod }.getOrNull() ?: return false
+            val im: InputMethod = activeInputMethod(service) ?: return false
             val ic = im.currentInputConnection ?: return false
             val now = SystemClock.uptimeMillis()
             val action = if (isDown) KeyEvent.ACTION_DOWN else KeyEvent.ACTION_UP
@@ -1335,7 +1329,7 @@ class KeyDeckAccessibilityService : AccessibilityService() {
             metaState: Int,
             charToCommit: Char?,
         ): String? {
-            val im: InputMethod = runCatching { service.inputMethod }.getOrNull() ?: return null
+            val im: InputMethod = activeInputMethod(service) ?: return null
             if (!im.currentInputStarted) return null
             val ic = im.currentInputConnection ?: return null
             val editorInfo = im.currentInputEditorInfo

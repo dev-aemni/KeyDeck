@@ -245,6 +245,7 @@ class KeyDeckLogicTest {
             simpleDoubleSpacePeriod = false,
             simpleClipboardStripEnabled = true,
             showGameMousePointer = false,
+            gameMousePointerScale = 1.25f,
             holdToRepeat = false,
         )
         val defaults = KeyDeckSettings()
@@ -254,6 +255,7 @@ class KeyDeckLogicTest {
         assertTrue(defaults.simpleDoubleSpacePeriod)
         assertTrue(defaults.simpleClipboardStripEnabled)
         assertTrue(defaults.showGameMousePointer)
+        assertEquals(0.80f, defaults.gameMousePointerScale, 0.001f)
         val hotkeys = listOf(
             CustomHotkey(
                 id = "hk_copy",
@@ -317,6 +319,7 @@ class KeyDeckLogicTest {
         assertFalse(parsed.settings.simpleDoubleSpacePeriod)
         assertTrue(parsed.settings.simpleClipboardStripEnabled)
         assertFalse(parsed.settings.showGameMousePointer)
+        assertEquals(1.25f, parsed.settings.gameMousePointerScale, 0.01f)
         assertFalse(parsed.settings.holdToRepeat)
         assertEquals(2, parsed.hotkeys?.size)
         assertEquals("Ctrl+C", parsed.hotkeys?.first()?.comboText())
@@ -452,6 +455,24 @@ class KeyDeckLogicTest {
         val leftPull = MouseJoystickMath.computeStickOutput(-0.8f, 0f)
         val rightPull = MouseJoystickMath.computeStickOutput(0.8f, 0f)
         assertEquals(-rightPull.stepDx, leftPull.stepDx, 0.0001f)
+
+        // Default gaming mode starts in Cursor mode (not Cam Look) so the default PC pointer moves with the pad
+        val defaults = KeyDeckSettings()
+        assertFalse(defaults.gamingMcpeLookMode)
+        assertTrue(defaults.showGameMousePointer)
+
+        // Cursor position helper initializes at screen center and clamps cleanly inside screen edges
+        val (initX, initY) = MouseJoystickMath.clampCursorPosition(-1f, -1f, 20f, -10f, 1080f, 2400f)
+        assertEquals(560f, initX, 0.01f)
+        assertEquals(998f, initY, 0.01f)
+
+        val (clampedMinX, clampedMinY) = MouseJoystickMath.clampCursorPosition(10f, 20f, -100f, -100f, 1080f, 2400f)
+        assertEquals(8f, clampedMinX, 0.01f)
+        assertEquals(16f, clampedMinY, 0.01f)
+
+        val (clampedMaxX, clampedMaxY) = MouseJoystickMath.clampCursorPosition(1070f, 2380f, 100f, 100f, 1080f, 2400f)
+        assertEquals(1072f, clampedMaxX, 0.01f)
+        assertEquals(2384f, clampedMaxY, 0.01f)
     }
 
     @Test

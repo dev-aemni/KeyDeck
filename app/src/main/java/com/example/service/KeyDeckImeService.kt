@@ -205,6 +205,7 @@ class KeyDeckImeService : InputMethodService() {
                                     dy = dy,
                                     sensitivity = settings.touchpadSensitivity,
                                     mcpeLookMode = settings.gamingMcpeLookMode,
+                                    context = this@KeyDeckImeService,
                                 )
                             },
                             onMouseClick = { isRight ->

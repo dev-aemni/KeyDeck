@@ -16,12 +16,10 @@ import android.view.Gravity
 import android.view.View
 import android.view.WindowManager
 import androidx.compose.animation.AnimatedContent
-import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -35,12 +33,6 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.Path
-import androidx.compose.ui.graphics.StrokeCap
-import androidx.compose.ui.graphics.StrokeJoin
-import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.input.pointer.positionChange
@@ -64,6 +56,7 @@ import com.example.keyboard.KeyDispatcher
 import com.example.keyboard.KeyboardDockAlignment
 import com.example.keyboard.KeyboardLayoutMode
 import com.example.keyboard.PcKeyboardDeck
+import com.example.keyboard.PcMousePointerGraphic
 import com.example.keyboard.ResolvedKeyboardPalette
 import com.example.ui.theme.KeyDeckColors
 import com.example.ui.theme.KeyDeckTheme
@@ -214,13 +207,24 @@ class FloatingKeyboardService : Service() {
                     removeCursorOverlay()
                     return@collectLatest
                 }
-                if (!cursor.visible || cursor.xPx < 0f || cursor.yPx < 0f) {
-                    val dm = resources.displayMetrics
-                    val initX = if (cursor.xPx >= 0f) cursor.xPx else dm.widthPixels * 0.5f
-                    val initY = if (cursor.yPx >= 0f) cursor.yPx else dm.heightPixels * 0.42f
+                val dm = resources.displayMetrics
+                val w = dm.widthPixels.toFloat().coerceAtLeast(320f)
+                val h = dm.heightPixels.toFloat().coerceAtLeast(480f)
+                val pointerScale = settings.gameMousePointerScale.coerceIn(0.55f, 1.60f)
+                if (settings.gamingMcpeLookMode) {
+                    val centerX = w * 0.5f
+                    val centerY = h * 0.42f
+                    if (!cursor.visible || kotlin.math.abs(cursor.xPx - centerX) > 1f || kotlin.math.abs(cursor.yPx - centerY) > 1f) {
+                        KeyDeckRuntimeState.parkMouseCursorAtCenter(w, h, visible = true)
+                    }
+                    attachOrMoveCursorOverlay(centerX, centerY, pointerScale)
+                } else if (!cursor.visible || cursor.xPx < 0f || cursor.yPx < 0f) {
+                    val initX = if (cursor.xPx >= 0f) cursor.xPx else w * 0.5f
+                    val initY = if (cursor.yPx >= 0f) cursor.yPx else h * 0.42f
                     KeyDeckRuntimeState.updateMouseCursor(initX, initY, visible = true)
+                    attachOrMoveCursorOverlay(initX, initY, pointerScale)
                 } else {
-                    attachOrMoveCursorOverlay(cursor.xPx, cursor.yPx)
+                    attachOrMoveCursorOverlay(cursor.xPx, cursor.yPx, pointerScale)
                 }
             }
         }
@@ -434,6 +438,7 @@ class FloatingKeyboardService : Service() {
                                     dy = dy,
                                     sensitivity = settings.touchpadSensitivity,
                                     mcpeLookMode = settings.gamingMcpeLookMode,
+                                    context = this@FloatingKeyboardService,
                                 )
                             },
                             onMouseClick = { isRight ->
@@ -539,6 +544,12 @@ class FloatingKeyboardService : Service() {
         if (added) {
             keyboardLifecycleOwner = owner
             keyboardView = view
+            // Ensure mouse cursor overlay stays above the keyboard window in z-order
+            val cur = KeyDeckRuntimeState.mouseCursorState.value
+            if (cursorView != null && cur.visible) {
+                removeCursorOverlay()
+                attachOrMoveCursorOverlay(cur.xPx, cur.yPx)
+            }
         } else {
             runCatching { view.disposeComposition() }
             owner.onDestroy()
@@ -559,14 +570,24 @@ class FloatingKeyboardService : Service() {
         }
     }
 
-    private fun attachOrMoveCursorOverlay(xPx: Float, yPx: Float) {
+    private fun attachOrMoveCursorOverlay(
+        xPx: Float,
+        yPx: Float,
+        pointerScale: Float = 0.80f,
+    ) {
         if (!Settings.canDrawOverlays(this)) return
+        val tipOffsetPx = resources.displayMetrics.density * (1f * pointerScale.coerceIn(0.55f, 1.60f))
+        val targetWindowX = (xPx - tipOffsetPx).roundToInt()
+        val targetWindowY = (yPx - tipOffsetPx).roundToInt()
+
         val existingView = cursorView
         val existingParams = cursorParams
         if (existingView != null && existingParams != null) {
-            existingParams.x = xPx.roundToInt()
-            existingParams.y = yPx.roundToInt()
-            runCatching { windowManager.updateViewLayout(existingView, existingParams) }
+            if (existingParams.x != targetWindowX || existingParams.y != targetWindowY) {
+                existingParams.x = targetWindowX
+                existingParams.y = targetWindowY
+                runCatching { windowManager.updateViewLayout(existingView, existingParams) }
+            }
             return
         }
 
@@ -582,8 +603,8 @@ class FloatingKeyboardService : Service() {
             PixelFormat.TRANSLUCENT,
         ).apply {
             gravity = Gravity.TOP or Gravity.START
-            x = xPx.roundToInt()
-            y = yPx.roundToInt()
+            x = targetWindowX
+            y = targetWindowY
         }
         cursorParams = params
 
@@ -597,7 +618,11 @@ class FloatingKeyboardService : Service() {
             setViewTreeSavedStateRegistryOwner(owner)
             setViewTreeViewModelStoreOwner(owner)
             setContent {
-                FloatingMousePointer()
+                val settings by repository.settingsFlow.collectAsStateWithLifecycle(initialValue = KeyDeckSettings())
+                PcMousePointerGraphic(
+                    pointerScale = settings.gameMousePointerScale,
+                    isLookMode = settings.gamingMcpeLookMode,
+                )
             }
         }
         val added = runCatching { windowManager.addView(view, params) }.isSuccess
@@ -749,43 +774,6 @@ private fun FloatingTriggerBubble(
                 .size(7.dp)
                 .clip(CircleShape)
                 .background(if (expanded) palette.accentBg else KeyDeckColors.current.emerald),
-        )
-    }
-}
-
-@Composable
-private fun FloatingMousePointer() {
-    Canvas(modifier = Modifier.size(26.dp)) {
-        val tipX = 1.dp.toPx()
-        val tipY = 1.dp.toPx()
-        val shadowOffset = 1.1.dp.toPx()
-
-        fun buildPointerPath(ox: Float, oy: Float): Path = Path().apply {
-            moveTo(ox, oy)
-            lineTo(ox, oy + 17.5.dp.toPx())
-            lineTo(ox + 4.4.dp.toPx(), oy + 13.4.dp.toPx())
-            lineTo(ox + 7.6.dp.toPx(), oy + 20.4.dp.toPx())
-            lineTo(ox + 9.9.dp.toPx(), oy + 19.3.dp.toPx())
-            lineTo(ox + 6.8.dp.toPx(), oy + 12.3.dp.toPx())
-            lineTo(ox + 12.6.dp.toPx(), oy + 12.3.dp.toPx())
-            close()
-        }
-
-        val shadowPath = buildPointerPath(tipX + shadowOffset, tipY + shadowOffset)
-        drawPath(
-            path = shadowPath,
-            color = Color.Black.copy(alpha = 0.28f),
-        )
-
-        val arrowPath = buildPointerPath(tipX, tipY)
-        drawPath(
-            path = arrowPath,
-            color = Color(0xFF000000),
-            style = Stroke(width = 2.1.dp.toPx(), cap = StrokeCap.Butt, join = StrokeJoin.Miter),
-        )
-        drawPath(
-            path = arrowPath,
-            color = Color.White,
         )
     }
 }
