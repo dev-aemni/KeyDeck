@@ -209,7 +209,7 @@ fun KeyDeckDocsSection(
                     .padding(11.dp),
             ) {
                 Text(
-                    text = "Our KBD board works the same way as when you connect a mechanical keyboard and mouse to your phone with an OTG. It works and inputs the exact same like that—just still a few things are limited, mostly the real mechanical feel that you won't ever feel on touch glass. Android won't even know whether you connected a physical mechanical keyboard or not; our app sends hardware signals straight to the inputs the same way a mechanical keyboard does, not like other basic mobile keyboard apps that only input plain text.",
+                    text = "Our KDB (KeyDeckBoard) works the same way as when you connect a mechanical keyboard and mouse to your phone with an OTG. It works and inputs the exact same like that—just still a few things are limited, mostly the real mechanical feel that you won't ever feel on touch glass. Android won't even know whether you connected a physical mechanical keyboard or not; our app sends hardware signals straight to the inputs the same way a mechanical keyboard does, not like other basic mobile keyboard apps that only input plain text.",
                     fontFamily = BodyFontFamily,
                     fontSize = 11.5.sp,
                     lineHeight = 16.5.sp,

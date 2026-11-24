@@ -1,6 +1,6 @@
 <div align="center">
 
-![KeyDeck v1.1.7 Banner](./docs/keydeck-header.svg)
+![KeyDeck v1.1.8 Banner](./docs/keydeck-header.svg)
 
 **PC-Grade Hardware `KeyEvent` Keyboard • Persistent Floating Deck • Analog Mouse Joystick**
 
@@ -17,7 +17,7 @@
 
 ## ⚡ How It Works (Just Like a USB OTG Keyboard & Mouse)
 
-> Our KBD board works the same way as when you connect a mechanical keyboard and mouse to your phone with an OTG. It works and inputs the exact same like that—just still a few things are limited, mostly the real mechanical feel that you won't ever feel on touch glass. Android won't even know whether you connected a physical mechanical keyboard or not; our app sends hardware signals straight to the inputs the same way a mechanical keyboard does, not like other basic mobile keyboard apps that only input plain text.
+> Our KDB (KeyDeckBoard) works the same way as when you connect a mechanical keyboard and mouse to your phone with an OTG. It works and inputs the exact same like that—just still a few things are limited, mostly the real mechanical feel that you won't ever feel on touch glass. Android won't even know whether you connected a physical mechanical keyboard or not; our app sends hardware signals straight to the inputs the same way a mechanical keyboard does, not like other basic mobile keyboard apps that only input plain text.
 
 That means **Termux**, **code editors**, **remote desktops**, and **PC-keyboard-supported mobile games** react to <kbd>Ctrl</kbd>, <kbd>Alt</kbd>, <kbd>Win</kbd>, <kbd>F1</kbd>–<kbd>F12</kbd>, hold-down `WASD`, and arrow keys cleanly right off your screen.
 
@@ -41,7 +41,7 @@ That means **Termux**, **code editors**, **remote desktops**, and **PC-keyboard-
 | **5 Instant Modes** | Switch live between `PC+Num`, `PC Full`, `Simple`, `Num`, and `Game` from the top strip |
 | **Game Mouse Joystick** | Hybrid circular analog stick + trackpad with 60Hz panning, floating cursor pointer, and MCPE look mode |
 | **Floating + System IME** | Draggable, resizable transparent overlay with automatic system-IME suppression when expanded |
-| **Themes & `.kdb` Export** | 12+ Neumorphic themes, animated GIF wallpapers, and one-file `.kdb` backups (`@version:117`) |
+| **Themes & `.kdb` Export** | 12+ Neumorphic themes, animated GIF wallpapers, and one-file `.kdb` backups (`@version:118`) |
 
 ---
 
@@ -143,14 +143,14 @@ KeyDeck triggers Android's native physical-keyboard shortcuts directly from touc
 ## 🎨 Themes, GIF Wallpapers & `.kdb` Profiles
 
 <details>
-<summary><b>Neumorphic Themes, Live Wallpaper Studio &amp; Single-File Backups (<code>@version:117</code>)</b></summary>
+<summary><b>Neumorphic Themes, Live Wallpaper Studio &amp; Single-File Backups (<code>@version:118</code>)</b></summary>
 
 - **Neumorphic Theme Engine**: Soft extruded keycaps across **12+ built-in themes** (`Pure Black #000`, `Midnight Gaming`, `Carbon Stealth`, `Soft UI Slate`, auto Dark Mode sync), Custom Color Studio, and **RGB Border Modes** (`Gaming Only`, `All`, `Off`).
 - **Live Wallpaper Studio**:
   - 7 built-in geometric/cyber pattern wallpapers
   - Custom **Image & Animated GIF** gallery picker with interactive **drag/pan/zoom crop**
   - Real-time **Lightness**, **Saturation**, **Contrast**, **Brightness**, **Tint**, and **Keycap Glass Opacity** controls
-- **Portable `.kdb` Profiles (`@keydeck.aemni`)**: Export your entire setup—dimensions, transparency, theme, RGB border mode, custom hotkeys, and even base64-embedded static or animated **GIF wallpapers**—into `Download/*.kdb` (`@version:117`) and restore or share in one tap.
+- **Portable `.kdb` Profiles (`@keydeck.aemni`)**: Export your entire setup—dimensions, transparency, theme, RGB border mode, custom hotkeys, and even base64-embedded static or animated **GIF wallpapers**—into `Download/*.kdb` (`@version:118`) and restore or share in one tap.
 
 </details>
 
@@ -158,6 +158,6 @@ KeyDeck triggers Android's native physical-keyboard shortcuts directly from touc
 
 <div align="center">
 
-<sub><b>KeyDeck v1.1.7 (Patch 117)</b> • Package <code>com.aemni.keydeck</code> • Built for Android Mobile Developers &amp; Gamers</sub>
+<sub><b>KeyDeck v1.1.8 (Patch 118)</b> • Package <code>com.aemni.keydeck</code> • Built for Android Mobile Developers &amp; Gamers</sub>
 
 </div>

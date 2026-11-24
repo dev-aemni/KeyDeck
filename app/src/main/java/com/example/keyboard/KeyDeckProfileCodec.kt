@@ -21,7 +21,7 @@ data class ParsedKeyDeckProfile(
 object KeyDeckProfileCodec {
     const val FORMAT_HEADER = "@keydeck.aemni"
     const val PROFILE_EXTENSION = ".kdb"
-    const val CURRENT_FORMAT_VERSION = 117
+    const val CURRENT_FORMAT_VERSION = 118
 
     fun sanitizeProfileBaseName(rawName: String): String {
         val trimmed = rawName.trim()
