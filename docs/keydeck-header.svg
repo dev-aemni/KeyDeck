@@ -1,0 +1,111 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 880 156" width="100%" role="img" aria-label="KeyDeck v1.1.7 — Android PC Mechanical Keyboard, Floating Deck &amp; Mouse Joystick">
+  <defs>
+    <linearGradient id="bgGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#0B1120" />
+      <stop offset="55%" stop-color="#111827" />
+      <stop offset="100%" stop-color="#0F172A" />
+    </linearGradient>
+
+    <linearGradient id="borderGlow" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#38BDF8">
+        <animate attributeName="stop-color" values="#38BDF8;#818CF8;#10B981;#38BDF8" dur="7s" repeatCount="indefinite" />
+      </stop>
+      <stop offset="50%" stop-color="#818CF8">
+        <animate attributeName="stop-color" values="#818CF8;#10B981;#38BDF8;#818CF8" dur="7s" repeatCount="indefinite" />
+      </stop>
+      <stop offset="100%" stop-color="#10B981">
+        <animate attributeName="stop-color" values="#10B981;#38BDF8;#818CF8;#10B981" dur="7s" repeatCount="indefinite" />
+      </stop>
+    </linearGradient>
+
+    <linearGradient id="keycapGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#1E293B" />
+      <stop offset="100%" stop-color="#0F172A" />
+    </linearGradient>
+
+    <style>
+      .cursor-blink {
+        animation: blink 1.05s steps(1, end) infinite;
+      }
+      .led-pulse {
+        animation: pulse 2.4s ease-in-out infinite;
+      }
+      @keyframes blink {
+        0%, 49% { opacity: 1; }
+        50%, 100% { opacity: 0; }
+      }
+      @keyframes pulse {
+        0%, 100% { opacity: 1; }
+        50% { opacity: 0.35; }
+      }
+    </style>
+  </defs>
+
+  <!-- Outer frame with subtle animated gradient hairline -->
+  <rect x="2" y="2" width="876" height="152" rx="18" fill="url(#bgGrad)" stroke="url(#borderGlow)" stroke-width="1.6" />
+  <rect x="3" y="3" width="874" height="150" rx="17" fill="none" stroke="#FFFFFF" stroke-opacity="0.05" stroke-width="1" />
+
+  <!-- Subtle background dot matrix -->
+  <g fill="#64748B" fill-opacity="0.16">
+    <circle cx="720" cy="34" r="1.4" />
+    <circle cx="744" cy="34" r="1.4" />
+    <circle cx="768" cy="34" r="1.4" />
+    <circle cx="792" cy="34" r="1.4" />
+    <circle cx="816" cy="34" r="1.4" />
+    <circle cx="840" cy="34" r="1.4" />
+    <circle cx="720" cy="56" r="1.4" />
+    <circle cx="744" cy="56" r="1.4" />
+    <circle cx="768" cy="56" r="1.4" />
+    <circle cx="792" cy="56" r="1.4" />
+    <circle cx="816" cy="56" r="1.4" />
+    <circle cx="840" cy="56" r="1.4" />
+    <circle cx="720" cy="78" r="1.4" />
+    <circle cx="744" cy="78" r="1.4" />
+    <circle cx="768" cy="78" r="1.4" />
+    <circle cx="792" cy="78" r="1.4" />
+    <circle cx="816" cy="78" r="1.4" />
+    <circle cx="840" cy="78" r="1.4" />
+  </g>
+
+  <!-- Tactile Keycap Icon -->
+  <g transform="translate(34, 38)">
+    <rect x="0" y="0" width="80" height="80" rx="16" fill="#060A13" stroke="#334155" stroke-width="1.2" />
+    <rect x="6" y="4" width="68" height="64" rx="12" fill="url(#keycapGrad)" stroke="#38BDF8" stroke-opacity="0.45" stroke-width="1.2" />
+    <text x="40" y="34" text-anchor="middle" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="14" font-weight="700" fill="#38BDF8" letter-spacing="1">KBD</text>
+    <text x="40" y="52" text-anchor="middle" font-family="ui-sans-serif, system-ui, -apple-system, sans-serif" font-size="10" font-weight="600" fill="#94A3B8">OTG-SYNC</text>
+  </g>
+
+  <!-- Title & Version Pill -->
+  <text x="136" y="68" font-family="ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif" font-size="34" font-weight="800" fill="#F8FAFC" letter-spacing="-0.5">KeyDeck</text>
+
+  <g transform="translate(292, 43)">
+    <rect x="0" y="0" width="76" height="26" rx="13" fill="#1E293B" stroke="#38BDF8" stroke-opacity="0.55" stroke-width="1" />
+    <circle class="led-pulse" cx="14" cy="13" r="4" fill="#10B981">
+      <animate attributeName="opacity" values="1;0.35;1" dur="2.4s" repeatCount="indefinite" />
+    </circle>
+    <text x="46" y="17.5" text-anchor="middle" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="12" font-weight="700" fill="#E2E8F0">v1.1.7</text>
+  </g>
+
+  <!-- Subtle Subtitle + Blinking Terminal Cursor -->
+  <text x="136" y="99" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="14" fill="#94A3B8">
+    <tspan fill="#38BDF8">&gt;_</tspan> System IME  •  Floating Deck  •  Mouse Joystick
+  </text>
+  <rect class="cursor-blink" x="598" y="85" width="8" height="17" rx="1.5" fill="#38BDF8">
+    <animate attributeName="opacity" values="1;1;0;0" dur="1.05s" repeatCount="indefinite" />
+  </rect>
+
+  <!-- Mini Mode Chips Row -->
+  <g transform="translate(136, 114)" font-family="ui-sans-serif, system-ui, -apple-system, sans-serif" font-size="11" font-weight="600">
+    <rect x="0" y="0" width="70" height="22" rx="6" fill="#1E293B" stroke="#334155" stroke-width="1" />
+    <text x="35" y="15" text-anchor="middle" fill="#CBD5E1">PC + Num</text>
+
+    <rect x="78" y="0" width="54" height="22" rx="6" fill="#1E293B" stroke="#334155" stroke-width="1" />
+    <text x="105" y="15" text-anchor="middle" fill="#CBD5E1">Simple</text>
+
+    <rect x="140" y="0" width="94" height="22" rx="6" fill="#1E293B" stroke="#334155" stroke-width="1" />
+    <text x="187" y="15" text-anchor="middle" fill="#CBD5E1">Game + Mouse</text>
+
+    <rect x="242" y="0" width="88" height="22" rx="6" fill="#1E293B" stroke="#38BDF8" stroke-opacity="0.35" stroke-width="1" />
+    <text x="286" y="15" text-anchor="middle" fill="#7DD3FC">.kdb Profiles</text>
+  </g>
+</svg>

@@ -30,6 +30,7 @@ import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.DarkMode
 import androidx.compose.material.icons.filled.DashboardCustomize
 import androidx.compose.material.icons.filled.EditNote
+import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Keyboard
 import androidx.compose.material.icons.filled.Layers
 import androidx.compose.material.icons.filled.LightMode
@@ -67,13 +68,20 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.R
 import com.example.keyboard.AppThemeMode
 import com.example.keyboard.CustomHotkey
 import com.example.keyboard.DispatchedKeyRecord
@@ -710,6 +718,8 @@ fun DeckHomeScreen(
                 )
             }
 
+            ImportantNoteCard()
+
             // Quick Actions 2x2 Neumorphic Cards
             Text(
                 text = "Quick Actions",
@@ -1314,5 +1324,139 @@ private fun NeuReadinessChip(
                 )
             }
         }
+    }
+}
+
+@Composable
+private fun ImportantNoteCard(modifier: Modifier = Modifier) {
+    val colors = KeyDeckColors.current
+    val imeBullet = buildAnnotatedString {
+        withStyle(SpanStyle(fontWeight = FontWeight.SemiBold, color = colors.textPrimary)) {
+            append(stringResource(R.string.important_note_ime_prefix))
+        }
+        withStyle(SpanStyle(fontStyle = FontStyle.Italic, color = colors.textSecondary)) {
+            append(stringResource(R.string.important_note_ime_emphasis))
+        }
+    }
+    val floatingBullet = buildAnnotatedString {
+        withStyle(SpanStyle(fontWeight = FontWeight.SemiBold, color = colors.textPrimary)) {
+            append(stringResource(R.string.important_note_floating_prefix))
+        }
+        withStyle(SpanStyle(fontStyle = FontStyle.Italic, color = colors.textSecondary)) {
+            append(stringResource(R.string.important_note_floating_emphasis))
+        }
+    }
+    val a11yBullet = buildAnnotatedString {
+        withStyle(SpanStyle(fontWeight = FontWeight.SemiBold, color = colors.textPrimary)) {
+            append(stringResource(R.string.important_note_a11y_prefix))
+        }
+        withStyle(SpanStyle(fontStyle = FontStyle.Italic, color = colors.textSecondary)) {
+            append(stringResource(R.string.important_note_a11y_emphasis))
+        }
+    }
+
+    Box(
+        modifier = modifier
+            .fillMaxWidth()
+            .neumorphicRaised(
+                surfaceColor = colors.bg,
+                shadowLight = colors.shadowLight,
+                shadowDark = colors.shadowDark,
+                cornerRadius = 22.dp,
+                shadowOffset = 5.dp,
+                blurRadius = 10.dp,
+                borderColor = colors.keyBorder.copy(alpha = 0.45f),
+            )
+            .padding(16.dp)
+            .testTag("home_important_note_card"),
+    ) {
+        Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                Box(
+                    modifier = Modifier
+                        .size(28.dp)
+                        .neumorphicInset(
+                            surfaceColor = colors.activeFill,
+                            shadowLight = colors.shadowLight,
+                            shadowDark = colors.shadowDark,
+                            cornerRadius = 9.dp,
+                            depth = 2.dp,
+                            borderColor = colors.keyBorder.copy(alpha = 0.35f),
+                        ),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Info,
+                        contentDescription = stringResource(R.string.important_note_title),
+                        tint = colors.indigo,
+                        modifier = Modifier.size(16.dp),
+                    )
+                }
+                Text(
+                    text = stringResource(R.string.important_note_title),
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold,
+                    color = colors.textPrimary,
+                )
+            }
+
+            Column(verticalArrangement = Arrangement.spacedBy(7.dp)) {
+                ImportantNoteBulletRow(dotColor = colors.emerald, text = imeBullet)
+                ImportantNoteBulletRow(dotColor = colors.indigo, text = floatingBullet)
+                ImportantNoteBulletRow(dotColor = colors.amber, text = a11yBullet)
+            }
+
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .neumorphicInset(
+                        surfaceColor = colors.activeFill.copy(alpha = 0.65f),
+                        shadowLight = colors.shadowLight,
+                        shadowDark = colors.shadowDark,
+                        cornerRadius = 14.dp,
+                        depth = 2.dp,
+                        borderColor = colors.keyBorder.copy(alpha = 0.35f),
+                    )
+                    .padding(horizontal = 12.dp, vertical = 10.dp),
+            ) {
+                Text(
+                    text = stringResource(R.string.important_note_audience),
+                    fontFamily = FontFamily.Monospace,
+                    fontSize = 11.sp,
+                    lineHeight = 16.sp,
+                    color = colors.textPrimary,
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun ImportantNoteBulletRow(
+    dotColor: Color,
+    text: androidx.compose.ui.text.AnnotatedString,
+) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        verticalAlignment = Alignment.Top,
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        Box(
+            modifier = Modifier
+                .padding(top = 5.dp)
+                .size(6.dp)
+                .clip(CircleShape)
+                .background(dotColor),
+        )
+        Text(
+            text = text,
+            fontFamily = BodyFontFamily,
+            fontSize = 12.sp,
+            lineHeight = 17.sp,
+            modifier = Modifier.weight(1f),
+        )
     }
 }

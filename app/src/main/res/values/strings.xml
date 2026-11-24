@@ -6,4 +6,12 @@
     <string name="fgs_notification_title">KeyDeck Keyboard Active</string>
     <string name="fgs_notification_text">Tap the floating icon to open KeyDeck anytime. Use Turn Off to close.</string>
     <string name="fgs_action_stop">Turn Off</string>
+    <string name="important_note_title">Important Note</string>
+    <string name="important_note_ime_prefix">Enable and select KeyDeck as IME </string>
+    <string name="important_note_ime_emphasis">to use the IME (Normal keyboard) version.</string>
+    <string name="important_note_floating_prefix">Enable and select KeyDeck IME and open Floating Keyboard </string>
+    <string name="important_note_floating_emphasis">to type in any area\'s input across apps.</string>
+    <string name="important_note_a11y_prefix">Enable Accessibility </string>
+    <string name="important_note_a11y_emphasis">to use the keyboard\'s Game mode Mouse Pad / Joystick on screen.</string>
+    <string name="important_note_audience">Built for Mobile Developers &amp; Mobile Gamers who want full mechanical-keyboard control in supported Games and Dev apps (e.g., Termux, code editors, SSH).</string>
 </resources>
