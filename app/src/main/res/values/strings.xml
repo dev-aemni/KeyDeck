@@ -13,6 +13,8 @@
     <string name="important_note_floating_emphasis">to type in any area\'s input across apps.</string>
     <string name="important_note_a11y_prefix">Enable Accessibility </string>
     <string name="important_note_a11y_emphasis">to use the keyboard\'s Game mode Mouse Pad / Joystick on screen.</string>
+    <string name="important_note_restricted_prefix">Android 13+ Tip: Enable \"Allow restricted settings\" </string>
+    <string name="important_note_restricted_emphasis">in KeyDeck\'s App Info (⋮ menu) before turning on Accessibility mode.</string>
     <string name="important_note_audience">Built for Mobile Developers &amp; Mobile Gamers who want full mechanical-keyboard control in supported Games and Dev apps (e.g., Termux, code editors, SSH).</string>
     <string name="home_checkout_full_docs">Checkout the full Docs. You must read it.</string>
     <string name="deck_lab_issues_title">Suggest features or Inform about bugs</string>
@@ -21,4 +23,5 @@
     <string name="floating_launcher_name">KeyDeck Float</string>
     <string name="floating_launcher_long_label">Open Floating Keyboard</string>
     <string name="floating_launcher_overlay_required">Grant Display over other apps to open Floating Keyboard</string>
+    <string name="floating_launcher_setup_needed">Enable &amp; select KeyDeck IME and grant Overlay in KeyDeck first</string>
 </resources>

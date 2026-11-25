@@ -43,24 +43,19 @@
                 android:resource="@xml/shortcuts" />
         </activity>
 
-        <!-- Direct Floating Keyboard launcher entry: exposes a second app icon ("KeyDeck Float"),
-             component target, Intent action (com.aemni.keydeck.OPEN_FLOATING), and URI (keydeck://floating). -->
+        <!-- Target trampoline activity for Floating Keyboard intents, actions, and deep links. -->
         <activity
             android:name=".FloatingDeckLauncherActivity"
             android:excludeFromRecents="true"
             android:exported="true"
-            android:icon="@mipmap/ic_launcher"
+            android:icon="@mipmap/ic_launcher_float"
             android:label="@string/floating_launcher_name"
             android:noHistory="true"
-            android:roundIcon="@mipmap/ic_launcher_round"
+            android:roundIcon="@mipmap/ic_launcher_float_round"
             android:taskAffinity=""
             android:theme="@style/Theme.KeyDeck.TranslucentLauncher">
             <intent-filter>
-                <action android:name="android.intent.action.MAIN" />
-                <category android:name="android.intent.category.LAUNCHER" />
-                <category android:name="android.intent.category.DEFAULT" />
-            </intent-filter>
-            <intent-filter>
+                <action android:name="com.aemni.keydeck.float" />
                 <action android:name="com.aemni.keydeck.OPEN_FLOATING" />
                 <category android:name="android.intent.category.DEFAULT" />
             </intent-filter>
@@ -71,8 +66,27 @@
                 <data
                     android:host="floating"
                     android:scheme="keydeck" />
+                <data
+                    android:host="float"
+                    android:scheme="keydeck" />
             </intent-filter>
         </activity>
+
+        <!-- Second launcher entry (component com.aemni.keydeck/com.aemni.keydeck.float) with distinct floating logo. -->
+        <activity-alias
+            android:name="com.aemni.keydeck.float"
+            android:enabled="true"
+            android:exported="true"
+            android:icon="@mipmap/ic_launcher_float"
+            android:label="@string/floating_launcher_name"
+            android:roundIcon="@mipmap/ic_launcher_float_round"
+            android:targetActivity=".FloatingDeckLauncherActivity">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+                <category android:name="android.intent.category.DEFAULT" />
+            </intent-filter>
+        </activity-alias>
 
         <!-- Floating Bubble & Floating PC Keyboard Overlay Service.
              stopWithTask=false keeps the floating keyboard alive even if the KeyDeck app tab is closed. -->

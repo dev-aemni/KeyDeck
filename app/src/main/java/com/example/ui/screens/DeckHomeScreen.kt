@@ -1433,6 +1433,14 @@ private fun ImportantNoteCard(
             append(stringResource(R.string.important_note_a11y_emphasis))
         }
     }
+    val restrictedBullet = buildAnnotatedString {
+        withStyle(SpanStyle(fontWeight = FontWeight.SemiBold, color = colors.textPrimary)) {
+            append(stringResource(R.string.important_note_restricted_prefix))
+        }
+        withStyle(SpanStyle(fontStyle = FontStyle.Italic, color = colors.textSecondary)) {
+            append(stringResource(R.string.important_note_restricted_emphasis))
+        }
+    }
 
     Box(
         modifier = modifier
@@ -1486,6 +1494,7 @@ private fun ImportantNoteCard(
                 ImportantNoteBulletRow(dotColor = colors.emerald, text = imeBullet)
                 ImportantNoteBulletRow(dotColor = colors.indigo, text = floatingBullet)
                 ImportantNoteBulletRow(dotColor = colors.amber, text = a11yBullet)
+                ImportantNoteBulletRow(dotColor = colors.coral, text = restrictedBullet)
             }
 
             Box(

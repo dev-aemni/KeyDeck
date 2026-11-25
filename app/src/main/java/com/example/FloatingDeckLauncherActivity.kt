@@ -2,25 +2,23 @@ package com.example
 
 import android.app.Activity
 import android.content.Intent
-import android.net.Uri
 import android.os.Build
 import android.os.Bundle
-import android.provider.Settings
 import android.widget.Toast
 import com.example.service.FloatingKeyboardService
 import com.example.service.KeyDeckImeService
+import com.example.ui.inspectSystemReadiness
 
 /**
- * Lightweight, transparent launcher entry activity that immediately starts and expands the
- * Floating Keyboard overlay without opening KeyDeck's main settings UI.
- *
- * Exposes a dedicated launcher icon ("KeyDeck Float"), component name, custom Intent action
- * (`com.aemni.keydeck.OPEN_FLOATING`), and deep link (`keydeck://floating`) so external launchers,
- * sidebars, automation tools, or system shortcuts can open the Floating Keyboard directly.
+ * Lightweight, transparent launcher shortcut activity that directly opens the Floating Keyboard
+ * overlay once minimum requirements (KeyDeck IME enabled & selected, plus Display over other apps)
+ * are granted. If any of those minimum requirements are missing, it opens MainActivity instead of
+ * forcing the user into system permission menus.
  */
 class FloatingDeckLauncherActivity : Activity() {
 
     companion object {
+        const val ACTION_FLOAT_ALIAS = "com.aemni.keydeck.float"
         const val ACTION_OPEN_FLOATING = "com.aemni.keydeck.OPEN_FLOATING"
         const val DEEP_LINK_URI = "keydeck://floating"
     }
@@ -28,25 +26,27 @@ class FloatingDeckLauncherActivity : Activity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         suppressTransition()
-        launchFloatingDeck()
+        launchFloatingDeckOrMain()
         finish()
         suppressTransition()
     }
 
-    private fun launchFloatingDeck() {
-        if (!Settings.canDrawOverlays(this)) {
+    private fun launchFloatingDeckOrMain() {
+        val readiness = inspectSystemReadiness(this)
+        if (!readiness.isFloatingMinReady) {
             Toast.makeText(
                 this,
-                getString(R.string.floating_launcher_overlay_required),
-                Toast.LENGTH_LONG,
+                getString(R.string.floating_launcher_setup_needed),
+                Toast.LENGTH_SHORT,
             ).show()
-            val permIntent = Intent(
-                Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
-                Uri.parse("package:$packageName"),
-            ).apply {
-                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            val mainIntent = Intent(this, MainActivity::class.java).apply {
+                addFlags(
+                    Intent.FLAG_ACTIVITY_NEW_TASK or
+                        Intent.FLAG_ACTIVITY_CLEAR_TOP or
+                        Intent.FLAG_ACTIVITY_SINGLE_TOP,
+                )
             }
-            runCatching { startActivity(permIntent) }
+            runCatching { startActivity(mainIntent) }
             return
         }
 

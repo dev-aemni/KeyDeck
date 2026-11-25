@@ -28,6 +28,7 @@ That means **Termux**, **code editors**, **remote desktops**, and **PC-keyboard-
 > - Enable and select **KeyDeck** as your IME *to use the IME (Normal keyboard) version.*
 > - Enable and select **KeyDeck IME** and open the **Floating Keyboard** *to use it in any area's input across apps.*
 > - Enable **Accessibility** *to use the keyboard's Game mode Mouse Pad / Joystick on screen.*
+> - **Android 13+ Tip:** Enable **"Allow restricted settings"** in KeyDeck's **App Info** (top-right `⋮` menu) *before* turning on Accessibility mode.
 >
 > `This keyboard is made for Mobile Developers and Mobile Gamers who want better control over mechanical-keyboard-supported Games and Dev-related apps (e.g., Termux, SSH clients, code editors).`
 
@@ -41,7 +42,7 @@ That means **Termux**, **code editors**, **remote desktops**, and **PC-keyboard-
 | **5 Instant Modes** | Switch live between `PC+Num`, `PC Full`, `Simple`, `Num`, and `Game` from the top strip |
 | **Game Mouse Joystick** | Hybrid circular analog stick + trackpad with 60Hz panning, floating cursor pointer, and MCPE look mode |
 | **Floating + System IME** | Draggable, resizable transparent overlay with automatic system-IME suppression when expanded |
-| **Themes & `.kdb` Export** | 12+ Neumorphic themes, animated GIF wallpapers, and one-file `.kdb` backups (`@version:118`) |
+| **Themes & `.kdb` Export** | 12+ Neumorphic themes, animated GIF wallpapers, and one-file `.kdb` backups (`@version:211`) |
 
 ---
 
@@ -121,6 +122,7 @@ KeyDeck triggers Android's native physical-keyboard shortcuts directly from touc
 - **MCPE Camera Look Mode (`On`)**: Uses chained Android 8+ continuous accessibility strokes (`willContinue` -> `continueStroke`) for smooth 3D camera rotation with automatic edge re-centering and clean lift on thumb release.
 - **Desktop Mouse Joystick Mode (`Off`)**: Renders a non-touchable floating **Mouse Cursor Arrow** right on screen whose exact tip aligns with <kbd>LMB</kbd> / <kbd>RMB</kbd> clicks, hiding automatically when you switch modes or minimize.
 - **No Ugly Android 11 Accessibility Icon**: Configured so enabling Accessibility grants Mouse Mode, cross-app shortcuts, and non-IME typing **without** spawning the intrusive floating human button on Android 11 navigation bars.
+- **Android 13+ Restricted Settings**: Before enabling Accessibility mode on Android 13+, open **Settings → Apps → KeyDeck → top-right `⋮` menu → Allow restricted settings** so Android lets you turn on Accessibility.
 
 </details>
 
@@ -132,6 +134,7 @@ KeyDeck triggers Android's native physical-keyboard shortcuts directly from touc
 <summary><b>System IME + Persistent Floating Deck + Smart Suppression</b></summary>
 
 - Runs both as a **native Android System IME** (`KeyDeck PC Keyboard`) and as a **draggable, corner-resizable Floating Keyboard** (`stopWithTask=false`).
+- **KeyDeck Float Direct Launcher**: Includes a separate **KeyDeck Float** launcher icon (`com.aemni.keydeck/com.aemni.keydeck.float`, action `com.aemni.keydeck.float`, URI `keydeck://float`) that opens the Floating Keyboard directly once IME, active IME selection, and Overlay are ready—or opens the main KeyDeck app if setup is incomplete.
 - **Floating Transparency (`0%–75%`)**: See games, terminals, and videos clearly behind floating keys while keeping the System IME crisp and opaque.
 - **Smart IME Suppression**: Automatically hides the bottom system keyboard while the floating deck is expanded so two keyboards never stack over your screen.
 - **Built-in Deck Lab**: Test shortcut combos, hold states, cursor coordinates, LMB/RMB clicks, and numpad responses live inside the app without switching apps.
@@ -143,14 +146,14 @@ KeyDeck triggers Android's native physical-keyboard shortcuts directly from touc
 ## 🎨 Themes, GIF Wallpapers & `.kdb` Profiles
 
 <details>
-<summary><b>Neumorphic Themes, Live Wallpaper Studio &amp; Single-File Backups (<code>@version:118</code>)</b></summary>
+<summary><b>Neumorphic Themes, Live Wallpaper Studio &amp; Single-File Backups (<code>@version:211</code>)</b></summary>
 
 - **Neumorphic Theme Engine**: Soft extruded keycaps across **12+ built-in themes** (`Pure Black #000`, `Midnight Gaming`, `Carbon Stealth`, `Soft UI Slate`, auto Dark Mode sync), Custom Color Studio, and **RGB Border Modes** (`Gaming Only`, `All`, `Off`).
 - **Live Wallpaper Studio**:
   - 7 built-in geometric/cyber pattern wallpapers
   - Custom **Image & Animated GIF** gallery picker with interactive **drag/pan/zoom crop**
   - Real-time **Lightness**, **Saturation**, **Contrast**, **Brightness**, **Tint**, and **Keycap Glass Opacity** controls
-- **Portable `.kdb` Profiles (`@keydeck.aemni`)**: Export your entire setup—dimensions, transparency, theme, RGB border mode, custom hotkeys, and even base64-embedded static or animated **GIF wallpapers**—into `Download/*.kdb` (`@version:118`) and restore or share in one tap.
+- **Portable `.kdb` Profiles (`@keydeck.aemni`)**: Export your entire setup—dimensions, transparency, theme, RGB border mode, custom hotkeys, and even base64-embedded static or animated **GIF wallpapers**—into `Download/*.kdb` (`@version:211`) and restore or share in one tap.
 
 </details>
 
@@ -158,6 +161,6 @@ KeyDeck triggers Android's native physical-keyboard shortcuts directly from touc
 
 <div align="center">
 
-<sub><b>KeyDeck v1.1.8 (Patch 118)</b> • Package <code>com.aemni.keydeck</code> • Built for Android Mobile Developers &amp; Gamers</sub>
+<sub><b>KeyDeck v2.1.1 (Patch 211)</b> • Package <code>com.aemni.keydeck</code> • Float Alias <code>com.aemni.keydeck.float</code> • Built for Android Mobile Developers &amp; Gamers</sub>
 
 </div>

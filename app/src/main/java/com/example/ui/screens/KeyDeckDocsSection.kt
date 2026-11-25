@@ -243,6 +243,7 @@ fun KeyDeckDocsSection(
             DocsBullet(colors.emerald, "Enable and select KeyDeck as IME to use the IME (Normal keyboard) version.")
             DocsBullet(colors.indigo, "Enable and select KeyDeck IME and open Floating Keyboard to use it in any area's input.")
             DocsBullet(colors.amber, "Enable Accessibility to use Game mode's Mouse Pad / Joystick on screen.")
+            DocsBullet(colors.coral, "Android 13+ Tip: Enable \"Allow restricted settings\" in KeyDeck's App Info (top-right ⋮ menu) before enabling Accessibility mode.")
             Text(
                 text = stringResource(R.string.important_note_audience),
                 fontFamily = FontFamily.Monospace,
@@ -302,6 +303,7 @@ fun KeyDeckDocsSection(
             DocsBullet(colors.indigo, "MCPE Camera Look Mode: Chained Android 8+ continuous gestures with edge re-centering + LMB click / RMB hold-use.")
             DocsBullet(colors.emerald, "Desktop Cursor Pointer: Renders a live non-touchable mouse pointer aligned with LMB/RMB clicks.")
             DocsBullet(colors.amber, "Clean Android 11 Setup: Accessibility works without adding an intrusive accessibility human icon to the nav bar.")
+            DocsBullet(colors.coral, "Android 13+ Restricted Settings: If Accessibility is greyed out after sideloading, open Android Settings → Apps → KeyDeck → top-right ⋮ menu → Allow restricted settings first.")
         }
 
         DocsAccordionCard(
@@ -312,7 +314,7 @@ fun KeyDeckDocsSection(
         ) {
             DocsBullet(colors.indigo, "Works both as your System IME keyboard and as a draggable, corner-resizable Floating Keyboard.")
             DocsBullet(colors.emerald, "Automatically suppresses the bottom system keyboard when the floating deck is open so two keyboards never stack.")
-            DocsBullet(colors.amber, "Direct Floating Launch: Open the 'KeyDeck Float' app icon, component com.aemni.keydeck/com.example.FloatingDeckLauncherActivity, action com.aemni.keydeck.OPEN_FLOATING, or URI keydeck://floating.")
+            DocsBullet(colors.amber, "KeyDeck Float Shortcut: Launch KeyDeck Float (component com.aemni.keydeck/com.aemni.keydeck.float, action com.aemni.keydeck.float, or keydeck://float). If KeyDeck IME, IME selection, or Overlay isn't enabled yet, it opens the main KeyDeck app.")
         }
 
         DocsAccordionCard(

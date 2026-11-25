@@ -1,0 +1,45 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <!-- Floating hover shadow pill beneath elevated deck -->
+    <path
+        android:fillColor="#665CE1E6"
+        android:pathData="M31,73 L77,73 C78.7,73 80,74.3 80,76 C80,77.7 78.7,79 77,79 L31,79 C29.3,79 28,77.7 28,76 C28,74.3 29.3,73 31,73 Z" />
+    <!-- Elevated floating keyboard chassis inside safe zone -->
+    <path
+        android:fillColor="#FF1D2E4F"
+        android:pathData="M27,28 L81,28 C83.2,28 85,29.8 85,32 L85,63 C85,65.2 83.2,67 81,67 L27,67 C24.8,67 23,65.2 23,63 L23,32 C23,29.8 24.8,28 27,28 Z" />
+    <!-- Crisp cyan top border accent -->
+    <path
+        android:fillColor="#FF5CE1E6"
+        android:pathData="M27,28 L81,28 C82.5,28 83.8,28.8 84.5,30 L23.5,30 C24.2,28.8 25.5,28 27,28 Z" />
+    <!-- Top keycap row -->
+    <path
+        android:fillColor="#FFF8FAFC"
+        android:pathData="M28,33 h8 v7 h-8 z M39,33 h8 v7 h-8 z M50,33 h8 v7 h-8 z M61,33 h8 v7 h-8 z" />
+    <!-- Coral floating-action corner key -->
+    <path
+        android:fillColor="#FFFF5462"
+        android:pathData="M72,33 h8 v17 h-8 z" />
+    <!-- Middle keycap row -->
+    <path
+        android:fillColor="#FFF8FAFC"
+        android:pathData="M28,43 h11 v7 h-11 z M42,43 h8 v7 h-8 z M53,43 h8 v7 h-8 z M64,43 h5 v7 h-5 z" />
+    <!-- Bottom row with cyan spacebar + floating pop-out badge -->
+    <path
+        android:fillColor="#FFF8FAFC"
+        android:pathData="M28,53 h8 v8 h-8 z" />
+    <path
+        android:fillColor="#FF5CE1E6"
+        android:pathData="M39,53 h26 v8 h-26 z" />
+    <!-- Floating overlay pop-out badge in bottom-right -->
+    <path
+        android:fillColor="#FF5CE1E6"
+        android:pathData="M69,53 L79,53 C80.1,53 81,53.9 81,55 L81,62 C81,63.1 80.1,64 79,64 L69,64 C67.9,64 67,63.1 67,62 L67,55 C67,53.9 67.9,53 69,53 Z" />
+    <path
+        android:fillColor="#FF0B1F3A"
+        android:pathData="M71,60 L77,60 L77,58 L71,58 Z M73,55.5 L77.5,58.5 L73,61.5 Z" />
+</vector>

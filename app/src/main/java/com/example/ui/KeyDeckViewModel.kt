@@ -50,7 +50,45 @@ data class SystemReadinessState(
     val isAccessibilityEnabled: Boolean = false,
     val isImeEnabled: Boolean = false,
     val isImeSelected: Boolean = false,
-)
+) {
+    val isFloatingMinReady: Boolean
+        get() = canDrawOverlays && isImeEnabled && isImeSelected
+}
+
+fun inspectSystemReadiness(context: Context): SystemReadinessState {
+    val canOverlay = Settings.canDrawOverlays(context)
+
+    val am = context.getSystemService(Context.ACCESSIBILITY_SERVICE) as? AccessibilityManager
+    val a11yEnabled = am?.getEnabledAccessibilityServiceList(AccessibilityServiceInfo.FEEDBACK_ALL_MASK)
+        ?.any {
+            it.resolveInfo?.serviceInfo?.packageName == context.packageName &&
+                it.resolveInfo?.serviceInfo?.name == KeyDeckAccessibilityService::class.java.name
+        } == true || KeyDeckAccessibilityService.activeInstance != null
+
+    val imeComponent = ComponentName(context, KeyDeckImeService::class.java)
+    val shortImeId = imeComponent.flattenToShortString()
+    val fullImeId = imeComponent.flattenToString()
+
+    val imm = context.getSystemService(Context.INPUT_METHOD_SERVICE) as? InputMethodManager
+    val imeEnabled = imm?.enabledInputMethodList?.any {
+        (it.packageName == context.packageName &&
+            (it.serviceName == KeyDeckImeService::class.java.name || it.id.contains("KeyDeckImeService"))) ||
+            it.id == shortImeId ||
+            it.id == fullImeId
+    } == true
+
+    val defaultIme = Settings.Secure.getString(context.contentResolver, Settings.Secure.DEFAULT_INPUT_METHOD) ?: ""
+    val imeSelected = defaultIme == shortImeId ||
+        defaultIme == fullImeId ||
+        (defaultIme.contains(context.packageName) && defaultIme.contains("KeyDeckImeService"))
+
+    return SystemReadinessState(
+        canDrawOverlays = canOverlay,
+        isAccessibilityEnabled = a11yEnabled,
+        isImeEnabled = imeEnabled,
+        isImeSelected = imeSelected,
+    )
+}
 
 class KeyDeckViewModel(application: Application) : AndroidViewModel(application) {
 
@@ -101,39 +139,7 @@ class KeyDeckViewModel(application: Application) : AndroidViewModel(application)
     }
 
     fun refreshSystemReadiness() {
-        val ctx = getApplication<Application>()
-        val canOverlay = Settings.canDrawOverlays(ctx)
-
-        val am = ctx.getSystemService(Context.ACCESSIBILITY_SERVICE) as? AccessibilityManager
-        val a11yEnabled = am?.getEnabledAccessibilityServiceList(AccessibilityServiceInfo.FEEDBACK_ALL_MASK)
-            ?.any {
-                it.resolveInfo?.serviceInfo?.packageName == ctx.packageName &&
-                    it.resolveInfo?.serviceInfo?.name == KeyDeckAccessibilityService::class.java.name
-            } == true || KeyDeckAccessibilityService.activeInstance != null
-
-        val imeComponent = ComponentName(ctx, KeyDeckImeService::class.java)
-        val shortImeId = imeComponent.flattenToShortString()
-        val fullImeId = imeComponent.flattenToString()
-
-        val imm = ctx.getSystemService(Context.INPUT_METHOD_SERVICE) as? InputMethodManager
-        val imeEnabled = imm?.enabledInputMethodList?.any {
-            (it.packageName == ctx.packageName &&
-                (it.serviceName == KeyDeckImeService::class.java.name || it.id.contains("KeyDeckImeService"))) ||
-                it.id == shortImeId ||
-                it.id == fullImeId
-        } == true
-
-        val defaultIme = Settings.Secure.getString(ctx.contentResolver, Settings.Secure.DEFAULT_INPUT_METHOD) ?: ""
-        val imeSelected = defaultIme == shortImeId ||
-            defaultIme == fullImeId ||
-            (defaultIme.contains(ctx.packageName) && defaultIme.contains("KeyDeckImeService"))
-
-        _readiness.value = SystemReadinessState(
-            canDrawOverlays = canOverlay,
-            isAccessibilityEnabled = a11yEnabled,
-            isImeEnabled = imeEnabled,
-            isImeSelected = imeSelected,
-        )
+        _readiness.value = inspectSystemReadiness(getApplication())
     }
 
     fun setFloatingKeyboardEnabled(enabled: Boolean, expandImmediately: Boolean = false) {

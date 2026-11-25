@@ -285,7 +285,7 @@ class KeyDeckLogicTest {
         )
 
         assertTrue(serialized.startsWith("@keydeck.aemni"))
-        assertTrue(serialized.contains("@version:210"))
+        assertTrue(serialized.contains("@version:211"))
         assertTrue(serialized.contains("@kdb.name:Pro Setup"))
         assertTrue(serialized.contains("@kdb.hight:42"))
         assertTrue(serialized.contains("@kdb.width:0.90"))
@@ -303,7 +303,7 @@ class KeyDeckLogicTest {
             base64Decoder = { Base64.getDecoder().decode(it) },
         )!!
         assertEquals("Pro Setup", parsed.profileName)
-        assertEquals(210, parsed.formatVersion)
+        assertEquals(211, parsed.formatVersion)
         assertTrue(parsed.isAnimatedGif)
         assertEquals(42, parsed.settings.keyHeightDp)
         assertEquals(0.90f, parsed.settings.keyboardWidthFraction, 0.01f)
@@ -543,5 +543,41 @@ class KeyDeckLogicTest {
 
         ClipboardHistoryStore.clearAll()
         assertTrue(ClipboardHistoryStore.clips.value.isEmpty())
+    }
+
+    @Test
+    fun `floating shortcut minimum requirements require ime enabled, ime selected, and overlay granted`() {
+        assertEquals("com.aemni.keydeck.float", FloatingDeckLauncherActivity.ACTION_FLOAT_ALIAS)
+
+        assertFalse(com.example.ui.SystemReadinessState().isFloatingMinReady)
+        assertFalse(
+            com.example.ui.SystemReadinessState(
+                canDrawOverlays = true,
+                isImeEnabled = false,
+                isImeSelected = false,
+            ).isFloatingMinReady,
+        )
+        assertFalse(
+            com.example.ui.SystemReadinessState(
+                canDrawOverlays = true,
+                isImeEnabled = true,
+                isImeSelected = false,
+            ).isFloatingMinReady,
+        )
+        assertFalse(
+            com.example.ui.SystemReadinessState(
+                canDrawOverlays = false,
+                isImeEnabled = true,
+                isImeSelected = true,
+            ).isFloatingMinReady,
+        )
+        assertTrue(
+            com.example.ui.SystemReadinessState(
+                canDrawOverlays = true,
+                isImeEnabled = true,
+                isImeSelected = true,
+                isAccessibilityEnabled = false,
+            ).isFloatingMinReady,
+        )
     }
 }
