@@ -38,6 +38,40 @@
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
+            <meta-data
+                android:name="android.app.shortcuts"
+                android:resource="@xml/shortcuts" />
+        </activity>
+
+        <!-- Direct Floating Keyboard launcher entry: exposes a second app icon ("KeyDeck Float"),
+             component target, Intent action (com.aemni.keydeck.OPEN_FLOATING), and URI (keydeck://floating). -->
+        <activity
+            android:name=".FloatingDeckLauncherActivity"
+            android:excludeFromRecents="true"
+            android:exported="true"
+            android:icon="@mipmap/ic_launcher"
+            android:label="@string/floating_launcher_name"
+            android:noHistory="true"
+            android:roundIcon="@mipmap/ic_launcher_round"
+            android:taskAffinity=""
+            android:theme="@style/Theme.KeyDeck.TranslucentLauncher">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+                <category android:name="android.intent.category.DEFAULT" />
+            </intent-filter>
+            <intent-filter>
+                <action android:name="com.aemni.keydeck.OPEN_FLOATING" />
+                <category android:name="android.intent.category.DEFAULT" />
+            </intent-filter>
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data
+                    android:host="floating"
+                    android:scheme="keydeck" />
+            </intent-filter>
         </activity>
 
         <!-- Floating Bubble & Floating PC Keyboard Overlay Service.

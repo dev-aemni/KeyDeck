@@ -285,7 +285,7 @@ class KeyDeckLogicTest {
         )
 
         assertTrue(serialized.startsWith("@keydeck.aemni"))
-        assertTrue(serialized.contains("@version:118"))
+        assertTrue(serialized.contains("@version:210"))
         assertTrue(serialized.contains("@kdb.name:Pro Setup"))
         assertTrue(serialized.contains("@kdb.hight:42"))
         assertTrue(serialized.contains("@kdb.width:0.90"))
@@ -303,7 +303,7 @@ class KeyDeckLogicTest {
             base64Decoder = { Base64.getDecoder().decode(it) },
         )!!
         assertEquals("Pro Setup", parsed.profileName)
-        assertEquals(118, parsed.formatVersion)
+        assertEquals(210, parsed.formatVersion)
         assertTrue(parsed.isAnimatedGif)
         assertEquals(42, parsed.settings.keyHeightDp)
         assertEquals(0.90f, parsed.settings.keyboardWidthFraction, 0.01f)

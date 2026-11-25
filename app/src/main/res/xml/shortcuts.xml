@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<shortcuts xmlns:android="http://schemas.android.com/apk/res/android">
+    <shortcut
+        android:shortcutId="open_floating_deck"
+        android:enabled="true"
+        android:icon="@mipmap/ic_launcher_round"
+        android:shortcutShortLabel="@string/floating_launcher_name"
+        android:shortcutLongLabel="@string/floating_launcher_long_label">
+        <intent
+            android:action="com.aemni.keydeck.OPEN_FLOATING"
+            android:targetPackage="com.aemni.keydeck"
+            android:targetClass="com.example.FloatingDeckLauncherActivity" />
+    </shortcut>
+</shortcuts>

@@ -312,6 +312,7 @@ fun KeyDeckDocsSection(
         ) {
             DocsBullet(colors.indigo, "Works both as your System IME keyboard and as a draggable, corner-resizable Floating Keyboard.")
             DocsBullet(colors.emerald, "Automatically suppresses the bottom system keyboard when the floating deck is open so two keyboards never stack.")
+            DocsBullet(colors.amber, "Direct Floating Launch: Open the 'KeyDeck Float' app icon, component com.aemni.keydeck/com.example.FloatingDeckLauncherActivity, action com.aemni.keydeck.OPEN_FLOATING, or URI keydeck://floating.")
         }
 
         DocsAccordionCard(

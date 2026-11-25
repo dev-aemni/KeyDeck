@@ -18,4 +18,7 @@
     <string name="deck_lab_issues_title">Suggest features or Inform about bugs</string>
     <string name="deck_lab_issues_url">https://github.com/dev-aemni/KeyDeck/issues</string>
     <string name="deck_lab_issues_cta">Open Issues on GitHub</string>
+    <string name="floating_launcher_name">KeyDeck Float</string>
+    <string name="floating_launcher_long_label">Open Floating Keyboard</string>
+    <string name="floating_launcher_overlay_required">Grant Display over other apps to open Floating Keyboard</string>
 </resources>

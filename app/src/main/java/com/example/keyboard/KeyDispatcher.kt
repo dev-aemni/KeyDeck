@@ -616,11 +616,24 @@ object KeyDispatcher {
     ): Boolean {
         val pkg = packageName.trim()
         val display = appLabel.ifBlank { pkg }
-        val launchIntent = runCatching {
-            context.packageManager.getLaunchIntentForPackage(pkg)?.apply {
+        val explicitComponent = if (pkg.contains('/')) {
+            android.content.ComponentName.unflattenFromString(pkg)
+        } else {
+            null
+        }
+        val launchIntent = if (explicitComponent != null) {
+            Intent(Intent.ACTION_MAIN).apply {
+                addCategory(Intent.CATEGORY_LAUNCHER)
+                component = explicitComponent
                 addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
             }
-        }.getOrNull()
+        } else {
+            runCatching {
+                context.packageManager.getLaunchIntentForPackage(pkg)?.apply {
+                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                }
+            }.getOrNull()
+        }
 
         val launched = if (launchIntent != null) {
             runCatching {
