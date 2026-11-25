@@ -21,7 +21,7 @@ data class ParsedKeyDeckProfile(
 object KeyDeckProfileCodec {
     const val FORMAT_HEADER = "@keydeck.aemni"
     const val PROFILE_EXTENSION = ".kdb"
-    const val CURRENT_FORMAT_VERSION = 211
+    const val CURRENT_FORMAT_VERSION = 212
 
     fun sanitizeProfileBaseName(rawName: String): String {
         val trimmed = rawName.trim()
@@ -52,9 +52,9 @@ object KeyDeckProfileCodec {
     ): String {
         val cleanName = profileName.trim().ifBlank { "My KeyDeck Layout" }
         val dateStr = SimpleDateFormat("HHmmddMMyyyy", Locale.US).format(Date(createdAtMs))
-        val transparencyPct = ((1f - settings.overlayOpacity.coerceIn(0.25f, 1.0f)) * 100f)
-            .toInt()
-            .coerceIn(0, 75)
+        val transparencyPct = ((1f - settings.overlayOpacity.coerceIn(0.15f, 1.0f)) * 100f)
+            .let { kotlin.math.round(it).toInt() }
+            .coerceIn(0, 85)
         val isGif = activeWallpaper?.isGifWallpaper() == true
 
         val themeValue = when {
@@ -153,7 +153,8 @@ object KeyDeckProfileCodec {
             sb.appendLine("@kdb.tint_intensity:${String.format(Locale.US, "%.2f", activeWallpaper.tintIntensity)}")
             sb.appendLine("@kdb.key_opacity:${String.format(Locale.US, "%.2f", activeWallpaper.keyOpacity)}")
             sb.appendLine("@kdb.dark_backdrop:${activeWallpaper.darkBackdrop}")
-            sb.appendLine("@kdb.fit_center:${activeWallpaper.fitCenter}")
+            sb.appendLine("@kdb.fit_center:${activeWallpaper.resolvedScaleMode() == WallpaperScaleMode.FIT}")
+            sb.appendLine("@kdb.scale_mode:${activeWallpaper.resolvedScaleMode().name}")
             sb.appendLine("@kdb.crop_zoom:${String.format(Locale.US, "%.2f", activeWallpaper.cropZoom)}")
             sb.appendLine("@kdb.crop_pan_x:${String.format(Locale.US, "%.3f", activeWallpaper.cropPanX)}")
             sb.appendLine("@kdb.crop_pan_y:${String.format(Locale.US, "%.3f", activeWallpaper.cropPanY)}")
@@ -227,11 +228,11 @@ object KeyDeckProfileCodec {
             val num = raw.removeSuffix("%").trim().toFloatOrNull()
             if (num != null) {
                 val opacity = if (hasPct || num > 1.0f) {
-                    1f - (num.coerceIn(0f, 75f) / 100f)
+                    1f - (num.coerceIn(0f, 85f) / 100f)
                 } else {
-                    num.coerceIn(0.25f, 1.0f)
+                    num.coerceIn(0.15f, 1.0f)
                 }
-                resolvedSettings = resolvedSettings.copy(overlayOpacity = opacity.coerceIn(0.25f, 1.0f))
+                resolvedSettings = resolvedSettings.copy(overlayOpacity = opacity.coerceIn(0.15f, 1.0f))
             }
         }
 
@@ -412,20 +413,25 @@ object KeyDeckProfileCodec {
 
         val wpConfig: KeyboardWallpaper? = when {
             embeddedBytes != null -> {
+                val legacyFit = props["@kdb.fit_center"]?.toBooleanStrictOrNull() ?: false
+                val parsedScale = props["@kdb.scale_mode"]?.let { raw ->
+                    runCatching { WallpaperScaleMode.valueOf(raw.uppercase(Locale.US)) }.getOrNull()
+                } ?: if (legacyFit) WallpaperScaleMode.FIT else WallpaperScaleMode.STRETCH
                 KeyboardWallpaper(
                     id = "wp_imp_${UUID.randomUUID().toString().take(8)}",
                     name = props["@kdb.wallpaper_name"]?.ifBlank { null } ?: profileName,
                     sourceType = WallpaperSourceType.CUSTOM_IMAGE,
                     imagePath = "",
-                    lightness = props["@kdb.lightness"]?.toFloatOrNull()?.coerceIn(0.03f, 1.0f) ?: 0.20f,
-                    saturation = props["@kdb.saturation"]?.toFloatOrNull()?.coerceIn(0.0f, 2.0f) ?: 0.92f,
-                    contrast = props["@kdb.contrast"]?.toFloatOrNull()?.coerceIn(0.4f, 2.0f) ?: 1.08f,
+                    lightness = props["@kdb.lightness"]?.toFloatOrNull()?.coerceIn(0.03f, 1.0f) ?: 1.0f,
+                    saturation = props["@kdb.saturation"]?.toFloatOrNull()?.coerceIn(0.0f, 2.0f) ?: 1.0f,
+                    contrast = props["@kdb.contrast"]?.toFloatOrNull()?.coerceIn(0.4f, 2.0f) ?: 1.0f,
                     brightness = props["@kdb.brightness"]?.toFloatOrNull()?.coerceIn(-0.5f, 0.5f) ?: 0.0f,
                     tintHex = parseHexLong(props["@kdb.tint"]) ?: 0L,
-                    tintIntensity = props["@kdb.tint_intensity"]?.toFloatOrNull()?.coerceIn(0f, 0.85f) ?: 0.22f,
-                    keyOpacity = props["@kdb.key_opacity"]?.toFloatOrNull()?.coerceIn(0.15f, 1.0f) ?: 0.64f,
-                    darkBackdrop = props["@kdb.dark_backdrop"]?.toBooleanStrictOrNull() ?: true,
-                    fitCenter = props["@kdb.fit_center"]?.toBooleanStrictOrNull() ?: false,
+                    tintIntensity = props["@kdb.tint_intensity"]?.toFloatOrNull()?.coerceIn(0f, 0.85f) ?: 0.0f,
+                    keyOpacity = props["@kdb.key_opacity"]?.toFloatOrNull()?.coerceIn(0.15f, 1.0f) ?: 0.48f,
+                    darkBackdrop = props["@kdb.dark_backdrop"]?.toBooleanStrictOrNull() ?: false,
+                    fitCenter = parsedScale == WallpaperScaleMode.FIT,
+                    scaleMode = parsedScale,
                     cropZoom = props["@kdb.crop_zoom"]?.toFloatOrNull()?.coerceIn(0.4f, 4.0f) ?: 1.0f,
                     cropPanX = props["@kdb.crop_pan_x"]?.toFloatOrNull()?.coerceIn(-1.5f, 1.5f) ?: 0.0f,
                     cropPanY = props["@kdb.crop_pan_y"]?.toFloatOrNull()?.coerceIn(-1.5f, 1.5f) ?: 0.0f,

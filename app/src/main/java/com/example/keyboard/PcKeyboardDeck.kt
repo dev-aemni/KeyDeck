@@ -145,6 +145,7 @@ fun PcKeyboardDeck(
     val isAppDark = KeyDeckColors.current.isDark
     val basePalette = remember(settings, isAppDark) { settings.resolvePalette(isAppDark) }
     val hasWallpaper = activeWallpaper != null && activeWallpaper.sourceType != WallpaperSourceType.NONE
+    val shadowsEnabled = !hasWallpaper
     val keyOpacity = if (hasWallpaper) activeWallpaper!!.keyOpacity.coerceIn(0.15f, 1.0f) else 1f
     val palette = remember(basePalette, activeWallpaper) {
         if (activeWallpaper != null && activeWallpaper.sourceType != WallpaperSourceType.NONE && activeWallpaper.darkBackdrop) {
@@ -795,7 +796,7 @@ fun PcKeyboardDeck(
         KeyboardWallpaperBackdrop(
             wallpaper = activeWallpaper,
             palette = palette,
-            overlayAlpha = if (isOverlay) settings.overlayOpacity.coerceIn(0.25f, 1.0f) else 1f,
+            overlayAlpha = 1f,
             modifier = Modifier.matchParentSize(),
         )
         Column(
@@ -852,6 +853,7 @@ fun PcKeyboardDeck(
                                 palette = palette,
                                 borderColor = borderCol,
                                 compact = isTightDeck,
+                                shadowsEnabled = shadowsEnabled,
                                 testTag = "deck_mode_${mode.name.lowercase()}",
                                 onClick = { onChangeLayoutMode(mode) },
                             )
@@ -879,6 +881,7 @@ fun PcKeyboardDeck(
                         active = showClipboardStrip,
                         palette = palette,
                         borderColor = borderCol,
+                        shadowsEnabled = shadowsEnabled,
                         testTag = "deck_top_clipboard_toggle",
                         onClick = {
                             showClipboardStrip = !showClipboardStrip
@@ -899,6 +902,7 @@ fun PcKeyboardDeck(
                         active = showShortcutsStrip,
                         palette = palette,
                         borderColor = borderCol,
+                        shadowsEnabled = shadowsEnabled,
                         testTag = "deck_top_shortcuts_toggle",
                         onClick = {
                             showShortcutsStrip = !showShortcutsStrip
@@ -917,6 +921,7 @@ fun PcKeyboardDeck(
                     active = showResizeStrip,
                     palette = palette,
                     borderColor = borderCol,
+                    shadowsEnabled = shadowsEnabled,
                     testTag = "deck_top_resize_toggle",
                     onClick = {
                         showResizeStrip = !showResizeStrip
@@ -934,6 +939,7 @@ fun PcKeyboardDeck(
                     active = showQuickSettingsPopup,
                     palette = palette,
                     borderColor = borderCol,
+                    shadowsEnabled = shadowsEnabled,
                     testTag = "deck_top_settings_toggle",
                     onClick = {
                         showQuickSettingsPopup = !showQuickSettingsPopup
@@ -951,6 +957,7 @@ fun PcKeyboardDeck(
                         active = false,
                         palette = palette,
                         borderColor = borderCol,
+                        shadowsEnabled = shadowsEnabled,
                         testTag = "ime_minimize_button",
                         onClick = onMinimize,
                     )
@@ -962,6 +969,7 @@ fun PcKeyboardDeck(
                         active = true,
                         palette = palette,
                         borderColor = borderCol,
+                        shadowsEnabled = shadowsEnabled,
                         testTag = "overlay_close_button",
                         onClick = { showCloseConfirm = true },
                     )
@@ -975,6 +983,7 @@ fun PcKeyboardDeck(
                 clips = clipboardClips,
                 palette = palette,
                 borderColor = borderCol,
+                shadowsEnabled = shadowsEnabled,
                 onPasteClip = { entry ->
                     if (KeyDispatcher.dispatchTextCommit(
                             context = context,
@@ -1031,6 +1040,7 @@ fun PcKeyboardDeck(
                                 shadowDark = palette.shadowDark,
                                 cornerRadius = 8.dp,
                                 borderColor = borderCol,
+                                shadowsEnabled = shadowsEnabled,
                             )
                             .clickable {
                                 onHotkeyDispatch?.invoke(hk) ?: onKeyDispatch(
@@ -1080,6 +1090,7 @@ fun PcKeyboardDeck(
                 settings = settings,
                 palette = palette,
                 isOverlay = isOverlay,
+                shadowsEnabled = shadowsEnabled,
                 onUpdateSettings = onUpdateSettings,
                 onResizeDragDelta = onResizeDragDelta,
             )
@@ -1108,6 +1119,7 @@ fun PcKeyboardDeck(
                         cornerRadius = 8.dp,
                         depth = 2.dp,
                         borderColor = borderCol,
+                        shadowsEnabled = shadowsEnabled,
                     )
                     .padding(horizontal = 8.dp, vertical = 4.dp)
                     .testTag("overlay_setup_banner"),
@@ -1132,6 +1144,7 @@ fun PcKeyboardDeck(
                             palette = palette,
                             borderColor = borderCol,
                             compact = true,
+                            shadowsEnabled = shadowsEnabled,
                             testTag = "overlay_setup_ime",
                             onClick = onSetupIme,
                         )
@@ -1143,6 +1156,7 @@ fun PcKeyboardDeck(
                             palette = palette,
                             borderColor = borderCol,
                             compact = true,
+                            shadowsEnabled = shadowsEnabled,
                             testTag = "overlay_setup_a11y",
                             onClick = onSetupAccessibility,
                         )
@@ -1197,6 +1211,7 @@ fun PcKeyboardDeck(
                         vGap = vGap,
                         showKeyBorder = borderVisible,
                         keyOpacity = keyOpacity,
+                        shadowsEnabled = shadowsEnabled,
                         rgbActive = rgbActive,
                         rgbPhaseDeg = rgbPhaseDeg,
                         holdToRepeatEnabled = holdToRepeatForDeck,
@@ -1233,6 +1248,7 @@ fun PcKeyboardDeck(
                         compact = true,
                         showKeyBorder = borderVisible,
                         keyOpacity = keyOpacity,
+                        shadowsEnabled = shadowsEnabled,
                         rgbActive = rgbActive,
                         rgbPhaseDeg = rgbPhaseDeg,
                         holdToRepeatEnabled = holdToRepeatForDeck,
@@ -1252,6 +1268,7 @@ fun PcKeyboardDeck(
                         compact = true,
                         showKeyBorder = borderVisible,
                         keyOpacity = keyOpacity,
+                        shadowsEnabled = shadowsEnabled,
                         rgbActive = rgbActive,
                         rgbPhaseDeg = rgbPhaseDeg,
                         holdToRepeatEnabled = holdToRepeatForDeck,
@@ -1281,6 +1298,7 @@ fun PcKeyboardDeck(
                     compact = isTightDeck,
                     showKeyBorder = borderVisible,
                     keyOpacity = keyOpacity,
+                    shadowsEnabled = shadowsEnabled,
                     rgbActive = rgbActive,
                     rgbPhaseDeg = rgbPhaseDeg,
                     holdToRepeatEnabled = holdToRepeatForDeck,
@@ -1317,6 +1335,7 @@ fun PcKeyboardDeck(
                             fontScale = fontScale,
                             showKeyBorder = borderVisible,
                             keyOpacity = keyOpacity,
+                            shadowsEnabled = shadowsEnabled,
                             rgbActive = rgbActive,
                             rgbPhaseDeg = rgbPhaseDeg,
                             onSelectSlot = { slot -> handleSuggestionSlotTap(slot) },
@@ -1341,6 +1360,7 @@ fun PcKeyboardDeck(
                         centerShortRows = !simpleSymbolLayer,
                         showKeyBorder = borderVisible,
                         keyOpacity = keyOpacity,
+                        shadowsEnabled = shadowsEnabled,
                         rgbActive = rgbActive,
                         rgbPhaseDeg = rgbPhaseDeg,
                         holdToRepeatEnabled = false,
@@ -1380,6 +1400,7 @@ fun PcKeyboardDeck(
                     compact = false,
                     showKeyBorder = borderVisible,
                     keyOpacity = keyOpacity,
+                    shadowsEnabled = shadowsEnabled,
                     rgbActive = rgbActive,
                     rgbPhaseDeg = rgbPhaseDeg,
                     holdToRepeatEnabled = holdToRepeatForDeck,
@@ -1410,6 +1431,7 @@ fun PcKeyboardDeck(
                         fontScale = fontScale,
                         showKeyBorder = borderVisible,
                         keyOpacity = keyOpacity,
+                        shadowsEnabled = shadowsEnabled,
                         rgbActive = rgbActive,
                         rgbPhaseDeg = rgbPhaseDeg,
                         modifier = Modifier.weight(1f - padWeight),
@@ -1427,6 +1449,7 @@ fun PcKeyboardDeck(
                         rgbPhaseDeg = rgbPhaseDeg,
                         rgbEnabled = rgbActive,
                         keyOpacity = keyOpacity,
+                        shadowsEnabled = shadowsEnabled,
                         totalHeight = totalPadHeight,
                         cornerRadius = keyCorner,
                         modifier = Modifier.weight(padWeight),
@@ -1470,6 +1493,7 @@ fun PcKeyboardDeck(
                         shadowOffset = 4.dp,
                         blurRadius = 8.dp,
                         borderColor = borderCol ?: palette.keyBorder.copy(alpha = 0.65f),
+                        shadowsEnabled = shadowsEnabled,
                     )
                     .testTag("simple_key_preview_bubble"),
                 contentAlignment = Alignment.Center,
@@ -1726,6 +1750,7 @@ private fun KeyGridBlock(
     centerShortRows: Boolean = false,
     showKeyBorder: Boolean,
     keyOpacity: Float = 1f,
+    shadowsEnabled: Boolean = true,
     rgbActive: Boolean,
     rgbPhaseDeg: Float,
     holdToRepeatEnabled: Boolean = false,
@@ -1777,6 +1802,7 @@ private fun KeyGridBlock(
                         vGap = vGap,
                         showKeyBorder = showKeyBorder,
                         keyOpacity = keyOpacity,
+                        shadowsEnabled = shadowsEnabled,
                         rgbActive = rgbActive,
                         rgbPhaseDeg = rgbPhaseDeg,
                         holdToRepeatEnabled = holdToRepeatEnabled,
@@ -1809,6 +1835,7 @@ private fun GamingKeysBlock(
     fontScale: Float,
     showKeyBorder: Boolean,
     keyOpacity: Float = 1f,
+    shadowsEnabled: Boolean = true,
     rgbActive: Boolean,
     rgbPhaseDeg: Float,
     modifier: Modifier = Modifier,
@@ -1834,6 +1861,7 @@ private fun GamingKeysBlock(
                         vGap = vGap,
                         showKeyBorder = showKeyBorder,
                         keyOpacity = keyOpacity,
+                        shadowsEnabled = shadowsEnabled,
                         rgbActive = rgbActive,
                         rgbPhaseDeg = rgbPhaseDeg,
                         modifier = Modifier.weight(spec.weight),
@@ -1856,6 +1884,7 @@ private fun GamingHoldKeyCap(
     vGap: Dp = 4.dp,
     showKeyBorder: Boolean,
     keyOpacity: Float = 1f,
+    shadowsEnabled: Boolean = true,
     rgbActive: Boolean,
     rgbPhaseDeg: Float,
     modifier: Modifier = Modifier,
@@ -1900,6 +1929,7 @@ private fun GamingHoldKeyCap(
                         cornerRadius = keyCorner,
                         depth = 3.dp,
                         borderColor = borderCol,
+                        shadowsEnabled = shadowsEnabled,
                     )
                 } else {
                     Modifier.neumorphicKeyCap(
@@ -1912,6 +1942,7 @@ private fun GamingHoldKeyCap(
                         maxSpreadX = spreadX,
                         maxSpreadY = spreadY,
                         borderColor = borderCol,
+                        shadowsEnabled = shadowsEnabled,
                     )
                 },
             )
@@ -1971,6 +2002,7 @@ private fun NumpadBlock(
     compact: Boolean,
     showKeyBorder: Boolean,
     keyOpacity: Float = 1f,
+    shadowsEnabled: Boolean = true,
     rgbActive: Boolean,
     rgbPhaseDeg: Float,
     holdToRepeatEnabled: Boolean = false,
@@ -1988,6 +2020,7 @@ private fun NumpadBlock(
                 cornerRadius = keyCorner + 2.dp,
                 depth = 2.5.dp,
                 borderColor = borderCol,
+                shadowsEnabled = shadowsEnabled,
             )
             .padding(2.5.dp),
         verticalArrangement = Arrangement.spacedBy(vGap),
@@ -2020,6 +2053,7 @@ private fun NumpadBlock(
                         vGap = vGap,
                         showKeyBorder = showKeyBorder,
                         keyOpacity = keyOpacity,
+                        shadowsEnabled = shadowsEnabled,
                         rgbActive = rgbActive,
                         rgbPhaseDeg = rgbPhaseDeg,
                         holdToRepeatEnabled = holdToRepeatEnabled,
@@ -2049,6 +2083,7 @@ private fun PcKeyCap(
     vGap: Dp = 4.dp,
     showKeyBorder: Boolean,
     keyOpacity: Float = 1f,
+    shadowsEnabled: Boolean = true,
     rgbActive: Boolean,
     rgbPhaseDeg: Float,
     holdToRepeatEnabled: Boolean = false,
@@ -2163,6 +2198,7 @@ private fun PcKeyCap(
             depth = 2.5.dp,
             borderColor = borderCol,
             borderWidth = 1.15.dp,
+            shadowsEnabled = shadowsEnabled,
         )
     } else {
         Modifier.neumorphicKeyCap(
@@ -2176,6 +2212,7 @@ private fun PcKeyCap(
             maxSpreadY = spreadY,
             borderColor = borderCol,
             borderWidth = 1.15.dp,
+            shadowsEnabled = shadowsEnabled,
         )
     }
 
@@ -2692,6 +2729,7 @@ private fun DeckModeChip(
     palette: ResolvedKeyboardPalette,
     borderColor: Color?,
     compact: Boolean,
+    shadowsEnabled: Boolean = true,
     testTag: String,
     onClick: () -> Unit,
 ) {
@@ -2703,6 +2741,7 @@ private fun DeckModeChip(
             cornerRadius = 9.dp,
             depth = 2.dp,
             borderColor = borderColor,
+            shadowsEnabled = shadowsEnabled,
         )
     } else {
         Modifier.neumorphicKeyCap(
@@ -2711,6 +2750,7 @@ private fun DeckModeChip(
             shadowDark = palette.shadowDark,
             cornerRadius = 9.dp,
             borderColor = borderColor,
+            shadowsEnabled = shadowsEnabled,
         )
     }
     Box(
@@ -2740,6 +2780,7 @@ private fun TopActionIconChip(
     active: Boolean,
     palette: ResolvedKeyboardPalette,
     borderColor: Color?,
+    shadowsEnabled: Boolean = true,
     testTag: String,
     onClick: () -> Unit,
 ) {
@@ -2751,6 +2792,7 @@ private fun TopActionIconChip(
             cornerRadius = 9.dp,
             depth = 2.dp,
             borderColor = borderColor,
+            shadowsEnabled = shadowsEnabled,
         )
     } else {
         Modifier.neumorphicKeyCap(
@@ -2759,6 +2801,7 @@ private fun TopActionIconChip(
             shadowDark = palette.shadowDark,
             cornerRadius = 9.dp,
             borderColor = borderColor,
+            shadowsEnabled = shadowsEnabled,
         )
     }
     Box(
@@ -2788,6 +2831,7 @@ private fun SimpleSuggestionBar(
     fontScale: Float,
     showKeyBorder: Boolean,
     keyOpacity: Float,
+    shadowsEnabled: Boolean = true,
     rgbActive: Boolean,
     rgbPhaseDeg: Float,
     onSelectSlot: (SuggestionSlot) -> Unit,
@@ -2810,6 +2854,7 @@ private fun SimpleSuggestionBar(
                     cornerRadius = cornerRadius,
                     depth = 2.dp,
                     borderColor = borderCol,
+                    shadowsEnabled = shadowsEnabled,
                 )
                 .padding(horizontal = 10.dp)
                 .testTag("simple_suggestion_paused"),
@@ -2880,6 +2925,7 @@ private fun SimpleSuggestionBar(
                     cornerRadius = cornerRadius,
                     depth = 2.dp,
                     borderColor = borderCol,
+                    shadowsEnabled = shadowsEnabled,
                 )
             } else {
                 Modifier.neumorphicKeyCap(
@@ -2892,6 +2938,7 @@ private fun SimpleSuggestionBar(
                     maxSpreadX = (hGap * 0.45f).coerceIn(0.5.dp, 2.0.dp),
                     maxSpreadY = 1.8.dp,
                     borderColor = borderCol,
+                    shadowsEnabled = shadowsEnabled,
                 )
             }
             Box(

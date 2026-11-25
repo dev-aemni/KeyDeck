@@ -230,6 +230,23 @@ fun ThemePickerSheet(
                     .padding(top = 4.dp, bottom = 12.dp),
                 verticalArrangement = Arrangement.spacedBy(12.dp),
             ) {
+                val floatingTransparency = (1f - settings.overlayOpacity.coerceIn(0.15f, 1.0f)).coerceIn(0f, 0.85f)
+                LabeledSlider(
+                    label = "Floating Keyboard Transparency",
+                    valueLabel = "${(floatingTransparency * 100).roundToInt()}%",
+                    value = floatingTransparency,
+                    range = 0f..0.85f,
+                    accentColor = colors.indigo,
+                    onValueChange = { t ->
+                        onUpdateSettings { it.copy(overlayOpacity = (1f - t).coerceIn(0.15f, 1.0f)) }
+                    },
+                )
+                Text(
+                    text = "See through the Floating Keyboard to apps/games behind it (system IME stays solid).",
+                    fontSize = 11.sp,
+                    color = colors.textSecondary,
+                )
+
                 if (activeSection == ThemeSheetSection.WALLPAPERS) {
                     WallpaperStudioSection(
                         settings = settings,
@@ -492,23 +509,6 @@ fun ThemePickerSheet(
                 accentColor = colors.indigo,
                 onValueChange = { v -> onUpdateSettings { it.copy(keyCornerRadiusDp = v.roundToInt()) } },
             )
-
-            val floatingTransparency = (1f - settings.overlayOpacity.coerceIn(0.25f, 1.0f)).coerceIn(0f, 0.75f)
-            LabeledSlider(
-                label = "Floating Keyboard Transparency (Overlay Only)",
-                valueLabel = "${(floatingTransparency * 100).roundToInt()}%",
-                value = floatingTransparency,
-                range = 0f..0.75f,
-                accentColor = colors.indigo,
-                onValueChange = { t ->
-                    onUpdateSettings { it.copy(overlayOpacity = (1f - t).coerceIn(0.25f, 1.0f)) }
-                },
-            )
-            Text(
-                text = "Transparency applies only to the Floating Keyboard over other apps (system IME cannot be transparent).",
-                fontSize = 11.sp,
-                color = colors.textSecondary,
-            )
                 }
 
                 NeuSheetPrimaryButton(
@@ -657,6 +657,18 @@ fun LayoutPickerSheet(
                 range = 0.60f..1.0f,
                 accentColor = colors.indigo,
                 onValueChange = { v -> onUpdateSettings { it.copy(keyboardWidthFraction = v) } },
+            )
+
+            val layoutTransparency = (1f - settings.overlayOpacity.coerceIn(0.15f, 1.0f)).coerceIn(0f, 0.85f)
+            LabeledSlider(
+                label = "Floating Keyboard Transparency",
+                valueLabel = "${(layoutTransparency * 100).roundToInt()}%",
+                value = layoutTransparency,
+                range = 0f..0.85f,
+                accentColor = colors.indigo,
+                onValueChange = { t ->
+                    onUpdateSettings { it.copy(overlayOpacity = (1f - t).coerceIn(0.15f, 1.0f)) }
+                },
             )
 
             Row(
@@ -1020,15 +1032,15 @@ fun SettingsSheet(
                 onValueChange = { v -> onUpdateSettings { it.copy(bubbleSizeDp = v.roundToInt()) } },
             )
 
-            val settingsTransparency = (1f - settings.overlayOpacity.coerceIn(0.25f, 1.0f)).coerceIn(0f, 0.75f)
+            val settingsTransparency = (1f - settings.overlayOpacity.coerceIn(0.15f, 1.0f)).coerceIn(0f, 0.85f)
             LabeledSlider(
                 label = "Floating Keyboard Transparency (Overlay Only)",
                 valueLabel = "${(settingsTransparency * 100).roundToInt()}%",
                 value = settingsTransparency,
-                range = 0f..0.75f,
+                range = 0f..0.85f,
                 accentColor = colors.indigo,
                 onValueChange = { t ->
-                    onUpdateSettings { it.copy(overlayOpacity = (1f - t).coerceIn(0.25f, 1.0f)) }
+                    onUpdateSettings { it.copy(overlayOpacity = (1f - t).coerceIn(0.15f, 1.0f)) }
                 },
             )
             Text(

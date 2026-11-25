@@ -33,6 +33,8 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.CompositingStrategy
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.input.pointer.positionChange
@@ -58,6 +60,7 @@ import com.example.keyboard.KeyboardLayoutMode
 import com.example.keyboard.PcKeyboardDeck
 import com.example.keyboard.PcMousePointerGraphic
 import com.example.keyboard.ResolvedKeyboardPalette
+import com.example.keyboard.WallpaperSourceType
 import com.example.ui.theme.KeyDeckColors
 import com.example.ui.theme.KeyDeckTheme
 import com.example.ui.theme.neumorphicInset
@@ -99,6 +102,7 @@ class FloatingKeyboardService : Service() {
     private var cursorLifecycleOwner: OverlayLifecycleOwner? = null
     private var cursorView: View? = null
     private var cursorParams: WindowManager.LayoutParams? = null
+    private var latestPointerScale: Float = 0.80f
     private var dragResizeAccumX = 0f
     private var dragResizeAccumY = 0f
 
@@ -211,6 +215,7 @@ class FloatingKeyboardService : Service() {
                 val w = dm.widthPixels.toFloat().coerceAtLeast(320f)
                 val h = dm.heightPixels.toFloat().coerceAtLeast(480f)
                 val pointerScale = settings.gameMousePointerScale.coerceIn(0.55f, 1.60f)
+                latestPointerScale = pointerScale
                 if (settings.gamingMcpeLookMode) {
                     val centerX = w * 0.5f
                     val centerY = h * 0.42f
@@ -521,20 +526,29 @@ class FloatingKeyboardService : Service() {
                                     )
                                 }
                             },
-                            modifier = Modifier
-                                .fillMaxWidth(settings.keyboardWidthFraction.coerceIn(0.60f, 1.0f))
-                                .graphicsLayer {
-                                    alpha = settings.overlayOpacity.coerceIn(0.25f, 1.0f)
-                                }
-                                .neumorphicRaised(
-                                    surfaceColor = palette.deckBg.copy(alpha = settings.overlayOpacity.coerceIn(0.25f, 1.0f)),
-                                    shadowLight = palette.shadowLight,
-                                    shadowDark = palette.shadowDark,
-                                    cornerRadius = outerCorner,
-                                    shadowOffset = 5.dp,
-                                    blurRadius = 10.dp,
-                                    borderColor = borderCol,
-                                ),
+                            modifier = run {
+                                val hasWallpaper = activeWallpaper != null &&
+                                    activeWallpaper.sourceType != WallpaperSourceType.NONE
+                                val overlayAlpha = settings.overlayOpacity.coerceIn(0.15f, 1.0f)
+                                Modifier
+                                    .fillMaxWidth(settings.keyboardWidthFraction.coerceIn(0.60f, 1.0f))
+                                    .graphicsLayer {
+                                        alpha = overlayAlpha
+                                        if (overlayAlpha < 0.995f) {
+                                            compositingStrategy = CompositingStrategy.Offscreen
+                                        }
+                                    }
+                                    .neumorphicRaised(
+                                        surfaceColor = if (hasWallpaper) Color.Transparent else palette.deckBg,
+                                        shadowLight = palette.shadowLight,
+                                        shadowDark = palette.shadowDark,
+                                        cornerRadius = outerCorner,
+                                        shadowOffset = 5.dp,
+                                        blurRadius = 10.dp,
+                                        borderColor = borderCol,
+                                        shadowsEnabled = !hasWallpaper,
+                                    )
+                            },
                         )
                     }
                 }
@@ -544,11 +558,11 @@ class FloatingKeyboardService : Service() {
         if (added) {
             keyboardLifecycleOwner = owner
             keyboardView = view
-            // Ensure mouse cursor overlay stays above the keyboard window in z-order
+            // Ensure mouse cursor overlay always stays above the keyboard window in z-order
             val cur = KeyDeckRuntimeState.mouseCursorState.value
             if (cursorView != null && cur.visible) {
                 removeCursorOverlay()
-                attachOrMoveCursorOverlay(cur.xPx, cur.yPx)
+                attachOrMoveCursorOverlay(cur.xPx, cur.yPx, latestPointerScale)
             }
         } else {
             runCatching { view.disposeComposition() }

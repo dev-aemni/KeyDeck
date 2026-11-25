@@ -20,6 +20,7 @@ import com.example.keyboard.RgbBorderMode
 import com.example.keyboard.SimpleSmartTyping
 import com.example.keyboard.SimpleSuggestionEngine
 import com.example.keyboard.SimpleTypingController
+import com.example.keyboard.WallpaperScaleMode
 import com.example.keyboard.WallpaperSourceType
 import com.example.keyboard.buildWallpaperColorMatrix
 import java.util.Base64
@@ -184,6 +185,10 @@ class KeyDeckLogicTest {
         assertEquals(1.0f, defaultWp.cropZoom, 0.001f)
         assertEquals(0.0f, defaultWp.cropPanX, 0.001f)
         assertEquals(0.0f, defaultWp.cropPanY, 0.001f)
+        assertEquals(WallpaperScaleMode.STRETCH, defaultWp.scaleMode)
+        assertEquals(WallpaperScaleMode.STRETCH, defaultWp.resolvedScaleMode())
+        assertEquals(WallpaperScaleMode.FIT, defaultWp.copy(fitCenter = true).resolvedScaleMode())
+        assertEquals(WallpaperScaleMode.CROP, defaultWp.copy(scaleMode = WallpaperScaleMode.CROP).resolvedScaleMode())
 
         val custom = KeyboardWallpaper(
             id = "custom_1",
@@ -196,6 +201,7 @@ class KeyDeckLogicTest {
             brightness = -0.05f,
             darkBackdrop = true,
             fitCenter = true,
+            scaleMode = WallpaperScaleMode.FIT,
             cropZoom = 1.65f,
             cropPanX = 0.25f,
             cropPanY = -0.18f,
@@ -285,7 +291,7 @@ class KeyDeckLogicTest {
         )
 
         assertTrue(serialized.startsWith("@keydeck.aemni"))
-        assertTrue(serialized.contains("@version:211"))
+        assertTrue(serialized.contains("@version:212"))
         assertTrue(serialized.contains("@kdb.name:Pro Setup"))
         assertTrue(serialized.contains("@kdb.hight:42"))
         assertTrue(serialized.contains("@kdb.width:0.90"))
@@ -303,7 +309,7 @@ class KeyDeckLogicTest {
             base64Decoder = { Base64.getDecoder().decode(it) },
         )!!
         assertEquals("Pro Setup", parsed.profileName)
-        assertEquals(211, parsed.formatVersion)
+        assertEquals(212, parsed.formatVersion)
         assertTrue(parsed.isAnimatedGif)
         assertEquals(42, parsed.settings.keyHeightDp)
         assertEquals(0.90f, parsed.settings.keyboardWidthFraction, 0.01f)
@@ -326,6 +332,22 @@ class KeyDeckLogicTest {
         assertEquals(HotkeyActionType.TOGGLE_FLOATING, parsed.hotkeys?.get(1)?.actionType)
         assertTrue(parsed.embeddedImageBytes?.contentEquals(fakeGifBytes) == true)
         assertEquals(1.32f, parsed.wallpaperConfig?.contrast ?: 0f, 0.01f)
+
+        // Verify 85% floating transparency (0.15f opacity) and scaleMode CROP roundtrip
+        val clear85 = KeyDeckProfileCodec.serialize(
+            profileName = "SeeThrough",
+            settings = settings.copy(overlayOpacity = 0.15f),
+            hotkeys = emptyList(),
+            activeWallpaper = gifWallpaper.copy(scaleMode = WallpaperScaleMode.CROP),
+            embeddedImageBytes = fakeGifBytes,
+            base64Encoder = { Base64.getEncoder().encodeToString(it) },
+        )
+        val parsed85 = KeyDeckProfileCodec.parse(
+            content = clear85,
+            base64Decoder = { Base64.getDecoder().decode(it) },
+        )!!
+        assertEquals(0.15f, parsed85.settings.overlayOpacity, 0.01f)
+        assertEquals(WallpaperScaleMode.CROP, parsed85.wallpaperConfig?.scaleMode)
     }
 
     @Test

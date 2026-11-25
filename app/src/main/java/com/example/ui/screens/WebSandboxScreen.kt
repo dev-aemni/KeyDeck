@@ -687,7 +687,7 @@ fun WebSandboxScreen(
 
     if (showExportDialog) {
         val targetFileName = KeyDeckProfileCodec.buildFileName(exportNameInput)
-        val transpPct = ((1f - settings.overlayOpacity.coerceIn(0.25f, 1.0f)) * 100f).roundToInt().coerceIn(0, 75)
+        val transpPct = ((1f - settings.overlayOpacity.coerceIn(0.15f, 1.0f)) * 100f).roundToInt().coerceIn(0, 85)
         Dialog(onDismissRequest = { showExportDialog = false }) {
             Column(
                 modifier = Modifier

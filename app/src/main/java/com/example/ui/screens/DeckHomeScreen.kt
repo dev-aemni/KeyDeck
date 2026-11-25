@@ -42,6 +42,8 @@ import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.material.icons.filled.Wallpaper
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Slider
+import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Switch
 import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
@@ -728,6 +730,66 @@ fun DeckHomeScreen(
                             color = colors.indigo,
                         )
                     }
+
+                    // Prominent Floating Keyboard Clearance Transparency Slider (0%..85%)
+                    val heroTransparency = (1f - settings.overlayOpacity.coerceIn(0.15f, 1.0f)).coerceIn(0f, 0.85f)
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .neumorphicInset(
+                                surfaceColor = colors.bg.copy(alpha = 0.72f),
+                                shadowLight = colors.shadowLight,
+                                shadowDark = colors.shadowDark,
+                                cornerRadius = 14.dp,
+                                depth = 2.dp,
+                                borderColor = colors.keyBorder.copy(alpha = 0.30f),
+                            )
+                            .padding(horizontal = 12.dp, vertical = 8.dp),
+                        verticalArrangement = Arrangement.spacedBy(2.dp),
+                    ) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                        ) {
+                            Text(
+                                text = "Floating Keyboard Transparency",
+                                fontFamily = BodyFontFamily,
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.SemiBold,
+                                color = colors.textPrimary,
+                            )
+                            Text(
+                                text = "${(heroTransparency * 100).roundToInt()}%",
+                                fontFamily = BodyFontFamily,
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = colors.indigo,
+                            )
+                        }
+                        Slider(
+                            value = heroTransparency,
+                            onValueChange = { t ->
+                                onUpdateSettings { it.copy(overlayOpacity = (1f - t).coerceIn(0.15f, 1.0f)) }
+                            },
+                            valueRange = 0f..0.85f,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(30.dp)
+                                .testTag("hero_floating_transparency_slider"),
+                            colors = SliderDefaults.colors(
+                                thumbColor = colors.indigo,
+                                activeTrackColor = colors.indigo,
+                                inactiveTrackColor = colors.shadowDark.copy(alpha = 0.40f),
+                            ),
+                        )
+                        Text(
+                            text = "See through floating keyboard to apps & games behind it",
+                            fontFamily = BodyFontFamily,
+                            fontSize = 10.5.sp,
+                            color = colors.textSecondary,
+                        )
+                    }
                 }
             }
 
@@ -1079,6 +1141,7 @@ fun DeckHomeScreen(
         }
         val outerCorner = (settings.keyCornerRadiusDp + 8).coerceIn(12, 24).dp
         val borderCol = if (settings.isKeyBorderVisible()) palette.keyBorder.copy(alpha = 0.85f) else null
+        val hasHomeWallpaper = activeWallpaper != null && activeWallpaper.sourceType != WallpaperSourceType.NONE
 
         if (showInlinePreview) {
             Box(
@@ -1164,13 +1227,14 @@ fun DeckHomeScreen(
                             }
                         }
                         .neumorphicRaised(
-                            surfaceColor = palette.deckBg,
+                            surfaceColor = if (hasHomeWallpaper) Color.Transparent else palette.deckBg,
                             shadowLight = palette.shadowLight,
                             shadowDark = palette.shadowDark,
                             cornerRadius = outerCorner,
                             shadowOffset = 5.dp,
                             blurRadius = 10.dp,
                             borderColor = borderCol,
+                            shadowsEnabled = !hasHomeWallpaper,
                         ),
                 )
             }

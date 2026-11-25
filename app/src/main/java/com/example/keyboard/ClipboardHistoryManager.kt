@@ -148,6 +148,7 @@ fun KeyboardClipboardHistoryStrip(
     borderColor: androidx.compose.ui.graphics.Color?,
     onPasteClip: (ClipboardClipEntry) -> Unit,
     onClearAll: () -> Unit,
+    shadowsEnabled: Boolean = true,
     modifier: Modifier = Modifier,
 ) {
     Row(
@@ -171,6 +172,7 @@ fun KeyboardClipboardHistoryStrip(
                         cornerRadius = 9.dp,
                         depth = 2.dp,
                         borderColor = borderColor,
+                        shadowsEnabled = shadowsEnabled,
                     )
                     .padding(horizontal = 10.dp, vertical = 6.dp)
                     .testTag("clipboard_empty_hint"),
@@ -210,6 +212,7 @@ fun KeyboardClipboardHistoryStrip(
                     cornerRadius = 8.dp,
                     depth = 2.dp,
                     borderColor = borderColor,
+                    shadowsEnabled = shadowsEnabled,
                 )
                 .clickable(onClick = onClearAll)
                 .padding(horizontal = 9.dp, vertical = 5.dp)
@@ -244,6 +247,7 @@ fun KeyboardClipboardHistoryStrip(
                         shadowDark = palette.shadowDark,
                         cornerRadius = 8.dp,
                         borderColor = borderColor,
+                        shadowsEnabled = shadowsEnabled,
                     )
                     .clickable { onPasteClip(entry) }
                     .padding(horizontal = 10.dp, vertical = 5.dp)

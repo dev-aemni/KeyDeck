@@ -198,6 +198,9 @@ class KeyDeckAccessibilityService : AccessibilityService() {
         super.onDestroy()
     }
 
+    @Volatile
+    private var lastLookGestureDispatchMs: Long = 0L
+
     fun dispatchMouseLookOrMove(dx: Float, dy: Float, mcpeLookMode: Boolean) {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.N) return
         val dm = resources.displayMetrics
@@ -208,6 +211,12 @@ class KeyDeckAccessibilityService : AccessibilityService() {
             // Desktop Mouse Pointer Mode: move shared cursor smoothly without fake screen-dragging swipes
             KeyDeckRuntimeState.moveMouseCursorBy(dx, dy, w, h, visible = true)
             return
+        }
+
+        val now = SystemClock.uptimeMillis()
+        if (isLookGestureInFlight && (now - lastLookGestureDispatchMs) > 550L) {
+            isLookGestureInFlight = false
+            activeLookStroke = null
         }
 
         lookPendingDx += dx
@@ -221,6 +230,11 @@ class KeyDeckAccessibilityService : AccessibilityService() {
 
     fun dispatchMouseEnd(mcpeLookMode: Boolean) {
         if (!mcpeLookMode || Build.VERSION.SDK_INT < Build.VERSION_CODES.N) return
+        val now = SystemClock.uptimeMillis()
+        if (isLookGestureInFlight && (now - lastLookGestureDispatchMs) > 550L) {
+            isLookGestureInFlight = false
+            activeLookStroke = null
+        }
         lookWantsRelease = true
         if (!isLookGestureInFlight && activeLookStroke != null) {
             flushNextLookStroke()
@@ -228,6 +242,7 @@ class KeyDeckAccessibilityService : AccessibilityService() {
     }
 
     private fun flushNextLookStroke() {
+        lastLookGestureDispatchMs = SystemClock.uptimeMillis()
         val dm = resources.displayMetrics
         val w = dm.widthPixels.toFloat().coerceAtLeast(320f)
         val h = dm.heightPixels.toFloat().coerceAtLeast(480f)
@@ -430,6 +445,13 @@ class KeyDeckAccessibilityService : AccessibilityService() {
 
     fun dispatchMouseTap(isRightClick: Boolean, mcpeLookMode: Boolean): String {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.N) return "Tap requires Android 7+"
+        // Clear any lingering look gesture state so tap always dispatches cleanly
+        lookPendingDx = 0f
+        lookPendingDy = 0f
+        lookWantsRelease = false
+        activeLookStroke = null
+        isLookGestureInFlight = false
+
         val dm = resources.displayMetrics
         val w = dm.widthPixels.toFloat().coerceAtLeast(320f)
         val h = dm.heightPixels.toFloat().coerceAtLeast(480f)

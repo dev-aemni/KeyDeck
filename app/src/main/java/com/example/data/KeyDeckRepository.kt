@@ -22,6 +22,7 @@ import com.example.keyboard.KeyboardThemeId
 import com.example.keyboard.KeyboardWallpaper
 import com.example.keyboard.PcKeyboardLayoutData
 import com.example.keyboard.RgbBorderMode
+import com.example.keyboard.WallpaperScaleMode
 import com.example.keyboard.WallpaperSourceType
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -344,7 +345,7 @@ class KeyDeckRepository(private val context: Context) {
             deckPaddingDp = (prefs[Keys.DECK_PADDING_DP] ?: 6).coerceIn(1, 10),
             keyCornerRadiusDp = (prefs[Keys.KEY_CORNER_DP] ?: 10).coerceIn(4, 16),
             fontScale = (prefs[Keys.FONT_SCALE] ?: 0.96f).coerceIn(0.75f, 1.25f),
-            overlayOpacity = (prefs[Keys.OVERLAY_OPACITY] ?: 0.96f).coerceIn(0.25f, 1.0f),
+            overlayOpacity = (prefs[Keys.OVERLAY_OPACITY] ?: 0.96f).coerceIn(0.15f, 1.0f),
             bubbleSizeDp = (prefs[Keys.BUBBLE_SIZE_DP] ?: 48).coerceIn(36, 68),
             rgbBorderMode = runCatching { RgbBorderMode.valueOf(rgbName) }
                 .getOrDefault(RgbBorderMode.GAMING_ONLY),
@@ -454,7 +455,8 @@ class KeyDeckRepository(private val context: Context) {
                     put("tintIntensity", wp.tintIntensity.toDouble())
                     put("keyOpacity", wp.keyOpacity.toDouble())
                     put("darkBackdrop", wp.darkBackdrop)
-                    put("fitCenter", wp.fitCenter)
+                    put("fitCenter", wp.resolvedScaleMode() == WallpaperScaleMode.FIT)
+                    put("scaleMode", wp.resolvedScaleMode().name)
                     put("cropZoom", wp.cropZoom.toDouble())
                     put("cropPanX", wp.cropPanX.toDouble())
                     put("cropPanY", wp.cropPanY.toDouble())
@@ -472,6 +474,14 @@ class KeyDeckRepository(private val context: Context) {
             buildList {
                 for (i in 0 until arr.length()) {
                     val obj = arr.getJSONObject(i)
+                    val legacyFit = obj.optBoolean("fitCenter", false)
+                    val parsedScaleMode = if (obj.has("scaleMode")) {
+                        runCatching {
+                            WallpaperScaleMode.valueOf(obj.optString("scaleMode", WallpaperScaleMode.STRETCH.name))
+                        }.getOrDefault(if (legacyFit) WallpaperScaleMode.FIT else WallpaperScaleMode.STRETCH)
+                    } else {
+                        if (legacyFit) WallpaperScaleMode.FIT else WallpaperScaleMode.STRETCH
+                    }
                     add(
                         KeyboardWallpaper(
                             id = obj.getString("id"),
@@ -480,15 +490,16 @@ class KeyDeckRepository(private val context: Context) {
                                 WallpaperSourceType.valueOf(obj.optString("sourceType", WallpaperSourceType.NONE.name))
                             }.getOrDefault(WallpaperSourceType.NONE),
                             imagePath = obj.optString("imagePath", ""),
-                            lightness = obj.optDouble("lightness", 0.16).toFloat().coerceIn(0.03f, 1.0f),
-                            saturation = obj.optDouble("saturation", 0.90).toFloat().coerceIn(0.0f, 2.0f),
-                            contrast = obj.optDouble("contrast", 1.08).toFloat().coerceIn(0.4f, 2.0f),
+                            lightness = obj.optDouble("lightness", 1.0).toFloat().coerceIn(0.03f, 1.0f),
+                            saturation = obj.optDouble("saturation", 1.0).toFloat().coerceIn(0.0f, 2.0f),
+                            contrast = obj.optDouble("contrast", 1.0).toFloat().coerceIn(0.4f, 2.0f),
                             brightness = obj.optDouble("brightness", 0.0).toFloat().coerceIn(-0.5f, 0.5f),
                             tintHex = obj.optLong("tintHex", 0L),
-                            tintIntensity = obj.optDouble("tintIntensity", 0.24).toFloat().coerceIn(0f, 0.85f),
-                            keyOpacity = obj.optDouble("keyOpacity", 0.64).toFloat().coerceIn(0.15f, 1.0f),
-                            darkBackdrop = obj.optBoolean("darkBackdrop", true),
-                            fitCenter = obj.optBoolean("fitCenter", false),
+                            tintIntensity = obj.optDouble("tintIntensity", 0.0).toFloat().coerceIn(0f, 0.85f),
+                            keyOpacity = obj.optDouble("keyOpacity", 0.48).toFloat().coerceIn(0.15f, 1.0f),
+                            darkBackdrop = obj.optBoolean("darkBackdrop", false),
+                            fitCenter = parsedScaleMode == WallpaperScaleMode.FIT,
+                            scaleMode = parsedScaleMode,
                             cropZoom = obj.optDouble("cropZoom", 1.0).toFloat().coerceIn(0.4f, 4.0f),
                             cropPanX = obj.optDouble("cropPanX", 0.0).toFloat().coerceIn(-1.5f, 1.5f),
                             cropPanY = obj.optDouble("cropPanY", 0.0).toFloat().coerceIn(-1.5f, 1.5f),

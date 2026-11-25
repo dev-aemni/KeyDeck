@@ -74,21 +74,28 @@ enum class WallpaperSourceType(val label: String) {
     CUSTOM_IMAGE("Custom Image"),
 }
 
+enum class WallpaperScaleMode(val label: String) {
+    STRETCH("Stretch Full"),
+    CROP("Fill Crop"),
+    FIT("Fit Center"),
+}
+
 data class KeyboardWallpaper(
     val id: String,
     val name: String,
     val sourceType: WallpaperSourceType,
     val imagePath: String = "",
-    val lightness: Float = 0.16f,      // 0.04f..1.0f (~16% visible -> ~85-90% dark stealth by default)
+    val lightness: Float = 0.16f,      // 0.04f..1.0f (~16% visible for stealth presets; 1.0f clear for photos/GIFs)
     val saturation: Float = 0.90f,     // 0.0f..2.0f
     val contrast: Float = 1.08f,       // 0.50f..1.80f
     val brightness: Float = 0.0f,      // -0.40f..0.40f
     val tintHex: Long = 0L,            // 0L = neutral / theme default
     val tintIntensity: Float = 0.24f,  // 0.0f..0.85f
-    val keyOpacity: Float = 0.64f,     // 0.20f..1.0f
-    val darkBackdrop: Boolean = true,  // true = 90% dark black keyboard look
-    val fitCenter: Boolean = false,    // false = Crop fill, true = Fit centered (great for logos)
-    val cropZoom: Float = 1.0f,        // 0.40f..4.0f zoom multiplier from interactive cropper
+    val keyOpacity: Float = 0.64f,     // 0.15f..1.0f
+    val darkBackdrop: Boolean = true,  // true = obsidian dark keyboard look
+    val fitCenter: Boolean = false,    // legacy compat flag; resolvedScaleMode() honors scaleMode
+    val scaleMode: WallpaperScaleMode = WallpaperScaleMode.STRETCH,
+    val cropZoom: Float = 1.0f,        // 0.40f..4.0f zoom multiplier from interactive cropper/editor
     val cropPanX: Float = 0.0f,        // normalized horizontal pan fraction (-1.5f..1.5f)
     val cropPanY: Float = 0.0f,        // normalized vertical pan fraction (-1.5f..1.5f)
     val isAnimatedGif: Boolean = false,
@@ -96,6 +103,12 @@ data class KeyboardWallpaper(
     val createdAtMs: Long = 0L,
 ) {
     fun isGifWallpaper(): Boolean = isAnimatedGif || imagePath.endsWith(".gif", ignoreCase = true)
+
+    fun resolvedScaleMode(): WallpaperScaleMode = when {
+        scaleMode != WallpaperScaleMode.STRETCH -> scaleMode
+        fitCenter -> WallpaperScaleMode.FIT
+        else -> WallpaperScaleMode.STRETCH
+    }
 }
 
 object BuiltInWallpapers {
@@ -409,10 +422,14 @@ fun KeyboardWallpaperBackdrop(
     }
 
     val lightness = wallpaper.lightness.coerceIn(0.03f, 1.0f)
-    val baseColor = if (wallpaper.darkBackdrop) {
-        lerp(palette.deckBg, Color.Black, 0.92f).copy(alpha = overlayAlpha)
-    } else {
-        palette.deckBg.copy(alpha = overlayAlpha)
+    val resolvedScale = wallpaper.resolvedScaleMode()
+    val baseColor = when {
+        wallpaper.sourceType == WallpaperSourceType.CUSTOM_IMAGE && !wallpaper.darkBackdrop ->
+            Color.Transparent
+        wallpaper.darkBackdrop ->
+            lerp(palette.deckBg, Color.Black, 0.92f).copy(alpha = overlayAlpha)
+        else ->
+            palette.deckBg.copy(alpha = overlayAlpha)
     }
 
     val colorMatrix = remember(wallpaper.saturation, wallpaper.contrast, wallpaper.brightness) {
@@ -430,7 +447,7 @@ fun KeyboardWallpaperBackdrop(
                 contentDescription = wallpaper.name,
                 isAnimatedGif = wallpaper.isGifWallpaper(),
                 animateGif = animateGif,
-                fitCenter = wallpaper.fitCenter,
+                scaleMode = resolvedScale,
                 cropZoom = wallpaper.cropZoom,
                 cropPanX = wallpaper.cropPanX,
                 cropPanY = wallpaper.cropPanY,
@@ -475,7 +492,7 @@ fun KeyboardWallpaperBackdrop(
         }
 
         if (wallpaper.darkBackdrop) {
-            // Subtle bottom/edge vignette keeps stealth ~90% dark keyboard edges clean
+            // Optional dark vignette only when Stealth Dark Backdrop is enabled
             val edgeAlpha = ((1f - lightness) * 0.35f * overlayAlpha).coerceIn(0f, 0.45f)
             if (edgeAlpha > 0.01f) {
                 Box(
@@ -495,7 +512,7 @@ fun WallpaperMediaLayer(
     contentDescription: String,
     isAnimatedGif: Boolean,
     animateGif: Boolean,
-    fitCenter: Boolean,
+    scaleMode: WallpaperScaleMode = WallpaperScaleMode.STRETCH,
     cropZoom: Float,
     cropPanX: Float,
     cropPanY: Float,
@@ -508,179 +525,209 @@ fun WallpaperMediaLayer(
     val panY = cropPanY.coerceIn(-1.5f, 1.5f)
     val clampedAlpha = alpha.coerceIn(0f, 1f)
 
-    if (isAnimatedGif && animateGif && imagePath.isNotBlank()) {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
-            var animDrawable by remember(imagePath) { mutableStateOf<AnimatedImageDrawable?>(null) }
-            var frameTick by remember(imagePath) { mutableIntStateOf(0) }
+    Box(modifier = modifier.clipToBounds()) {
+        val transformModifier = Modifier
+            .fillMaxSize()
+            .graphicsLayer {
+                scaleX = zoom
+                scaleY = zoom
+                translationX = panX * size.width
+                translationY = panY * size.height
+            }
 
-            LaunchedEffect(imagePath) {
+        if (isAnimatedGif && animateGif && imagePath.isNotBlank()) {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+                var animDrawable by remember(imagePath) { mutableStateOf<AnimatedImageDrawable?>(null) }
+                var frameTick by remember(imagePath) { mutableIntStateOf(0) }
+
+                LaunchedEffect(imagePath) {
+                    val decoded = withContext(Dispatchers.IO) {
+                        runCatching {
+                            val file = File(imagePath)
+                            if (file.exists()) {
+                                ImageDecoder.decodeDrawable(ImageDecoder.createSource(file)) as? AnimatedImageDrawable
+                            } else {
+                                null
+                            }
+                        }.getOrNull()
+                    }
+                    animDrawable = decoded
+                }
+
+                val activeDrawable = animDrawable
+                if (activeDrawable != null && activeDrawable.intrinsicWidth > 0 && activeDrawable.intrinsicHeight > 0) {
+                    DisposableEffect(activeDrawable) {
+                        val mainHandler = Handler(Looper.getMainLooper())
+                        val cb = object : Drawable.Callback {
+                            override fun invalidateDrawable(who: Drawable) {
+                                frameTick++
+                            }
+
+                            override fun scheduleDrawable(who: Drawable, what: Runnable, `when`: Long) {
+                                mainHandler.postAtTime(what, who, `when`)
+                            }
+
+                            override fun unscheduleDrawable(who: Drawable, what: Runnable) {
+                                mainHandler.removeCallbacks(what, who)
+                            }
+                        }
+                        val iw = activeDrawable.intrinsicWidth.coerceAtLeast(1)
+                        val ih = activeDrawable.intrinsicHeight.coerceAtLeast(1)
+                        activeDrawable.setBounds(0, 0, iw, ih)
+                        activeDrawable.repeatCount = AnimatedImageDrawable.REPEAT_INFINITE
+                        activeDrawable.callback = cb
+                        activeDrawable.start()
+                        onDispose {
+                            runCatching {
+                                activeDrawable.stop()
+                                mainHandler.removeCallbacksAndMessages(activeDrawable)
+                                activeDrawable.callback = null
+                            }
+                        }
+                    }
+
+                    val nativeFilter = remember(colorMatrix) { ColorMatrixColorFilter(colorMatrix.values) }
+                    Canvas(modifier = transformModifier) {
+                        @Suppress("UNUSED_VARIABLE")
+                        val currentFrame = frameTick
+                        val iw = activeDrawable.intrinsicWidth.coerceAtLeast(1).toFloat()
+                        val ih = activeDrawable.intrinsicHeight.coerceAtLeast(1).toFloat()
+                        val (scaleXBase, scaleYBase) = computeScalePair(
+                            srcW = iw,
+                            srcH = ih,
+                            dstW = size.width,
+                            dstH = size.height,
+                            scaleMode = scaleMode,
+                        )
+                        val dx = (size.width - iw * scaleXBase) * 0.5f
+                        val dy = (size.height - ih * scaleYBase) * 0.5f
+
+                        activeDrawable.alpha = (clampedAlpha * 255f).roundToInt().coerceIn(0, 255)
+                        activeDrawable.colorFilter = nativeFilter
+                        drawIntoCanvas { canvas ->
+                            val nc = canvas.nativeCanvas
+                            val saveCount = nc.save()
+                            nc.translate(dx, dy)
+                            nc.scale(scaleXBase, scaleYBase)
+                            activeDrawable.draw(nc)
+                            nc.restoreToCount(saveCount)
+                        }
+                    }
+                    return@Box
+                }
+            } else {
+                var movie by remember(imagePath) { mutableStateOf<android.graphics.Movie?>(null) }
+                var movieTimeMs by remember(imagePath) { mutableIntStateOf(0) }
+                LaunchedEffect(imagePath) {
+                    movie = withContext(Dispatchers.IO) {
+                        runCatching {
+                            val file = File(imagePath)
+                            if (file.exists()) android.graphics.Movie.decodeFile(file.absolutePath) else null
+                        }.getOrNull()
+                    }
+                }
+                val activeMovie = movie
+                if (activeMovie != null && activeMovie.width() > 0 && activeMovie.height() > 0) {
+                    val duration = activeMovie.duration().coerceAtLeast(1000)
+                    LaunchedEffect(activeMovie, duration) {
+                        val startMs = SystemClock.uptimeMillis()
+                        while (isActive) {
+                            movieTimeMs = ((SystemClock.uptimeMillis() - startMs) % duration).toInt()
+                            delay(33L)
+                        }
+                    }
+                    Canvas(modifier = transformModifier) {
+                        val iw = activeMovie.width().toFloat()
+                        val ih = activeMovie.height().toFloat()
+                        val (scaleXBase, scaleYBase) = computeScalePair(
+                            srcW = iw,
+                            srcH = ih,
+                            dstW = size.width,
+                            dstH = size.height,
+                            scaleMode = scaleMode,
+                        )
+                        val dx = (size.width - iw * scaleXBase) * 0.5f
+                        val dy = (size.height - ih * scaleYBase) * 0.5f
+
+                        activeMovie.setTime(movieTimeMs)
+                        val paint = android.graphics.Paint().apply {
+                            this.alpha = (clampedAlpha * 255f).roundToInt().coerceIn(0, 255)
+                            this.colorFilter = ColorMatrixColorFilter(colorMatrix.values)
+                        }
+                        drawIntoCanvas { canvas ->
+                            val nc = canvas.nativeCanvas
+                            val saveCount = nc.save()
+                            nc.translate(dx, dy)
+                            nc.scale(scaleXBase, scaleYBase)
+                            activeMovie.draw(nc, 0f, 0f, paint)
+                            nc.restoreToCount(saveCount)
+                        }
+                    }
+                    return@Box
+                }
+            }
+        }
+
+        var loadedBitmap by remember(imagePath) {
+            mutableStateOf(WallpaperBitmapCache.getCached(imagePath))
+        }
+        LaunchedEffect(imagePath) {
+            if (loadedBitmap == null) {
                 val decoded = withContext(Dispatchers.IO) {
                     runCatching {
                         val file = File(imagePath)
                         if (file.exists()) {
-                            ImageDecoder.decodeDrawable(ImageDecoder.createSource(file)) as? AnimatedImageDrawable
+                            BitmapFactory.decodeFile(file.absolutePath)?.asImageBitmap()
                         } else {
                             null
                         }
                     }.getOrNull()
                 }
-                animDrawable = decoded
-            }
-
-            val activeDrawable = animDrawable
-            if (activeDrawable != null) {
-                DisposableEffect(activeDrawable) {
-                    val mainHandler = Handler(Looper.getMainLooper())
-                    val cb = object : Drawable.Callback {
-                        override fun invalidateDrawable(who: Drawable) {
-                            frameTick++
-                        }
-
-                        override fun scheduleDrawable(who: Drawable, what: Runnable, `when`: Long) {
-                            mainHandler.postAtTime(what, who, `when`)
-                        }
-
-                        override fun unscheduleDrawable(who: Drawable, what: Runnable) {
-                            mainHandler.removeCallbacks(what, who)
-                        }
-                    }
-                    activeDrawable.repeatCount = AnimatedImageDrawable.REPEAT_INFINITE
-                    activeDrawable.callback = cb
-                    activeDrawable.start()
-                    onDispose {
-                        runCatching {
-                            activeDrawable.stop()
-                            mainHandler.removeCallbacksAndMessages(activeDrawable)
-                            activeDrawable.callback = null
-                        }
-                    }
+                if (decoded != null) {
+                    WallpaperBitmapCache.putCached(imagePath, decoded)
+                    loadedBitmap = decoded
                 }
-
-                val nativeFilter = remember(colorMatrix) { ColorMatrixColorFilter(colorMatrix.values) }
-                Canvas(modifier = modifier.clipToBounds()) {
-                    @Suppress("UNUSED_VARIABLE")
-                    val currentFrame = frameTick
-                    val iw = activeDrawable.intrinsicWidth.coerceAtLeast(1).toFloat()
-                    val ih = activeDrawable.intrinsicHeight.coerceAtLeast(1).toFloat()
-                    val baseScale = if (fitCenter) {
-                        min(size.width / iw, size.height / ih)
-                    } else {
-                        max(size.width / iw, size.height / ih)
-                    }
-                    val totalScale = baseScale * zoom
-                    val drawW = iw * totalScale
-                    val drawH = ih * totalScale
-                    val left = (size.width - drawW) * 0.5f + panX * size.width
-                    val top = (size.height - drawH) * 0.5f + panY * size.height
-
-                    activeDrawable.alpha = (clampedAlpha * 255f).roundToInt().coerceIn(0, 255)
-                    activeDrawable.colorFilter = nativeFilter
-                    activeDrawable.setBounds(
-                        left.roundToInt(),
-                        top.roundToInt(),
-                        (left + drawW).roundToInt(),
-                        (top + drawH).roundToInt(),
-                    )
-                    clipRect {
-                        drawIntoCanvas { canvas ->
-                            activeDrawable.draw(canvas.nativeCanvas)
-                        }
-                    }
-                }
-                return
-            }
-        } else {
-            var movie by remember(imagePath) { mutableStateOf<android.graphics.Movie?>(null) }
-            var movieTimeMs by remember(imagePath) { mutableIntStateOf(0) }
-            LaunchedEffect(imagePath) {
-                movie = withContext(Dispatchers.IO) {
-                    runCatching {
-                        val file = File(imagePath)
-                        if (file.exists()) android.graphics.Movie.decodeFile(file.absolutePath) else null
-                    }.getOrNull()
-                }
-            }
-            val activeMovie = movie
-            if (activeMovie != null && activeMovie.width() > 0 && activeMovie.height() > 0) {
-                val duration = activeMovie.duration().coerceAtLeast(1000)
-                LaunchedEffect(activeMovie, duration) {
-                    val startMs = SystemClock.uptimeMillis()
-                    while (isActive) {
-                        movieTimeMs = ((SystemClock.uptimeMillis() - startMs) % duration).toInt()
-                        delay(33L)
-                    }
-                }
-                Canvas(modifier = modifier.clipToBounds()) {
-                    val iw = activeMovie.width().toFloat()
-                    val ih = activeMovie.height().toFloat()
-                    val baseScale = if (fitCenter) {
-                        min(size.width / iw, size.height / ih)
-                    } else {
-                        max(size.width / iw, size.height / ih)
-                    }
-                    val totalScale = baseScale * zoom
-                    val drawW = iw * totalScale
-                    val drawH = ih * totalScale
-                    val left = (size.width - drawW) * 0.5f + panX * size.width
-                    val top = (size.height - drawH) * 0.5f + panY * size.height
-
-                    activeMovie.setTime(movieTimeMs)
-                    val paint = android.graphics.Paint().apply {
-                        this.alpha = (clampedAlpha * 255f).roundToInt().coerceIn(0, 255)
-                        this.colorFilter = ColorMatrixColorFilter(colorMatrix.values)
-                    }
-                    clipRect {
-                        drawIntoCanvas { canvas ->
-                            val nc = canvas.nativeCanvas
-                            val saveCount = nc.save()
-                            nc.translate(left, top)
-                            nc.scale(totalScale, totalScale)
-                            activeMovie.draw(nc, 0f, 0f, paint)
-                            nc.restoreToCount(saveCount)
-                        }
-                    }
-                }
-                return
             }
         }
-    }
-
-    var loadedBitmap by remember(imagePath) {
-        mutableStateOf(WallpaperBitmapCache.getCached(imagePath))
-    }
-    LaunchedEffect(imagePath) {
-        if (loadedBitmap == null) {
-            val decoded = withContext(Dispatchers.IO) {
-                runCatching {
-                    val file = File(imagePath)
-                    if (file.exists()) {
-                        BitmapFactory.decodeFile(file.absolutePath)?.asImageBitmap()
-                    } else {
-                        null
-                    }
-                }.getOrNull()
+        val bmp = loadedBitmap
+        if (bmp != null) {
+            val contentScale = when (scaleMode) {
+                WallpaperScaleMode.STRETCH -> ContentScale.FillBounds
+                WallpaperScaleMode.FIT -> ContentScale.Fit
+                WallpaperScaleMode.CROP -> ContentScale.Crop
             }
-            if (decoded != null) {
-                WallpaperBitmapCache.putCached(imagePath, decoded)
-                loadedBitmap = decoded
-            }
+            Image(
+                bitmap = bmp,
+                contentDescription = contentDescription,
+                contentScale = contentScale,
+                alpha = clampedAlpha,
+                colorFilter = ColorFilter.colorMatrix(colorMatrix),
+                modifier = transformModifier,
+            )
         }
     }
-    val bmp = loadedBitmap
-    if (bmp != null) {
-        Image(
-            bitmap = bmp,
-            contentDescription = contentDescription,
-            contentScale = if (fitCenter) ContentScale.Fit else ContentScale.Crop,
-            alpha = clampedAlpha,
-            colorFilter = ColorFilter.colorMatrix(colorMatrix),
-            modifier = modifier.graphicsLayer {
-                scaleX = zoom
-                scaleY = zoom
-                translationX = panX * size.width
-                translationY = panY * size.height
-            },
-        )
+}
+
+private fun computeScalePair(
+    srcW: Float,
+    srcH: Float,
+    dstW: Float,
+    dstH: Float,
+    scaleMode: WallpaperScaleMode,
+): Pair<Float, Float> {
+    if (srcW <= 0f || srcH <= 0f || dstW <= 0f || dstH <= 0f) return 1f to 1f
+    val sx = dstW / srcW
+    val sy = dstH / srcH
+    return when (scaleMode) {
+        WallpaperScaleMode.STRETCH -> sx to sy
+        WallpaperScaleMode.FIT -> {
+            val u = min(sx, sy)
+            u to u
+        }
+        WallpaperScaleMode.CROP -> {
+            val u = max(sx, sy)
+            u to u
+        }
     }
 }
 

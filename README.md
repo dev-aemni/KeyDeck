@@ -1,6 +1,6 @@
 <div align="center">
 
-![KeyDeck v1.1.8 Banner](./docs/keydeck-header.svg)
+![KeyDeck v2.1.2 Banner](./docs/keydeck-header.svg)
 
 **PC-Grade Hardware `KeyEvent` Keyboard • Persistent Floating Deck • Analog Mouse Joystick**
 
@@ -42,7 +42,7 @@ That means **Termux**, **code editors**, **remote desktops**, and **PC-keyboard-
 | **5 Instant Modes** | Switch live between `PC+Num`, `PC Full`, `Simple`, `Num`, and `Game` from the top strip |
 | **Game Mouse Joystick** | Hybrid circular analog stick + trackpad with 60Hz panning, floating cursor pointer, and MCPE look mode |
 | **Floating + System IME** | Draggable, resizable transparent overlay with automatic system-IME suppression when expanded |
-| **Themes & `.kdb` Export** | 12+ Neumorphic themes, animated GIF wallpapers, and one-file `.kdb` backups (`@version:211`) |
+| **Themes & `.kdb` Export** | 12+ Neumorphic themes, animated GIF wallpapers, and one-file `.kdb` backups (`@version:212`) |
 
 ---
 
@@ -135,7 +135,7 @@ KeyDeck triggers Android's native physical-keyboard shortcuts directly from touc
 
 - Runs both as a **native Android System IME** (`KeyDeck PC Keyboard`) and as a **draggable, corner-resizable Floating Keyboard** (`stopWithTask=false`).
 - **KeyDeck Float Direct Launcher**: Includes a separate **KeyDeck Float** launcher icon (`com.aemni.keydeck/com.aemni.keydeck.float`, action `com.aemni.keydeck.float`, URI `keydeck://float`) that opens the Floating Keyboard directly once IME, active IME selection, and Overlay are ready—or opens the main KeyDeck app if setup is incomplete.
-- **Floating Transparency (`0%–75%`)**: See games, terminals, and videos clearly behind floating keys while keeping the System IME crisp and opaque.
+- **Floating Transparency (`0%–85%`)**: See games, terminals, and videos clearly behind floating keys while keeping the System IME crisp and opaque.
 - **Smart IME Suppression**: Automatically hides the bottom system keyboard while the floating deck is expanded so two keyboards never stack over your screen.
 - **Built-in Deck Lab**: Test shortcut combos, hold states, cursor coordinates, LMB/RMB clicks, and numpad responses live inside the app without switching apps.
 
@@ -146,14 +146,14 @@ KeyDeck triggers Android's native physical-keyboard shortcuts directly from touc
 ## 🎨 Themes, GIF Wallpapers & `.kdb` Profiles
 
 <details>
-<summary><b>Neumorphic Themes, Live Wallpaper Studio &amp; Single-File Backups (<code>@version:211</code>)</b></summary>
+<summary><b>Neumorphic Themes, Live Wallpaper Studio &amp; Single-File Backups (<code>@version:212</code>)</b></summary>
 
 - **Neumorphic Theme Engine**: Soft extruded keycaps across **12+ built-in themes** (`Pure Black #000`, `Midnight Gaming`, `Carbon Stealth`, `Soft UI Slate`, auto Dark Mode sync), Custom Color Studio, and **RGB Border Modes** (`Gaming Only`, `All`, `Off`).
 - **Live Wallpaper Studio**:
   - 7 built-in geometric/cyber pattern wallpapers
-  - Custom **Image & Animated GIF** gallery picker with interactive **drag/pan/zoom crop**
+  - Custom **Image & Animated GIF** pickers (`Pick Photo / GIF` + `Pick GIF / File`) with crystal-clear shadow-free rendering, **Stretch Full / Fill Crop / Fit Center** modes, and inline **Zoom & Pan** controls
   - Real-time **Lightness**, **Saturation**, **Contrast**, **Brightness**, **Tint**, and **Keycap Glass Opacity** controls
-- **Portable `.kdb` Profiles (`@keydeck.aemni`)**: Export your entire setup—dimensions, transparency, theme, RGB border mode, custom hotkeys, and even base64-embedded static or animated **GIF wallpapers**—into `Download/*.kdb` (`@version:211`) and restore or share in one tap.
+- **Portable `.kdb` Profiles (`@keydeck.aemni`)**: Export your entire setup—dimensions, transparency, theme, RGB border mode, custom hotkeys, and even base64-embedded static or animated **GIF wallpapers**—into `Download/*.kdb` (`@version:212`) and restore or share in one tap.
 
 </details>
 
@@ -161,6 +161,6 @@ KeyDeck triggers Android's native physical-keyboard shortcuts directly from touc
 
 <div align="center">
 
-<sub><b>KeyDeck v2.1.1 (Patch 211)</b> • Package <code>com.aemni.keydeck</code> • Float Alias <code>com.aemni.keydeck.float</code> • Built for Android Mobile Developers &amp; Gamers</sub>
+<sub><b>KeyDeck v2.1.2 (Patch 212)</b> • Package <code>com.aemni.keydeck</code> • Float Alias <code>com.aemni.keydeck.float</code> • Built for Android Mobile Developers &amp; Gamers</sub>
 
 </div>

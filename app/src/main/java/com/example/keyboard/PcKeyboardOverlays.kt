@@ -79,6 +79,7 @@ fun GamingMouseTouchpad(
     rgbPhaseDeg: Float,
     rgbEnabled: Boolean,
     keyOpacity: Float = 1f,
+    shadowsEnabled: Boolean = true,
     totalHeight: Dp,
     cornerRadius: Dp,
     onMouseMove: (dx: Float, dy: Float) -> Unit,
@@ -96,19 +97,23 @@ fun GamingMouseTouchpad(
     var isDragged by remember { mutableStateOf(false) }
     var analogMoved by remember { mutableStateOf(false) }
     var downAtMs by remember { mutableLongStateOf(0L) }
+    var lastDragMoveAtMs by remember { mutableLongStateOf(0L) }
     var rawOffsetX by remember { mutableFloatStateOf(0f) }
     var rawOffsetY by remember { mutableFloatStateOf(0f) }
 
     val borderVisible = settings.isKeyBorderVisible()
     val borderCol = if (borderVisible && !rgbEnabled) palette.keyBorder.copy(alpha = 0.85f) else null
 
-    // Continuous 60Hz analog stick velocity when dragged or held outside deadzone
+    // Continuous 60Hz analog stick velocity only when finger holds steady outside deadzone
+    // (never fights active 1:1 finger drag movement)
     LaunchedEffect(fingerActive) {
         if (!fingerActive) return@LaunchedEffect
         while (fingerActive) {
             delay(16L)
-            val heldPastTapMs = (SystemClock.uptimeMillis() - downAtMs) > 120L
-            if (isDragged || heldPastTapMs) {
+            val now = SystemClock.uptimeMillis()
+            val heldSteadyMs = now - lastDragMoveAtMs
+            val heldPastTapMs = (now - downAtMs) > 130L
+            if ((isDragged && heldSteadyMs > 75L) || (!isDragged && heldPastTapMs)) {
                 val stick = MouseJoystickMath.computeStickOutput(rawOffsetX, rawOffsetY)
                 if (stick.stepDx != 0f || stick.stepDy != 0f) {
                     analogMoved = true
@@ -196,6 +201,7 @@ fun GamingMouseTouchpad(
                     depth = 4.dp,
                     borderColor = borderCol,
                     borderWidth = 1.dp,
+                    shadowsEnabled = shadowsEnabled,
                 )
                 .then(
                     if (rgbEnabled) {
@@ -212,8 +218,8 @@ fun GamingMouseTouchpad(
                 .pointerInput(touchSlop) {
                     val dragActivatePx = min(touchSlop * 0.35f, 6.dp.toPx()).coerceAtLeast(3f)
                     awaitEachGesture {
-                        val down = awaitFirstDown(requireUnconsumed = false)
-                        // Consume down immediately so ancestor verticalScroll never steals joystick drags
+                        val down = awaitFirstDown(requireUnconsumed = false, pass = PointerEventPass.Initial)
+                        // Consume down immediately in Initial pass so ancestor verticalScroll never steals joystick drags
                         down.consume()
                         val w = size.width.toFloat().coerceAtLeast(1f)
                         val h = size.height.toFloat().coerceAtLeast(1f)
@@ -221,10 +227,12 @@ fun GamingMouseTouchpad(
                         val cy = h * 0.5f
                         val radius = (min(w, h) * 0.40f).coerceAtLeast(18f)
 
+                        val now = SystemClock.uptimeMillis()
                         fingerActive = true
                         isDragged = false
                         analogMoved = false
-                        downAtMs = SystemClock.uptimeMillis()
+                        downAtMs = now
+                        lastDragMoveAtMs = now
                         rawOffsetX = (down.position.x - cx) / radius
                         rawOffsetY = (down.position.y - cy) / radius
 
@@ -233,7 +241,7 @@ fun GamingMouseTouchpad(
                         var pendingPreSlopDy = 0f
                         try {
                             while (true) {
-                                val event = awaitPointerEvent(PointerEventPass.Main)
+                                val event = awaitPointerEvent(PointerEventPass.Initial)
                                 val change = event.changes.firstOrNull { it.id == down.id } ?: break
                                 if (!change.pressed) {
                                     change.consume()
@@ -255,6 +263,10 @@ fun GamingMouseTouchpad(
 
                                 rawOffsetX = (change.position.x - cx) / radius
                                 rawOffsetY = (change.position.y - cy) / radius
+
+                                if (stepDist > 0.25f) {
+                                    lastDragMoveAtMs = SystemClock.uptimeMillis()
+                                }
 
                                 if (!isDragged) {
                                     pendingPreSlopDx += delta.x
@@ -392,6 +404,7 @@ fun GamingMouseTouchpad(
                 rgbEnabled = rgbEnabled,
                 showBorder = borderVisible,
                 keyOpacity = keyOpacity,
+                shadowsEnabled = shadowsEnabled,
                 testTag = "gaming_lmb_button",
                 modifier = Modifier
                     .weight(1f)
@@ -406,6 +419,7 @@ fun GamingMouseTouchpad(
                 rgbEnabled = rgbEnabled,
                 showBorder = borderVisible,
                 keyOpacity = keyOpacity,
+                shadowsEnabled = shadowsEnabled,
                 testTag = "gaming_rmb_button",
                 modifier = Modifier
                     .weight(1f)
@@ -425,6 +439,7 @@ private fun TouchpadMouseButton(
     rgbEnabled: Boolean,
     showBorder: Boolean,
     keyOpacity: Float = 1f,
+    shadowsEnabled: Boolean = true,
     testTag: String,
     modifier: Modifier = Modifier,
     onClick: () -> Unit,
@@ -446,6 +461,7 @@ private fun TouchpadMouseButton(
                         cornerRadius = cornerRadius,
                         depth = 3.dp,
                         borderColor = borderCol,
+                        shadowsEnabled = shadowsEnabled,
                     )
                 } else {
                     Modifier.neumorphicKeyCap(
@@ -454,6 +470,7 @@ private fun TouchpadMouseButton(
                         shadowDark = palette.shadowDark,
                         cornerRadius = cornerRadius,
                         borderColor = borderCol,
+                        shadowsEnabled = shadowsEnabled,
                     )
                 },
             )
@@ -504,6 +521,7 @@ fun DeckQuickResizeStrip(
     settings: KeyDeckSettings,
     palette: ResolvedKeyboardPalette,
     isOverlay: Boolean,
+    shadowsEnabled: Boolean = true,
     onUpdateSettings: ((KeyDeckSettings) -> KeyDeckSettings) -> Unit,
     onResizeDragDelta: ((dx: Float, dy: Float) -> Unit)? = null,
     modifier: Modifier = Modifier,
@@ -519,6 +537,7 @@ fun DeckQuickResizeStrip(
                 cornerRadius = 10.dp,
                 depth = 2.dp,
                 borderColor = borderCol,
+                shadowsEnabled = shadowsEnabled,
             )
             .padding(horizontal = 8.dp, vertical = 4.dp)
             .testTag("deck_quick_resize_strip"),
@@ -536,10 +555,10 @@ fun DeckQuickResizeStrip(
                 fontWeight = FontWeight.SemiBold,
                 color = palette.primaryText,
             )
-            MiniStepperBtn("-", palette, borderCol) {
+            MiniStepperBtn("-", palette, borderCol, shadowsEnabled) {
                 onUpdateSettings { it.copy(keyHeightDp = (it.keyHeightDp - 2).coerceIn(26, 54)) }
             }
-            MiniStepperBtn("+", palette, borderCol) {
+            MiniStepperBtn("+", palette, borderCol, shadowsEnabled) {
                 onUpdateSettings { it.copy(keyHeightDp = (it.keyHeightDp + 2).coerceIn(26, 54)) }
             }
         }
@@ -555,10 +574,10 @@ fun DeckQuickResizeStrip(
                 fontWeight = FontWeight.SemiBold,
                 color = palette.primaryText,
             )
-            MiniStepperBtn("-", palette, borderCol) {
+            MiniStepperBtn("-", palette, borderCol, shadowsEnabled) {
                 onUpdateSettings { it.copy(keyboardWidthFraction = (it.keyboardWidthFraction - 0.05f).coerceIn(0.60f, 1.0f)) }
             }
-            MiniStepperBtn("+", palette, borderCol) {
+            MiniStepperBtn("+", palette, borderCol, shadowsEnabled) {
                 onUpdateSettings { it.copy(keyboardWidthFraction = (it.keyboardWidthFraction + 0.05f).coerceIn(0.60f, 1.0f)) }
             }
         }
@@ -574,6 +593,7 @@ fun DeckQuickResizeStrip(
                         shadowOffset = 2.dp,
                         blurRadius = 3.dp,
                         borderColor = borderCol,
+                        shadowsEnabled = shadowsEnabled,
                     )
                     .pointerInput(Unit) {
                         awaitEachGesture {
@@ -617,6 +637,7 @@ private fun MiniStepperBtn(
     label: String,
     palette: ResolvedKeyboardPalette,
     borderCol: Color?,
+    shadowsEnabled: Boolean = true,
     onClick: () -> Unit,
 ) {
     Box(
@@ -628,6 +649,7 @@ private fun MiniStepperBtn(
                 shadowDark = palette.shadowDark,
                 cornerRadius = 6.dp,
                 borderColor = borderCol,
+                shadowsEnabled = shadowsEnabled,
             )
             .clickable(onClick = onClick),
         contentAlignment = Alignment.Center,
@@ -811,18 +833,16 @@ fun DeckQuickSettingsPopup(
         }
 
         // Compact Size, Floating Transparency & Touchpad Sensitivity Sliders
-        if (isOverlay) {
-            val transparency = (1f - settings.overlayOpacity.coerceIn(0.25f, 1.0f)).coerceIn(0f, 0.75f)
-            QuickPopupSlider(
-                label = "Floating Transparency (${(transparency * 100).roundToInt()}%)",
-                value = transparency,
-                range = 0f..0.75f,
-                palette = palette,
-                onValueChange = { t ->
-                    onUpdateSettings { it.copy(overlayOpacity = (1f - t).coerceIn(0.25f, 1.0f)) }
-                },
-            )
-        }
+        val transparency = (1f - settings.overlayOpacity.coerceIn(0.15f, 1.0f)).coerceIn(0f, 0.85f)
+        QuickPopupSlider(
+            label = "Floating Transparency (${(transparency * 100).roundToInt()}%)",
+            value = transparency,
+            range = 0f..0.85f,
+            palette = palette,
+            onValueChange = { t ->
+                onUpdateSettings { it.copy(overlayOpacity = (1f - t).coerceIn(0.15f, 1.0f)) }
+            },
+        )
         QuickPopupSlider(
             label = "Key Height (${settings.keyHeightDp}dp)",
             value = settings.keyHeightDp.toFloat(),

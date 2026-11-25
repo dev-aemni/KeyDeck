@@ -37,6 +37,7 @@ import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Crop
 import androidx.compose.material.icons.filled.DeleteOutline
 import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.FolderOpen
 import androidx.compose.material.icons.filled.HideImage
 import androidx.compose.material.icons.filled.OpenWith
 import androidx.compose.material.icons.filled.Tune
@@ -91,6 +92,7 @@ import com.example.keyboard.PcKeyboardLayoutData
 import com.example.keyboard.ResolvedKeyboardPalette
 import com.example.keyboard.WallpaperBitmapCache
 import com.example.keyboard.WallpaperMediaLayer
+import com.example.keyboard.WallpaperScaleMode
 import com.example.keyboard.WallpaperSourceType
 import com.example.keyboard.buildWallpaperColorMatrix
 import com.example.ui.theme.BodyFontFamily
@@ -137,10 +139,10 @@ fun FullKeyboardPreviewCard(
         }
     }
     val hasWallpaper = wallpaper != null && wallpaper.sourceType != WallpaperSourceType.NONE
-    val effectiveDeckBg = if (hasWallpaper && wallpaper!!.darkBackdrop) {
-        Color.Black
-    } else {
-        palette.deckBg
+    val effectiveDeckBg = when {
+        hasWallpaper && wallpaper!!.darkBackdrop -> Color.Black
+        hasWallpaper -> Color.Transparent
+        else -> palette.deckBg
     }
     val outerCorner = (settings.keyCornerRadiusDp + 6).coerceIn(10, 20).dp
     val borderCol = if (settings.isKeyBorderVisible()) palette.keyBorder.copy(alpha = 0.78f) else null
@@ -176,6 +178,7 @@ fun FullKeyboardPreviewCard(
                     shadowOffset = 4.dp,
                     blurRadius = 8.dp,
                     borderColor = borderCol,
+                    shadowsEnabled = !hasWallpaper,
                 ),
         )
     }
@@ -214,6 +217,21 @@ fun WallpaperStudioSection(
         }
     }
 
+    val documentGifPickerLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.OpenDocument(),
+    ) { uri ->
+        if (uri != null) {
+            importError = null
+            onImportWallpaperImage(uri) { draft ->
+                if (draft != null) {
+                    croppingDraft = draft
+                } else {
+                    importError = "Could not load selected file. Try another GIF, PNG, or JPG."
+                }
+            }
+        }
+    }
+
     if (croppingDraft != null) {
         WallpaperCropDialog(
             draft = croppingDraft!!,
@@ -247,44 +265,86 @@ fun WallpaperStudioSection(
                 },
             )
         } else {
-            // Primary Gallery Photo / Logo Picker Button
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(50.dp)
-                    .neumorphicRaised(
-                        surfaceColor = colors.accentFill,
-                        shadowLight = colors.shadowLight,
-                        shadowDark = colors.shadowDark,
-                        cornerRadius = 14.dp,
-                        shadowOffset = 4.dp,
-                        blurRadius = 8.dp,
-                        borderColor = null,
-                    )
-                    .clickable {
-                        photoPickerLauncher.launch(
-                            PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly),
+            // Primary Gallery Photo Picker + Direct File/GIF Picker Row (both zero-permission)
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                Box(
+                    modifier = Modifier
+                        .weight(1.35f)
+                        .height(50.dp)
+                        .neumorphicRaised(
+                            surfaceColor = colors.accentFill,
+                            shadowLight = colors.shadowLight,
+                            shadowDark = colors.shadowDark,
+                            cornerRadius = 14.dp,
+                            shadowOffset = 4.dp,
+                            blurRadius = 8.dp,
+                            borderColor = null,
+                        )
+                        .clickable {
+                            photoPickerLauncher.launch(
+                                PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly),
+                            )
+                        }
+                        .testTag("wallpaper_pick_image_button"),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.AddPhotoAlternate,
+                            contentDescription = null,
+                            tint = Color.White,
+                            modifier = Modifier.size(18.dp),
+                        )
+                        Text(
+                            text = "Pick Photo / GIF",
+                            color = Color.White,
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 12.5.sp,
                         )
                     }
-                    .testTag("wallpaper_pick_image_button"),
-                contentAlignment = Alignment.Center,
-            ) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                }
+                Box(
+                    modifier = Modifier
+                        .weight(1f)
+                        .height(50.dp)
+                        .neumorphicRaised(
+                            surfaceColor = colors.bg,
+                            shadowLight = colors.shadowLight,
+                            shadowDark = colors.shadowDark,
+                            cornerRadius = 14.dp,
+                            shadowOffset = 3.dp,
+                            blurRadius = 6.dp,
+                            borderColor = colors.keyBorder.copy(alpha = 0.45f),
+                        )
+                        .clickable {
+                            documentGifPickerLauncher.launch(arrayOf("image/*", "image/gif"))
+                        }
+                        .testTag("wallpaper_pick_gif_file_button"),
+                    contentAlignment = Alignment.Center,
                 ) {
-                    Icon(
-                        imageVector = Icons.Default.AddPhotoAlternate,
-                        contentDescription = null,
-                        tint = Color.White,
-                        modifier = Modifier.size(19.dp),
-                    )
-                    Text(
-                        text = "Pick Image / GIF / Logo (Drag, Zoom & Crop)",
-                        color = Color.White,
-                        fontWeight = FontWeight.Bold,
-                        fontSize = 13.5.sp,
-                    )
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.FolderOpen,
+                            contentDescription = null,
+                            tint = colors.indigo,
+                            modifier = Modifier.size(18.dp),
+                        )
+                        Text(
+                            text = "Pick GIF / File",
+                            color = colors.indigo,
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 12.sp,
+                        )
+                    }
                 }
             }
 
@@ -609,17 +669,46 @@ private fun WallpaperCropDialog(
     var zoom by remember(draft.id) { mutableFloatStateOf(draft.cropZoom.coerceIn(0.4f, 4.0f)) }
     var panX by remember(draft.id) { mutableFloatStateOf(draft.cropPanX.coerceIn(-1.5f, 1.5f)) }
     var panY by remember(draft.id) { mutableFloatStateOf(draft.cropPanY.coerceIn(-1.5f, 1.5f)) }
-    var fitCenter by remember(draft.id) { mutableStateOf(draft.fitCenter) }
+    var scaleMode by remember(draft.id) { mutableStateOf(draft.resolvedScaleMode()) }
     var viewportSize by remember { mutableStateOf(IntSize(1, 1)) }
 
-    val keyboardAspect = remember(settings.layoutMode) {
-        when (settings.layoutMode) {
-            KeyboardLayoutMode.NUMPAD_ONLY -> 1.35f
-            KeyboardLayoutMode.SIMPLE -> 1.58f
-            KeyboardLayoutMode.PC_WITH_NUMPAD -> 1.78f
-            KeyboardLayoutMode.GAMING -> 1.85f
-            KeyboardLayoutMode.PC_STANDARD -> 1.65f
+    val keyboardAspect = remember(
+        settings.layoutMode,
+        settings.keyboardWidthFraction,
+        settings.keyHeightDp,
+        settings.keyVerticalGapDp,
+        settings.deckPaddingDp,
+        settings.showModeStrip,
+        settings.showFunctionRow,
+        settings.simpleSuggestionsEnabled,
+    ) {
+        val kh = settings.keyHeightDp.coerceIn(26, 54).toFloat()
+        val vGap = settings.keyVerticalGapDp.coerceIn(1, 7).toFloat()
+        val pad = settings.deckPaddingDp.coerceIn(1, 10).toFloat()
+        val bodyH = when (settings.layoutMode) {
+            KeyboardLayoutMode.SIMPLE -> {
+                val sk = (kh + 5f).coerceIn(36f, 52f)
+                val sv = (vGap + 2f).coerceIn(5f, 8f)
+                val sugH = if (settings.simpleSuggestionsEnabled) (kh * 0.78f).coerceIn(28f, 36f) + sv else 0f
+                sk * 5f + sv * 4f + sugH
+            }
+            KeyboardLayoutMode.NUMPAD_ONLY -> (kh + 5f) * 5f + (vGap + 1f) * 4f
+            KeyboardLayoutMode.GAMING -> (kh + 2f).coerceAtLeast(36f) * 4f + vGap * 3f
+            else -> kh * 5f + vGap * 4f
         }
+        val fnExtra = if (settings.showFunctionRow &&
+            settings.layoutMode != KeyboardLayoutMode.GAMING &&
+            settings.layoutMode != KeyboardLayoutMode.NUMPAD_ONLY &&
+            settings.layoutMode != KeyboardLayoutMode.SIMPLE
+        ) {
+            (kh * 0.78f).coerceAtLeast(24f) + vGap
+        } else {
+            0f
+        }
+        val headerH = if (settings.showModeStrip) 28f else 18f
+        val estH = pad * 2f + headerH + vGap + fnExtra + bodyH
+        val estW = 390f * settings.keyboardWidthFraction.coerceIn(0.60f, 1.0f)
+        (estW / estH.coerceAtLeast(120f)).coerceIn(1.15f, 2.70f)
     }
     val previewRows = remember(settings.layoutMode) {
         when (settings.layoutMode) {
@@ -724,7 +813,7 @@ private fun WallpaperCropDialog(
                         contentDescription = "Crop preview",
                         isAnimatedGif = draft.isGifWallpaper(),
                         animateGif = true,
-                        fitCenter = fitCenter,
+                        scaleMode = scaleMode,
                         cropZoom = zoom,
                         cropPanX = panX,
                         cropPanY = panY,
@@ -818,65 +907,64 @@ private fun WallpaperCropDialog(
                 onValueChange = { zoom = it },
             )
 
-            // Quick Fit / Fill / Reset Position pills
+            // Stretch / Crop / Fit Mode Selector
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
             ) {
-                CropModeChip(
-                    label = "Fill Frame",
-                    active = !fitCenter,
-                    onClick = { fitCenter = false },
-                    modifier = Modifier.weight(1f),
-                )
-                CropModeChip(
-                    label = "Fit Logo",
-                    active = fitCenter,
-                    onClick = {
-                        fitCenter = true
-                        zoom = 0.85f
-                        panX = 0f
-                        panY = 0f
-                    },
-                    modifier = Modifier.weight(1f),
-                )
-                Box(
-                    modifier = Modifier
-                        .weight(1f)
-                        .height(36.dp)
-                        .neumorphicRaised(
-                            surfaceColor = colors.bg,
-                            shadowLight = colors.shadowLight,
-                            shadowDark = colors.shadowDark,
-                            cornerRadius = 10.dp,
-                            shadowOffset = 2.dp,
-                            blurRadius = 4.dp,
-                            borderColor = colors.keyBorder.copy(alpha = 0.45f),
-                        )
-                        .clickable {
+                WallpaperScaleMode.entries.forEach { mode ->
+                    CropModeChip(
+                        label = mode.label,
+                        active = scaleMode == mode,
+                        onClick = {
+                            scaleMode = mode
                             zoom = 1.0f
                             panX = 0f
                             panY = 0f
                         },
-                    contentAlignment = Alignment.Center,
+                        modifier = Modifier.weight(1f),
+                    )
+                }
+            }
+
+            // Quick Reset Position button
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(36.dp)
+                    .neumorphicRaised(
+                        surfaceColor = colors.bg,
+                        shadowLight = colors.shadowLight,
+                        shadowDark = colors.shadowDark,
+                        cornerRadius = 10.dp,
+                        shadowOffset = 2.dp,
+                        blurRadius = 4.dp,
+                        borderColor = colors.keyBorder.copy(alpha = 0.45f),
+                    )
+                    .clickable {
+                        scaleMode = WallpaperScaleMode.STRETCH
+                        zoom = 1.0f
+                        panX = 0f
+                        panY = 0f
+                    },
+                contentAlignment = Alignment.Center,
+            ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(5.dp),
                 ) {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(4.dp),
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.CenterFocusStrong,
-                            contentDescription = null,
-                            tint = colors.indigo,
-                            modifier = Modifier.size(14.dp),
-                        )
-                        Text(
-                            text = "Reset",
-                            fontSize = 11.5.sp,
-                            fontWeight = FontWeight.SemiBold,
-                            color = colors.textPrimary,
-                        )
-                    }
+                    Icon(
+                        imageVector = Icons.Default.CenterFocusStrong,
+                        contentDescription = null,
+                        tint = colors.indigo,
+                        modifier = Modifier.size(14.dp),
+                    )
+                    Text(
+                        text = "Reset Stretch & Center (100%)",
+                        fontSize = 11.5.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        color = colors.textPrimary,
+                    )
                 }
             }
 
@@ -922,7 +1010,8 @@ private fun WallpaperCropDialog(
                                     cropZoom = zoom,
                                     cropPanX = panX,
                                     cropPanY = panY,
-                                    fitCenter = fitCenter,
+                                    scaleMode = scaleMode,
+                                    fitCenter = (scaleMode == WallpaperScaleMode.FIT),
                                 ),
                             )
                         }
@@ -1166,7 +1255,7 @@ private fun WallpaperFilterEditor(
             }
         }
 
-        // Crop / Reposition button for custom image wallpapers
+        // Crop / Reposition + Inline Scale Mode & Pan/Zoom for custom image & GIF wallpapers
         if (draft.sourceType == WallpaperSourceType.CUSTOM_IMAGE) {
             Box(
                 modifier = Modifier
@@ -1196,13 +1285,65 @@ private fun WallpaperFilterEditor(
                         modifier = Modifier.size(16.dp),
                     )
                     Text(
-                        text = "Adjust Crop, Drag & Zoom (${(draft.cropZoom * 100).roundToInt()}%)",
+                        text = if (draft.isGifWallpaper()) {
+                            "Edit GIF Crop, Drag & Zoom (${(draft.cropZoom * 100).roundToInt()}%)"
+                        } else {
+                            "Adjust Crop, Drag & Zoom (${(draft.cropZoom * 100).roundToInt()}%)"
+                        },
                         fontSize = 12.5.sp,
                         fontWeight = FontWeight.Bold,
                         color = colors.indigo,
                     )
                 }
             }
+
+            Text("Fit / Stretch Mode", fontSize = 11.5.sp, color = colors.textSecondary)
+            val activeScaleMode = draft.resolvedScaleMode()
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                WallpaperScaleMode.entries.forEach { mode ->
+                    CropModeChip(
+                        label = mode.label,
+                        active = activeScaleMode == mode,
+                        onClick = {
+                            onDraftChange(
+                                draft.copy(
+                                    scaleMode = mode,
+                                    fitCenter = (mode == WallpaperScaleMode.FIT),
+                                ),
+                            )
+                        },
+                        modifier = Modifier.weight(1f),
+                    )
+                }
+            }
+
+            WallpaperFilterSlider(
+                label = "Zoom Scale",
+                valueText = "${(draft.cropZoom * 100).roundToInt()}%",
+                value = draft.cropZoom,
+                range = 0.40f..4.0f,
+                accent = colors.indigo,
+                onValueChange = { onDraftChange(draft.copy(cropZoom = it)) },
+            )
+            WallpaperFilterSlider(
+                label = "Pan Left / Right",
+                valueText = "${(draft.cropPanX * 100).roundToInt()}%",
+                value = draft.cropPanX,
+                range = -1.0f..1.0f,
+                accent = colors.emerald,
+                onValueChange = { onDraftChange(draft.copy(cropPanX = it)) },
+            )
+            WallpaperFilterSlider(
+                label = "Pan Up / Down",
+                valueText = "${(draft.cropPanY * 100).roundToInt()}%",
+                value = draft.cropPanY,
+                range = -1.0f..1.0f,
+                accent = colors.emerald,
+                onValueChange = { onDraftChange(draft.copy(cropPanY = it)) },
+            )
         }
 
         // Name Input
@@ -1243,16 +1384,16 @@ private fun WallpaperFilterEditor(
             )
         }
 
-        // Quick Lightness Presets (90% Dark Black Look vs Balanced vs Vivid)
-        Text("Quick Stealth Presets", fontSize = 11.5.sp, color = colors.textSecondary)
+        // Quick Lightness Presets (Clear 100% vs Balanced vs 90% Dark Stealth)
+        Text("Quick Look Presets", fontSize = 11.5.sp, color = colors.textSecondary)
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.spacedBy(8.dp),
         ) {
             listOf(
+                Triple("Clear 100%", 1.0f, 0.48f),
+                Triple("Balanced 55%", 0.55f, 0.54f),
                 Triple("90% Dark", 0.14f, 0.62f),
-                Triple("Balanced 35%", 0.35f, 0.56f),
-                Triple("Vivid 75%", 0.75f, 0.46f),
             ).forEach { (label, lightVal, keyOp) ->
                 val isMatch = kotlin.math.abs(draft.lightness - lightVal) < 0.04f
                 Box(
@@ -1286,7 +1427,7 @@ private fun WallpaperFilterEditor(
                                 draft.copy(
                                     lightness = lightVal,
                                     keyOpacity = keyOp,
-                                    darkBackdrop = lightVal < 0.50f,
+                                    darkBackdrop = lightVal < 0.30f,
                                 ),
                             )
                         }
